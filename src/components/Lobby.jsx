@@ -109,17 +109,22 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
     setBusy(true)
     setError(null)
 
-    const { data: campaign, error: createError } = await supabase
-      .from('campaigns')
-      .insert({
-        name: newName.trim(),
-        system: 'Shadowdark',
-        gm_type: newGmType,
-        gm_user_id: newGmType === 'human' ? user.id : null,
-        join_code: randomJoinCode(),
-      })
-      .select()
-      .single()
+    // Generate the id client-side and skip .select() on the insert entirely.
+    // Postgres checks the SELECT policy against RETURNING rows, and this
+    // user isn't a campaign_members row yet at that instant -- even with
+    // the on_campaign_created trigger, that check loses the race. Since we
+    // already know every field we're inserting, there's nothing to read
+    // back; the campaign_members insert below (or its trigger) happens
+    // before anyone ever tries to re-select this campaign.
+    const id = crypto.randomUUID()
+    const { error: createError } = await supabase.from('campaigns').insert({
+      id,
+      name: newName.trim(),
+      system: 'Shadowdark',
+      gm_type: newGmType,
+      gm_user_id: newGmType === 'human' ? user.id : null,
+      join_code: randomJoinCode(),
+    })
 
     if (createError) {
       setError(createError.message)
@@ -133,7 +138,7 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
     const { error: memberError } = await supabase
       .from('campaign_members')
       .upsert(
-        { campaign_id: campaign.id, user_id: user.id, role: newGmType === 'human' ? 'gm' : 'player' },
+        { campaign_id: id, user_id: user.id, role: newGmType === 'human' ? 'gm' : 'player' },
         { onConflict: 'campaign_id,user_id', ignoreDuplicates: true }
       )
 
