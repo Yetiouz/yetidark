@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ArrowLeft, Plus, Trash2, Upload, User } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 
 const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
@@ -32,8 +32,12 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   const [gear, setGear] = useState([])
   const [talents, setTalents] = useState([])
   const [canEdit, setCanEdit] = useState(false)
+  const [isOwner, setIsOwner] = useState(false)
   const [gearDraft, setGearDraft] = useState('')
   const [loading, setLoading] = useState(true)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarError, setAvatarError] = useState(null)
+  const avatarInputRef = useRef(null)
 
   useEffect(() => {
     if (!characterId) return
@@ -44,8 +48,9 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       if (cancelled || !char) return
       setCharacter(char)
 
-      const isOwner = char.owner_user_id === user?.id
-      if (isOwner) {
+      const owns = char.owner_user_id === user?.id
+      setIsOwner(owns)
+      if (owns) {
         setCanEdit(true)
       } else if (user && char.campaign_id) {
         const { data: membership } = await supabase
@@ -136,6 +141,33 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     setGearDraft('')
   }
 
+  // Owner-only, unlike HP/XP/coin/gear which the GM can also touch -- a
+  // portrait is a personal choice, not something the table needs to
+  // manage. Uploads to a fixed `{characterId}/avatar` path (upsert
+  // replaces any previous image) and appends a cache-busting query param
+  // so the new image shows immediately instead of a stale cached one.
+  const uploadAvatar = async (file) => {
+    if (!file || !characterId) return
+    setAvatarUploading(true)
+    setAvatarError(null)
+    const path = `${characterId}/avatar`
+    const { error: storageError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (storageError) {
+      setAvatarError(storageError.message)
+      setAvatarUploading(false)
+      return
+    }
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path)
+    const avatarUrl = `${pub.publicUrl}?v=${Date.now()}`
+    const { error: updateError } = await supabase.from('characters').update({ avatar_url: avatarUrl }).eq('id', characterId)
+    setAvatarUploading(false)
+    if (updateError) {
+      setAvatarError(updateError.message)
+      return
+    }
+    setCharacter((c) => ({ ...c, avatar_url: avatarUrl }))
+  }
+
   if (loading || !character) {
     return (
       <div className="max-w-xl mx-auto p-6">
@@ -156,11 +188,46 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         </button>
       )}
 
-      <h1 className="text-white text-lg font-medium">{character.name}</h1>
-      <p className="text-xs text-neutral-400 mb-4">
-        {character.ancestry} {character.class} &middot; level {character.level} &middot; {character.alignment || 'Unaligned'}
-        {character.background ? ` · ${character.background}` : ''}
-      </p>
+      <div className="flex items-center gap-3 mb-4">
+        <input
+          ref={avatarInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => uploadAvatar(e.target.files?.[0])}
+        />
+        <button
+          onClick={() => isOwner && avatarInputRef.current?.click()}
+          disabled={!isOwner || avatarUploading}
+          className={`w-16 h-16 rounded-full overflow-hidden bg-neutral-900 border border-neutral-700 flex items-center justify-center shrink-0 ${
+            isOwner ? 'hover:border-neutral-500 cursor-pointer' : 'cursor-default'
+          }`}
+          title={isOwner ? (character.avatar_url ? 'Replace portrait' : 'Upload portrait') : undefined}
+        >
+          {character.avatar_url ? (
+            <img src={character.avatar_url} alt={character.name} className="w-full h-full object-cover" />
+          ) : (
+            <User size={22} className="text-neutral-600" />
+          )}
+        </button>
+        <div>
+          <h1 className="text-white text-lg font-medium">{character.name}</h1>
+          <p className="text-xs text-neutral-400">
+            {character.ancestry} {character.class} &middot; level {character.level} &middot; {character.alignment || 'Unaligned'}
+            {character.background ? ` · ${character.background}` : ''}
+          </p>
+          {isOwner && (
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={avatarUploading}
+              className="text-[11px] text-neutral-500 hover:text-neutral-300 flex items-center gap-1 mt-1"
+            >
+              <Upload size={11} /> {avatarUploading ? 'Uploading…' : character.avatar_url ? 'Replace portrait' : 'Upload portrait'}
+            </button>
+          )}
+        </div>
+      </div>
+      {avatarError && <p className="text-xs text-red-400 mb-3">{avatarError}</p>}
 
       <div className="grid grid-cols-6 gap-1.5 mb-4">
         {STAT_KEYS.map((k) => (

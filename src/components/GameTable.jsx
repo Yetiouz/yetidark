@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send, AlertCircle } from 'lucide-react'
+import { Dices, Send, AlertCircle, User } from 'lucide-react'
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { rollDiceNotation, flatDieNotation, DiceNotationError } from '../lib/dice.js'
@@ -133,7 +133,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
 
     supabase
       .from('characters')
-      .select('id, name, class, level, hp, max_hp, ac')
+      .select('id, name, class, level, hp, max_hp, ac, avatar_url')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setParty(data || []) })
@@ -636,7 +636,14 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
             disabled={!onOpenCharacterSheet}
             className="text-left bg-neutral-900 border border-neutral-800 rounded-xl p-3 hover:border-neutral-600 disabled:cursor-default disabled:hover:border-neutral-800"
           >
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5">
+              {p.avatar_url ? (
+                <img src={p.avatar_url} alt={p.name} className="w-8 h-8 rounded-full object-cover border border-neutral-700" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center shrink-0">
+                  <User size={14} className="text-neutral-500" />
+                </div>
+              )}
               <span className="text-sm font-medium text-white">{p.name}</span>
             </div>
             <p className="text-[11px] text-neutral-400 mb-2">
