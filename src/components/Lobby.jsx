@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Swords, Key, Plus, Crown, Bot, Users, LogOut, AlertCircle } from 'lucide-react'
+import { Swords, Key, Plus, Crown, Bot, Users, LogOut, AlertCircle, Settings } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 
 function randomJoinCode() {
@@ -9,7 +9,7 @@ function randomJoinCode() {
   return `${code.slice(0, 3)}-${code.slice(3)}`
 }
 
-export default function Lobby({ session, onEnterCampaign, onSignOut }) {
+export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfile }) {
   const user = session?.user
   const [joinCode, setJoinCode] = useState('')
   const [showJoin, setShowJoin] = useState(false)
@@ -153,9 +153,22 @@ export default function Lobby({ session, onEnterCampaign, onSignOut }) {
         </div>
         <div className="flex items-center gap-2.5">
           <span className="text-sm text-neutral-400">{user?.email}</span>
-          <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-medium text-blue-300">
+          <button
+            onClick={onOpenProfile}
+            title="Profile"
+            className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-medium text-blue-300 hover:bg-blue-500/30"
+          >
             {(user?.email || '?')[0].toUpperCase()}
-          </div>
+          </button>
+          {onOpenProfile && (
+            <button
+              onClick={onOpenProfile}
+              title="Profile settings"
+              className="w-7 h-7 rounded-md border border-neutral-700 flex items-center justify-center text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+            >
+              <Settings size={13} />
+            </button>
+          )}
           {onSignOut && (
             <button
               onClick={onSignOut}

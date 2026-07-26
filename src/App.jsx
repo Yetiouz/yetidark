@@ -6,13 +6,14 @@ import CharacterPicker from './components/CharacterPicker.jsx'
 import CharacterBuilder from './components/CharacterBuilder.jsx'
 import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
+import Profile from './components/Profile.jsx'
 
-// Auth, the lobby, and characters are real Supabase now. Scene log, hex
-// map, and GM dashboard are still mock data in src/mockData.js -- next
-// slices of Phase 4.
+// Auth, the lobby, characters, and profile are real Supabase now. Scene
+// log, hex map, and GM dashboard are still mock data in src/mockData.js --
+// next slices of Phase 4.
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
-  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm'
+  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile'
   const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
   const [activeCharacter, setActiveCharacter] = useState(null) // real character row from Supabase
 
@@ -67,7 +68,15 @@ export default function App() {
   return (
     <div className="min-h-screen bg-neutral-950">
       {view === 'lobby' && (
-        <Lobby session={session} onEnterCampaign={enterCampaign} onSignOut={signOut} />
+        <Lobby
+          session={session}
+          onEnterCampaign={enterCampaign}
+          onSignOut={signOut}
+          onOpenProfile={() => setView('profile')}
+        />
+      )}
+      {view === 'profile' && (
+        <Profile session={session} onSignOut={signOut} onBack={() => setView('lobby')} />
       )}
       {view === 'characters' && (
         <CharacterPicker

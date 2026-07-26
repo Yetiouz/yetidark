@@ -194,6 +194,9 @@ $$;
 create policy "profiles are self-readable" on profiles
   for select using (true); -- display names are fine to be publicly readable
 
+create policy "users can update their own profile" on profiles
+  for update using (id = auth.uid());
+
 create policy "members can read their campaigns" on campaigns
   for select using (is_campaign_member(id));
 
@@ -205,6 +208,9 @@ create policy "members can read the member list" on campaign_members
 
 create policy "users can add themselves as a member" on campaign_members
   for insert with check (user_id = auth.uid());
+
+create policy "users can leave a campaign" on campaign_members
+  for delete using (user_id = auth.uid());
 
 create policy "members can read campaign characters" on characters
   for select using (is_campaign_member(campaign_id));
