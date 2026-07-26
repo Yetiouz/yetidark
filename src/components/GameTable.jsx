@@ -31,6 +31,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const [message, setMessage] = useState('')
   const [manualDie, setManualDie] = useState(20)
   const [manualValue, setManualValue] = useState('')
+  const [lastRoll, setLastRoll] = useState(null) // shown right in the dice panel so a roll is visible even if you're on the Map tab
 
   const [mapInfo, setMapInfo] = useState(null)
   const [cellState, setCellState] = useState({})
@@ -187,11 +188,13 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
 
   const rollDie = (sides) => {
     const value = Math.floor(Math.random() * sides) + 1
+    setLastRoll({ text: `You rolled a ${value} (d${sides})`, source: 'app' })
     postToLog({ type: 'roll', text: `rolled a ${value} (d${sides})`, roll_source: 'app' })
   }
 
   const logManualRoll = () => {
     if (!manualValue) return
+    setLastRoll({ text: `You rolled a ${manualValue} (d${manualDie})`, source: 'self' })
     postToLog({ type: 'roll', text: `rolled a ${manualValue} (d${manualDie})`, roll_source: 'self' })
     setManualValue('')
   }
@@ -376,6 +379,20 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
                 </button>
               ))}
             </div>
+            {lastRoll && (
+              <div className="flex items-center gap-1.5 mb-2.5 text-xs">
+                <span className="text-white font-medium">{lastRoll.text}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded ${
+                    lastRoll.source === 'app'
+                      ? 'bg-blue-500/20 text-blue-300'
+                      : 'bg-neutral-800 border border-neutral-700 text-neutral-400'
+                  }`}
+                >
+                  {lastRoll.source === 'app' ? 'app roll' : 'self-reported'}
+                </span>
+              </div>
+            )}
             <div className="pt-2.5 border-t border-neutral-800">
               <p className="text-[11px] text-neutral-500 mb-1.5">Rolled it yourself? Log it here.</p>
               <div className="flex gap-1.5">
