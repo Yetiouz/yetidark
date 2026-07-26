@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Dices } from 'lucide-react'
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
@@ -31,6 +31,15 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const [message, setMessage] = useState('')
   const [manualDie, setManualDie] = useState(20)
   const [manualValue, setManualValue] = useState('')
+  const [rollState, setRollState] = useState(null) // { sides, value, isRolling } -- drives the animated die
+  const [rollNonce, setRollNonce] = useState(0) // bumped every roll so the CSS animation replays even on repeat values
+  const rollTimerRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (rollTimerRef.current) clearInterval(rollTimerRef.current)
+    }
+  }, [])
 
   const [mapInfo, setMapInfo] = useState(null)
   const [cellState, setCellState] = useState({})
@@ -194,13 +203,33 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
     setMessage('')
   }
 
+  // Spins the number in the die box a handful of times before landing on
+  // the real result, then logs it -- purely cosmetic, the actual roll
+  // (`finalValue`) is decided up front so the animation never changes it.
   const rollDie = (sides) => {
-    const value = Math.floor(Math.random() * sides) + 1
-    postToLog({ type: 'roll', text: `rolled a ${value} (d${sides})`, roll_source: 'app' })
+    if (rollState?.isRolling) return
+    const finalValue = Math.floor(Math.random() * sides) + 1
+    if (rollTimerRef.current) clearInterval(rollTimerRef.current)
+    setRollNonce((n) => n + 1)
+    setRollState({ sides, value: Math.floor(Math.random() * sides) + 1, isRolling: true })
+    let ticks = 0
+    rollTimerRef.current = setInterval(() => {
+      ticks += 1
+      if (ticks >= 9) {
+        clearInterval(rollTimerRef.current)
+        rollTimerRef.current = null
+        setRollState({ sides, value: finalValue, isRolling: false })
+        postToLog({ type: 'roll', text: `rolled a ${finalValue} (d${sides})`, roll_source: 'app' })
+      } else {
+        setRollState({ sides, value: Math.floor(Math.random() * sides) + 1, isRolling: true })
+      }
+    }, 60)
   }
 
   const logManualRoll = () => {
     if (!manualValue) return
+    setRollNonce((n) => n + 1)
+    setRollState({ sides: manualDie, value: manualValue, isRolling: false })
     postToLog({ type: 'roll', text: `rolled a ${manualValue} (d${manualDie})`, roll_source: 'self' })
     setManualValue('')
   }
@@ -388,13 +417,47 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
           </div>
 
           <div className="bg-neutral-900 rounded-lg p-3">
+            <style>{`
+              @keyframes dice-spin {
+                0% { transform: rotate(0deg) scale(1); }
+                50% { transform: rotate(180deg) scale(1.12); }
+                100% { transform: rotate(360deg) scale(1); }
+              }
+              @keyframes dice-land {
+                0% { transform: scale(1.35); }
+                60% { transform: scale(0.92); }
+                100% { transform: scale(1); }
+              }
+              .dice-rolling { animation: dice-spin 0.3s linear infinite; }
+              .dice-landed { animation: dice-land 0.3s ease-out; }
+            `}</style>
             <p className="text-xs text-neutral-400 mb-2">Roll a die</p>
+
+            <div className="flex flex-col items-center justify-center mb-3">
+              <div
+                key={rollNonce}
+                className={`w-16 h-16 rounded-xl border-2 flex items-center justify-center text-2xl font-bold ${
+                  rollState
+                    ? 'border-blue-500 text-white bg-blue-500/10'
+                    : 'border-neutral-700 text-neutral-600 bg-neutral-950'
+                } ${rollState?.isRolling ? 'dice-rolling' : rollState ? 'dice-landed' : ''}`}
+              >
+                {rollState ? rollState.value : <Dices size={22} />}
+              </div>
+              {rollState && (
+                <p className="text-[11px] text-neutral-500 mt-1.5">
+                  d{rollState.sides}{rollState.isRolling ? ' rolling…' : ''}
+                </p>
+              )}
+            </div>
+
             <div className="grid grid-cols-3 gap-1.5 mb-2.5">
               {dice.map((sides) => (
                 <button
                   key={sides}
                   onClick={() => rollDie(sides)}
-                  className="text-xs py-1.5 border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800"
+                  disabled={rollState?.isRolling}
+                  className="text-xs py-1.5 border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
                 >
                   d{sides}
                 </button>
