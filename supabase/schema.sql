@@ -13,7 +13,9 @@ create table profiles (
   created_at timestamptz not null default now()
 );
 
--- A campaign is one ongoing game (e.g. "The sunken keep").
+-- A campaign is one ongoing game (e.g. "The sunken keep"). map_url/map_cols/
+-- map_rows describe the uploaded map image and the grid overlaid on it;
+-- party_row/party_col track where the party marker sits on that grid.
 create table campaigns (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -23,6 +25,11 @@ create table campaigns (
   join_code text not null unique,
   session_number int not null default 1,
   status text not null default 'active' check (status in ('active', 'paused', 'ended')),
+  map_url text,
+  map_cols int not null default 10,
+  map_rows int not null default 6,
+  party_row int,
+  party_col int,
   created_at timestamptz not null default now()
 );
 
@@ -77,16 +84,17 @@ create table gm_notes (
   created_at timestamptz not null default now()
 );
 
--- One row per hex. state starts 'fog' and flips to 'explored' permanently
--- (or 'party' for wherever the group currently is) per the honor-system
--- fog-of-war design -- a GM can still reset a hex back to 'fog' for a
--- story reason like amnesia.
-create table hex_cells (
+-- One row per grid cell overlaid on the campaign's uploaded map image.
+-- state starts 'fog' (an opaque tile hiding the map underneath) and flips
+-- to 'explored' (transparent, map shows through) permanently -- per the
+-- honor-system fog-of-war design -- unless the GM uses the "re-fog" control
+-- to clear cells for a story reason like amnesia. Cells are created lazily:
+-- a missing row for (campaign, row, col) just means 'fog'.
+create table map_cells (
   campaign_id uuid references campaigns(id) on delete cascade,
   row int not null,
   col int not null,
-  terrain text not null default 'fog',
-  state text not null default 'fog' check (state in ('fog', 'explored', 'party')),
+  state text not null default 'fog' check (state in ('fog', 'explored')),
   updated_at timestamptz not null default now(),
   primary key (campaign_id, row, col)
 );
@@ -162,7 +170,7 @@ alter table campaign_members enable row level security;
 alter table characters enable row level security;
 alter table encounter_monsters enable row level security;
 alter table gm_notes enable row level security;
-alter table hex_cells enable row level security;
+alter table map_cells enable row level security;
 alter table scene_log enable row level security;
 alter table turn_order enable row level security;
 alter table votes enable row level security;
@@ -203,6 +211,9 @@ create policy "members can read their campaigns" on campaigns
 create policy "authenticated users can create campaigns" on campaigns
   for insert with check (auth.uid() is not null);
 
+create policy "gm can update their campaign" on campaigns
+  for update using (is_campaign_gm(id));
+
 create policy "members can read the member list" on campaign_members
   for select using (is_campaign_member(campaign_id));
 
@@ -237,11 +248,17 @@ create policy "gm sees all notes, players see revealed only" on gm_notes
 create policy "only gm writes notes" on gm_notes
   for all using (is_campaign_gm(campaign_id));
 
-create policy "members can read and reveal hexes" on hex_cells
+create policy "members can read map cells" on map_cells
   for select using (is_campaign_member(campaign_id));
 
-create policy "members can update hexes" on hex_cells
+create policy "members can reveal map cells" on map_cells
+  for insert with check (is_campaign_member(campaign_id));
+
+create policy "members can update map cells" on map_cells
   for update using (is_campaign_member(campaign_id));
+
+create policy "gm can delete map cells" on map_cells
+  for delete using (is_campaign_gm(campaign_id));
 
 create policy "members can read the scene log" on scene_log
   for select using (is_campaign_member(campaign_id));
@@ -262,9 +279,29 @@ create policy "members can vote" on votes
   for insert with check (is_campaign_member(campaign_id) and voter_user_id = auth.uid());
 
 -- ---------------------------------------------------------------------
+-- Storage: a public "maps" bucket holds uploaded map images. Public read
+-- means anyone with the URL can view an image (fine -- URLs aren't
+-- guessable and images aren't sensitive); only signed-in users can upload.
+-- ---------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public)
+values ('maps', 'maps', true)
+on conflict (id) do nothing;
+
+create policy "anyone can view map images" on storage.objects
+  for select using (bucket_id = 'maps');
+
+create policy "authenticated users can upload map images" on storage.objects
+  for insert with check (bucket_id = 'maps' and auth.uid() is not null);
+
+create policy "authenticated users can replace map images" on storage.objects
+  for update using (bucket_id = 'maps' and auth.uid() is not null);
+
+-- ---------------------------------------------------------------------
 -- Realtime: turn these on in Supabase (Database > Replication) so the
 -- live table and GM dashboard update instantly for everyone connected,
 -- instead of needing a page refresh.
 -- ---------------------------------------------------------------------
--- Tables to enable: scene_log, hex_cells, encounter_monsters, turn_order,
--- votes, characters (for HP changes).
+-- Tables to enable: map_cells, campaigns (map image/grid/party updates),
+-- scene_log, encounter_monsters, turn_order, votes, characters (for HP
+-- changes).

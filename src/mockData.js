@@ -100,38 +100,3 @@ export const gmNotes = [
   { id: 1, text: 'The bog hag offers a trade before attacking if approached without weapons drawn.', revealed: false },
   { id: 2, text: "Vault key is sewn into the drowned monk's robe, not on the altar.", revealed: false },
 ]
-
-// Hex grid: 4 rows x 6 cols. state: 'fog' | 'explored' | 'party'
-// terrain only matters once a hex is explored.
-export const initialHexGrid = [
-  [
-    { terrain: 'forest', state: 'explored' },
-    { terrain: 'forest', state: 'explored' },
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-  ],
-  [
-    { terrain: 'water', state: 'explored' },
-    { terrain: 'plain', state: 'party' },
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-  ],
-  [
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'rock', state: 'explored' },
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-  ],
-  [
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-    { terrain: 'fog', state: 'fog' },
-  ],
-]

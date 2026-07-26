@@ -8,9 +8,9 @@ import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 import Profile from './components/Profile.jsx'
 
-// Auth, the lobby, characters, and profile are real Supabase now. Scene
-// log, hex map, and GM dashboard are still mock data in src/mockData.js --
-// next slices of Phase 4.
+// Auth, the lobby, characters, profile, and the map are real Supabase now.
+// Scene log, turn order, dice, and the GM's encounter/notes lists are still
+// mock data in src/mockData.js -- next slice of Phase 4.
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
   const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile'
@@ -95,10 +95,10 @@ export default function App() {
         />
       )}
       {view === 'table' && (
-        <GameTable campaignName={campaignName} onOpenGmView={() => setView('gm')} />
+        <GameTable campaignId={activeCampaign?.id} campaignName={campaignName} onOpenGmView={() => setView('gm')} />
       )}
       {view === 'gm' && (
-        <GmDashboard campaignName={campaignName} onSwitchToPlayerView={() => setView('table')} />
+        <GmDashboard campaignId={activeCampaign?.id} campaignName={campaignName} onSwitchToPlayerView={() => setView('table')} />
       )}
 
       {view !== 'lobby' && (

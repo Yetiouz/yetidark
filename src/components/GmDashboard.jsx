@@ -1,13 +1,71 @@
-import { useState } from 'react'
-import { Eye, Plus, Brush, Flag } from 'lucide-react'
-import HexMap from './HexMap.jsx'
-import { encounter as initialEncounter, gmNotes as initialNotes, initialHexGrid } from '../mockData.js'
+import { useState, useEffect, useRef } from 'react'
+import { Eye, Plus, Flag, Upload, RotateCcw } from 'lucide-react'
+import MapGrid from './MapGrid.jsx'
+import { supabase } from '../lib/supabaseClient.js'
+import { encounter as initialEncounter, gmNotes as initialNotes } from '../mockData.js'
 
-export default function GmDashboard({ campaignName = 'The sunken keep', onSwitchToPlayerView }) {
+// Encounter tracker and GM notes are still mock data (next slice of Phase
+// 4). The map panel is real: upload an image, set the grid size, drop the
+// party marker, and reveal or re-fog cells -- all synced live via Supabase.
+export default function GmDashboard({ campaignId, campaignName = 'The sunken keep', onSwitchToPlayerView }) {
   const [encounter, setEncounter] = useState(initialEncounter)
   const [notes, setNotes] = useState(initialNotes)
-  const [grid, setGrid] = useState(initialHexGrid)
   const [search, setSearch] = useState('')
+
+  const [mapInfo, setMapInfo] = useState(null)
+  const [cellState, setCellState] = useState({})
+  const [mapMode, setMapMode] = useState('reveal') // 'reveal' | 'move'
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+  const fileInputRef = useRef(null)
+
+  useEffect(() => {
+    if (!campaignId) return
+    let cancelled = false
+
+    supabase
+      .from('campaigns')
+      .select('map_url, map_cols, map_rows, party_row, party_col')
+      .eq('id', campaignId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setMapInfo(data)
+      })
+
+    supabase
+      .from('map_cells')
+      .select('row, col, state')
+      .eq('campaign_id', campaignId)
+      .then(({ data }) => {
+        if (cancelled) return
+        const next = {}
+        for (const cell of data || []) next[`${cell.row},${cell.col}`] = cell.state
+        setCellState(next)
+      })
+
+    const channel = supabase
+      .channel(`gm-dashboard-${campaignId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'map_cells', filter: `campaign_id=eq.${campaignId}` },
+        (payload) => {
+          const row = payload.new
+          if (!row) return
+          setCellState((s) => ({ ...s, [`${row.row},${row.col}`]: row.state }))
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
+        (payload) => setMapInfo(payload.new)
+      )
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      supabase.removeChannel(channel)
+    }
+  }, [campaignId])
 
   const adjustHp = (id, delta) => {
     setEncounter((list) =>
@@ -23,12 +81,60 @@ export default function GmDashboard({ campaignName = 'The sunken keep', onSwitch
     setNotes((list) => list.map((n) => (n.id === id ? { ...n, revealed: true } : n)))
   }
 
-  const revealHex = (row, col) => {
-    setGrid((g) => {
-      const next = g.map((r) => r.slice())
-      next[row][col] = { ...next[row][col], state: 'explored' }
-      return next
-    })
+  const revealCell = async (row, col) => {
+    if (!campaignId) return
+    setCellState((s) => ({ ...s, [`${row},${col}`]: 'explored' }))
+    await supabase
+      .from('map_cells')
+      .upsert({ campaign_id: campaignId, row, col, state: 'explored' }, { onConflict: 'campaign_id,row,col' })
+  }
+
+  const movePartyTo = async (row, col) => {
+    if (!campaignId) return
+    setMapInfo((m) => ({ ...(m || {}), party_row: row, party_col: col }))
+    await supabase.from('campaigns').update({ party_row: row, party_col: col }).eq('id', campaignId)
+  }
+
+  const handleMapClick = (row, col) => {
+    if (mapMode === 'move') movePartyTo(row, col)
+    else revealCell(row, col)
+  }
+
+  const uploadMap = async (file) => {
+    if (!file || !campaignId) return
+    setUploading(true)
+    setUploadError(null)
+    const path = `${campaignId}/${Date.now()}-${file.name}`
+    const { error: storageError } = await supabase.storage.from('maps').upload(path, file, { upsert: true })
+    if (storageError) {
+      setUploadError(storageError.message)
+      setUploading(false)
+      return
+    }
+    const { data: pub } = supabase.storage.from('maps').getPublicUrl(path)
+    const { error: updateError } = await supabase
+      .from('campaigns')
+      .update({ map_url: pub.publicUrl })
+      .eq('id', campaignId)
+    setUploading(false)
+    if (updateError) {
+      setUploadError(updateError.message)
+      return
+    }
+    setMapInfo((m) => ({ ...(m || {}), map_url: pub.publicUrl }))
+  }
+
+  const updateGridSize = async (field, value) => {
+    const n = Math.max(2, Math.min(30, parseInt(value, 10) || 1))
+    setMapInfo((m) => ({ ...(m || {}), [field]: n }))
+    await supabase.from('campaigns').update({ [field]: n }).eq('id', campaignId)
+  }
+
+  const refogMap = async () => {
+    if (!campaignId) return
+    if (!window.confirm("Clear all explored fog for this map? This can't be undone.")) return
+    await supabase.from('map_cells').delete().eq('campaign_id', campaignId)
+    setCellState({})
   }
 
   return (
@@ -125,20 +231,70 @@ export default function GmDashboard({ campaignName = 'The sunken keep', onSwitch
       </div>
 
       <div className="bg-neutral-900 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center justify-between mb-2.5 flex-wrap gap-2">
           <p className="text-xs text-neutral-400">Map controls</p>
-          <div className="flex gap-1.5">
-            <button className="text-xs border border-neutral-700 rounded-md px-2 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800">
-              <Brush size={13} /> Manually reveal hex
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => uploadMap(e.target.files?.[0])}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="text-xs border border-neutral-700 rounded-md px-2 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+            >
+              <Upload size={13} /> {uploading ? 'Uploading...' : mapInfo?.map_url ? 'Replace map image' : 'Upload map image'}
             </button>
-            <button className="text-xs border border-neutral-700 rounded-md px-2 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800">
-              <Flag size={13} /> Drop "head here" marker
+            <div className="flex items-center gap-1 text-xs text-neutral-400">
+              <span>cols</span>
+              <input
+                type="number"
+                value={mapInfo?.map_cols ?? 10}
+                onChange={(e) => updateGridSize('map_cols', e.target.value)}
+                className="w-12 bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-white"
+              />
+              <span>rows</span>
+              <input
+                type="number"
+                value={mapInfo?.map_rows ?? 6}
+                onChange={(e) => updateGridSize('map_rows', e.target.value)}
+                className="w-12 bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-white"
+              />
+            </div>
+            <button
+              onClick={() => setMapMode((m) => (m === 'move' ? 'reveal' : 'move'))}
+              className={`text-xs border rounded-md px-2 py-1 flex items-center gap-1.5 hover:bg-neutral-800 ${
+                mapMode === 'move' ? 'border-blue-500 text-blue-300 bg-blue-500/10' : 'border-neutral-700 text-neutral-200'
+              }`}
+            >
+              <Flag size={13} /> {mapMode === 'move' ? 'Click map to drop party' : 'Move party marker'}
+            </button>
+            <button
+              onClick={refogMap}
+              className="text-xs border border-neutral-700 rounded-md px-2 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
+            >
+              <RotateCcw size={13} /> Re-fog map
             </button>
           </div>
         </div>
-        <HexMap grid={grid} onRevealHex={revealHex} allowManualReveal={true} />
+        {uploadError && <p className="text-xs text-red-400 mb-2">{uploadError}</p>}
+        <MapGrid
+          mapUrl={mapInfo?.map_url}
+          cols={mapInfo?.map_cols || 10}
+          rows={mapInfo?.map_rows || 6}
+          cellState={cellState}
+          partyRow={mapInfo?.party_row}
+          partyCol={mapInfo?.party_col}
+          mode={mapMode}
+          onCellClick={handleMapClick}
+        />
         <p className="text-[11px] text-neutral-500 mt-2">
-          Fog clears automatically as the party moves, or reveal a hex early if a note calls for it. Click a foggy hex above to try it.
+          {mapMode === 'move'
+            ? 'Click anywhere on the map to move the party marker.'
+            : "Fog clears permanently as cells are explored. Use re-fog for story reasons like amnesia."}
         </p>
       </div>
     </div>

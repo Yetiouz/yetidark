@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Shield, Flame, Dices } from 'lucide-react'
-import HexMap from './HexMap.jsx'
-import { party, turnOrder, initialSceneLog, initialHexGrid } from '../mockData.js'
+import MapGrid from './MapGrid.jsx'
+import { supabase } from '../lib/supabaseClient.js'
+import { party, turnOrder, initialSceneLog } from '../mockData.js'
 
 const dice = [20, 12, 10, 8, 6, 4]
 
@@ -12,14 +13,75 @@ function hpBarColor(hp, maxHp) {
   return 'bg-red-500'
 }
 
-export default function GameTable({ campaignName = 'The sunken keep', onOpenGmView }) {
+// Scene log, turn order, dice, and party cards are still mock data (next
+// slice of Phase 4). The map is real: image, grid size, party marker, and
+// per-cell fog all live in Supabase and update for everyone in real time.
+export default function GameTable({ campaignId, campaignName = 'The sunken keep', onOpenGmView }) {
   const [tab, setTab] = useState('map') // 'log' | 'map'
   const [log, setLog] = useState(initialSceneLog)
   const [message, setMessage] = useState('')
   const [manualDie, setManualDie] = useState(20)
   const [manualValue, setManualValue] = useState('')
-  const [grid, setGrid] = useState(initialHexGrid)
   const [votes, setVotes] = useState({ vault: 3, entry: 1 })
+
+  const [mapInfo, setMapInfo] = useState(null) // { map_url, map_cols, map_rows, party_row, party_col }
+  const [cellState, setCellState] = useState({}) // "row,col" -> 'fog' | 'explored'
+
+  useEffect(() => {
+    if (!campaignId) return
+    let cancelled = false
+
+    supabase
+      .from('campaigns')
+      .select('map_url, map_cols, map_rows, party_row, party_col')
+      .eq('id', campaignId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setMapInfo(data)
+      })
+
+    supabase
+      .from('map_cells')
+      .select('row, col, state')
+      .eq('campaign_id', campaignId)
+      .then(({ data }) => {
+        if (cancelled) return
+        const next = {}
+        for (const cell of data || []) next[`${cell.row},${cell.col}`] = cell.state
+        setCellState(next)
+      })
+
+    const channel = supabase
+      .channel(`game-table-${campaignId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'map_cells', filter: `campaign_id=eq.${campaignId}` },
+        (payload) => {
+          const row = payload.new
+          if (!row) return
+          setCellState((s) => ({ ...s, [`${row.row},${row.col}`]: row.state }))
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
+        (payload) => setMapInfo(payload.new)
+      )
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      supabase.removeChannel(channel)
+    }
+  }, [campaignId])
+
+  const revealCell = async (row, col) => {
+    if (!campaignId) return
+    setCellState((s) => ({ ...s, [`${row},${col}`]: 'explored' })) // optimistic, permanent per the honor-system fog design
+    await supabase
+      .from('map_cells')
+      .upsert({ campaign_id: campaignId, row, col, state: 'explored' }, { onConflict: 'campaign_id,row,col' })
+  }
 
   const appendLog = (entry) => setLog((l) => [...l, entry])
 
@@ -38,14 +100,6 @@ export default function GameTable({ campaignName = 'The sunken keep', onOpenGmVi
     if (!manualValue) return
     appendLog({ type: 'roll', name: 'You', text: `rolled a ${manualValue} (d${manualDie})`, source: 'self' })
     setManualValue('')
-  }
-
-  const revealHex = (row, col) => {
-    setGrid((g) => {
-      const next = g.map((r) => r.slice())
-      next[row][col] = { ...next[row][col], state: 'explored' }
-      return next
-    })
   }
 
   const vote = (key) => setVotes((v) => ({ ...v, [key]: v[key] + 1 }))
@@ -131,9 +185,18 @@ export default function GameTable({ campaignName = 'The sunken keep', onOpenGmVi
 
           {tab === 'map' && (
             <div>
-              <HexMap grid={grid} onRevealHex={revealHex} allowManualReveal={true} />
+              <MapGrid
+                mapUrl={mapInfo?.map_url}
+                cols={mapInfo?.map_cols || 10}
+                rows={mapInfo?.map_rows || 6}
+                cellState={cellState}
+                partyRow={mapInfo?.party_row}
+                partyCol={mapInfo?.party_col}
+                mode="reveal"
+                onCellClick={(r, c) => revealCell(r, c)}
+              />
               <div className="flex items-center gap-3.5 mt-2 text-[10px] text-neutral-500">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-700 inline-block" /> Explored</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-neutral-300 inline-block" /> Explored</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-neutral-700 inline-block" /> Fog, not yet seen</span>
                 <span className="flex items-center gap-1"><Shield size={10} /> Party position</span>
               </div>
