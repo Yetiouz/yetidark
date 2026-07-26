@@ -1,7 +1,6 @@
 -- Delve data model
 -- Run this in the Supabase SQL editor (Project > SQL Editor > New query).
--- Maps 1:1 onto src/mockData.js so swapping mock data for real queries later
--- is mostly a find-and-replace.
+-- Every screen in the app reads and writes these tables directly.
 
 create extension if not exists "pgcrypto";
 
@@ -122,8 +121,10 @@ create table turn_order (
 );
 
 -- Lightweight group polls, e.g. the "where to next?" vote on the map tab.
--- unique(poll_key, voter_user_id) means re-voting changes your vote instead
--- of adding a second one.
+-- unique(campaign_id, poll_key, voter_user_id) means re-voting changes your
+-- vote instead of adding a second one -- and scopes that uniqueness to a
+-- single campaign, so the same poll_key in two different campaigns doesn't
+-- collide for the same player.
 create table votes (
   id uuid primary key default gen_random_uuid(),
   campaign_id uuid references campaigns(id) on delete cascade,
@@ -132,7 +133,7 @@ create table votes (
   option_label text not null,
   voter_user_id uuid references profiles(id),
   created_at timestamptz not null default now(),
-  unique (poll_key, voter_user_id)
+  unique (campaign_id, poll_key, voter_user_id)
 );
 
 -- ---------------------------------------------------------------------
@@ -302,6 +303,9 @@ create policy "members can read and cast votes" on votes
 create policy "members can vote" on votes
   for insert with check (is_campaign_member(campaign_id) and voter_user_id = auth.uid());
 
+create policy "members can change their own vote" on votes
+  for update using (voter_user_id = auth.uid());
+
 -- ---------------------------------------------------------------------
 -- Storage: a public "maps" bucket holds uploaded map images. Public read
 -- means anyone with the URL can view an image (fine -- URLs aren't
@@ -322,10 +326,8 @@ create policy "authenticated users can replace map images" on storage.objects
   for update using (bucket_id = 'maps' and auth.uid() is not null);
 
 -- ---------------------------------------------------------------------
--- Realtime: turn these on in Supabase (Database > Replication) so the
--- live table and GM dashboard update instantly for everyone connected,
--- instead of needing a page refresh.
+-- Realtime: these tables are enabled in the supabase_realtime publication
+-- so every screen updates live for everyone connected, no refresh needed:
+-- map_cells, campaigns, scene_log, encounter_monsters, gm_notes,
+-- turn_order, votes, characters.
 -- ---------------------------------------------------------------------
--- Tables to enable: map_cells, campaigns (map image/grid/party updates),
--- scene_log, encounter_monsters, turn_order, votes, characters (for HP
--- changes).
