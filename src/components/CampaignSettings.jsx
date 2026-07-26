@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Save } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 
@@ -28,6 +28,9 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
   const [modes, setModes] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // Mirrors isGm for the realtime handler below, which is set up once per
+  // (campaignId, user) and would otherwise close over a stale isGm=false.
+  const isGmRef = useRef(false)
 
   useEffect(() => {
     if (!campaignId) return
@@ -52,15 +55,27 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
         .eq('campaign_id', campaignId)
         .eq('user_id', user.id)
         .maybeSingle()
-        .then(({ data }) => { if (!cancelled) setIsGm(data?.role === 'gm') })
+        .then(({ data }) => {
+          if (cancelled) return
+          const gm = data?.role === 'gm'
+          isGmRef.current = gm
+          setIsGm(gm)
+        })
     }
 
+    // Only apply incoming realtime updates for non-GM viewers. The
+    // campaigns row changes constantly for unrelated reasons (party
+    // marker moves, map uploads, grid resizes), and every one of those
+    // broadcasts the last-*saved* house_rules/modes_of_play alongside it --
+    // applying that here mid-edit would silently revert the GM's unsaved
+    // checkbox toggles. Players have nothing to lose by staying live.
     const channel = supabase
       .channel(`campaign-settings-${campaignId}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
         (payload) => {
+          if (isGmRef.current) return
           setHouseRules(payload.new.house_rules || '')
           setModes(payload.new.modes_of_play || [])
         }
