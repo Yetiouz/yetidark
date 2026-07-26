@@ -1,15 +1,30 @@
 import { useState } from 'react'
-import { Swords, MailCheck } from 'lucide-react'
+import { Swords, MailCheck, AlertCircle } from 'lucide-react'
+import { supabase } from '../lib/supabaseClient.js'
 
-// Placeholder auth: no real email is sent yet. This is the UI to wire up to
-// Supabase magic-link auth (supabase.auth.signInWithOtp) later.
-export default function SignIn({ onSignedIn }) {
+// Real Supabase magic-link auth. Once the user clicks the link in their
+// email, Supabase redirects back here with a session -- App.jsx picks that
+// up via supabase.auth.onAuthStateChange and moves on to the lobby.
+export default function SignIn() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
+  const [error, setError] = useState(null)
+  const [sending, setSending] = useState(false)
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
     if (!email.trim()) return
+    setSending(true)
+    setError(null)
+    const { error: signInError } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: { emailRedirectTo: window.location.origin },
+    })
+    setSending(false)
+    if (signInError) {
+      setError(signInError.message)
+      return
+    }
     setSent(true)
   }
 
@@ -37,10 +52,17 @@ export default function SignIn({ onSignedIn }) {
             />
             <button
               type="submit"
-              className="w-full bg-blue-500 hover:bg-blue-400 text-white text-sm rounded-md py-2"
+              disabled={sending}
+              className="w-full bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white text-sm rounded-md py-2"
             >
-              Send sign-in link
+              {sending ? 'Sending...' : 'Send sign-in link'}
             </button>
+            {error && (
+              <div className="mt-3 flex items-start gap-2 text-red-400">
+                <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                <p className="text-xs">{error}</p>
+              </div>
+            )}
             <div className="mt-4 pt-3.5 border-t border-neutral-800 flex items-start gap-2">
               <MailCheck size={15} className="text-green-500 mt-0.5 flex-shrink-0" />
               <p className="text-xs text-neutral-400">
@@ -52,16 +74,9 @@ export default function SignIn({ onSignedIn }) {
           <div className="text-center">
             <MailCheck size={28} className="text-green-500 mx-auto mb-3" />
             <p className="text-sm text-white mb-1.5">Check your email</p>
-            <p className="text-xs text-neutral-400 mb-4">
-              We sent a sign-in link to {email}.
+            <p className="text-xs text-neutral-400">
+              We sent a sign-in link to {email}. Click it to come back here signed in.
             </p>
-            {/* Demo-only shortcut since no real email goes out yet */}
-            <button
-              onClick={() => onSignedIn && onSignedIn(email)}
-              className="text-xs border border-neutral-700 rounded-md px-3 py-1.5 text-neutral-300 hover:bg-neutral-800"
-            >
-              Continue (demo)
-            </button>
           </div>
         )}
       </div>

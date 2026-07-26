@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from './lib/supabaseClient.js'
 import SignIn from './components/SignIn.jsx'
 import Lobby from './components/Lobby.jsx'
 import CharacterPicker from './components/CharacterPicker.jsx'
@@ -6,15 +7,24 @@ import CharacterBuilder from './components/CharacterBuilder.jsx'
 import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 
-// No routing library or real auth yet on purpose -- this is a click-through
-// prototype with mock data. Swap this for real routing + Supabase auth/state
-// once the screens are locked in.
+// Auth is real (Supabase magic link). Campaigns/characters/scene state are
+// still mock data in src/mockData.js -- that swap is next, once someone
+// has actually signed in for real and can be added to a campaign.
 export default function App() {
-  const [view, setView] = useState('signin') // 'signin' | 'lobby' | 'characters' | 'builder' | 'table' | 'gm'
+  const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
+  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm'
   const [activeCampaign, setActiveCampaign] = useState(null)
   const [newCharacter, setNewCharacter] = useState(null)
 
-  const signedIn = () => setView('lobby')
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession)
+    })
+    return () => listener.subscription.unsubscribe()
+  }, [])
+
+  const signOut = () => supabase.auth.signOut()
 
   const enterCampaign = (id) => {
     setActiveCampaign(id)
@@ -36,10 +46,23 @@ export default function App() {
 
   const campaignName = activeCampaign === 'barrowfield' ? 'Barrowfield' : 'The sunken keep'
 
+  // Still resolving whether a session exists -- avoid flashing the sign-in
+  // screen for a returning, already-authenticated user.
+  if (session === undefined) {
+    return <div className="min-h-screen bg-neutral-950" />
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-neutral-950">
+        <SignIn />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-neutral-950">
-      {view === 'signin' && <SignIn onSignedIn={signedIn} />}
-      {view === 'lobby' && <Lobby onEnterCampaign={enterCampaign} />}
+      {view === 'lobby' && <Lobby onEnterCampaign={enterCampaign} onSignOut={signOut} />}
       {view === 'characters' && (
         <CharacterPicker campaignName={campaignName} onChooseCharacter={chooseCharacter} />
       )}
@@ -53,7 +76,7 @@ export default function App() {
         <GmDashboard campaignName={campaignName} onSwitchToPlayerView={() => setView('table')} />
       )}
 
-      {view !== 'signin' && view !== 'lobby' && (
+      {view !== 'lobby' && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2">
           <button
             onClick={() => setView('lobby')}

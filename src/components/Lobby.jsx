@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Swords, Key, Plus, Crown, Bot, Users } from 'lucide-react'
+import { Swords, Key, Plus, Crown, Bot, Users, LogOut } from 'lucide-react'
 import { campaigns, currentUser } from '../mockData.js'
 
-export default function Lobby({ onEnterCampaign }) {
+export default function Lobby({ onEnterCampaign, onSignOut }) {
   const [joinCode, setJoinCode] = useState('')
   const [showJoin, setShowJoin] = useState(false)
 
@@ -15,11 +15,20 @@ export default function Lobby({ onEnterCampaign }) {
           </div>
           <span className="text-white font-medium">Delve</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <span className="text-sm text-neutral-400">{currentUser.name}</span>
           <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-medium text-blue-300">
             {currentUser.initial}
           </div>
+          {onSignOut && (
+            <button
+              onClick={onSignOut}
+              title="Sign out"
+              className="w-7 h-7 rounded-md border border-neutral-700 flex items-center justify-center text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+            >
+              <LogOut size={13} />
+            </button>
+          )}
         </div>
       </div>
 
