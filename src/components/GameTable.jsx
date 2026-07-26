@@ -31,7 +31,6 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const [message, setMessage] = useState('')
   const [manualDie, setManualDie] = useState(20)
   const [manualValue, setManualValue] = useState('')
-  const [lastRoll, setLastRoll] = useState(null) // shown right in the dice panel so a roll is visible even if you're on the Map tab
 
   const [mapInfo, setMapInfo] = useState(null)
   const [cellState, setCellState] = useState({})
@@ -120,7 +119,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'scene_log', filter: `campaign_id=eq.${campaignId}` },
-        (payload) => setLog((l) => [...l, payload.new])
+        (payload) => setLog((l) => (l.some((e) => e.id === payload.new.id) ? l : [...l, payload.new]))
       )
       .on(
         'postgres_changes',
@@ -173,11 +172,20 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
       .upsert({ campaign_id: campaignId, row, col, state: 'explored' }, { onConflict: 'campaign_id,row,col' })
   }
 
+  // Inserts and reads the row straight back (instead of waiting on the
+  // realtime round-trip) so your own rolls and messages show up
+  // immediately; the INSERT handler above dedupes by id so this doesn't
+  // create a second copy once the realtime event for the same row arrives.
   const postToLog = async (entry) => {
     if (!campaignId) return
-    await supabase
+    const { data, error } = await supabase
       .from('scene_log')
       .insert({ campaign_id: campaignId, sender_user_id: user?.id, sender_name: displayName || 'You', ...entry })
+      .select()
+      .single()
+    if (!error && data) {
+      setLog((l) => (l.some((e) => e.id === data.id) ? l : [...l, data]))
+    }
   }
 
   const sendMessage = () => {
@@ -188,13 +196,11 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
 
   const rollDie = (sides) => {
     const value = Math.floor(Math.random() * sides) + 1
-    setLastRoll({ text: `You rolled a ${value} (d${sides})`, source: 'app' })
     postToLog({ type: 'roll', text: `rolled a ${value} (d${sides})`, roll_source: 'app' })
   }
 
   const logManualRoll = () => {
     if (!manualValue) return
-    setLastRoll({ text: `You rolled a ${manualValue} (d${manualDie})`, source: 'self' })
     postToLog({ type: 'roll', text: `rolled a ${manualValue} (d${manualDie})`, roll_source: 'self' })
     setManualValue('')
   }
@@ -222,6 +228,45 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   }, {})
   const myVote = votes.find((v) => v.voter_user_id === user?.id)?.option_key
 
+  // Shared with both the full Scene log tab and the "Latest" strip below,
+  // so a roll or chat message renders identically wherever it shows up.
+  const renderLogEntry = (entry) => {
+    if (entry.type === 'narration') {
+      return <span key={entry.id} className="block italic text-neutral-400">{entry.text}</span>
+    }
+    if (entry.type === 'gm') {
+      return (
+        <span key={entry.id} className="block">
+          <span className="font-medium text-blue-400">{entry.sender_name}:</span>{' '}
+          <span className="text-neutral-300">{entry.text}</span>
+        </span>
+      )
+    }
+    if (entry.type === 'roll') {
+      return (
+        <span key={entry.id} className="inline-flex items-center gap-1.5 flex-wrap">
+          <span className="font-medium text-white">{entry.sender_name}:</span>
+          <span className="text-neutral-300">{entry.text}</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.5 rounded ${
+              entry.roll_source === 'app'
+                ? 'bg-blue-500/20 text-blue-300'
+                : 'bg-neutral-800 border border-neutral-700 text-neutral-400'
+            }`}
+          >
+            {entry.roll_source === 'app' ? 'app roll' : 'self-reported'}
+          </span>
+        </span>
+      )
+    }
+    return (
+      <span key={entry.id} className="block">
+        <span className="font-medium text-white">{entry.sender_name}:</span>{' '}
+        <span className="text-neutral-300">{entry.text}</span>
+      </span>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-3">
@@ -234,6 +279,17 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
           </button>
         )}
       </div>
+
+      {log.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setTab('log')}
+          className="w-full text-left mb-3 text-xs bg-neutral-900/70 border border-neutral-800 rounded-md px-3 py-2 flex items-center gap-2 hover:bg-neutral-900"
+        >
+          <span className="text-neutral-500 shrink-0">Latest:</span>
+          {renderLogEntry(log[log.length - 1])}
+        </button>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3 mb-3">
         <div className="bg-neutral-900 rounded-lg p-4">
@@ -255,42 +311,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
           {tab === 'log' && (
             <div className="h-[260px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
               {log.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- say something below.</p>}
-              {log.map((entry) => {
-                if (entry.type === 'narration') {
-                  return <p key={entry.id} className="italic text-neutral-400">{entry.text}</p>
-                }
-                if (entry.type === 'gm') {
-                  return (
-                    <p key={entry.id}>
-                      <span className="font-medium text-blue-400">{entry.sender_name}:</span>{' '}
-                      <span className="text-neutral-300">{entry.text}</span>
-                    </p>
-                  )
-                }
-                if (entry.type === 'roll') {
-                  return (
-                    <p key={entry.id} className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-medium text-white">{entry.sender_name}:</span>
-                      <span className="text-neutral-300">{entry.text}</span>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded ${
-                          entry.roll_source === 'app'
-                            ? 'bg-blue-500/20 text-blue-300'
-                            : 'bg-neutral-800 border border-neutral-700 text-neutral-400'
-                        }`}
-                      >
-                        {entry.roll_source === 'app' ? 'app roll' : 'self-reported'}
-                      </span>
-                    </p>
-                  )
-                }
-                return (
-                  <p key={entry.id}>
-                    <span className="font-medium text-white">{entry.sender_name}:</span>{' '}
-                    <span className="text-neutral-300">{entry.text}</span>
-                  </p>
-                )
-              })}
+              {log.map((entry) => renderLogEntry(entry))}
             </div>
           )}
 
@@ -379,20 +400,6 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
                 </button>
               ))}
             </div>
-            {lastRoll && (
-              <div className="flex items-center gap-1.5 mb-2.5 text-xs">
-                <span className="text-white font-medium">{lastRoll.text}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded ${
-                    lastRoll.source === 'app'
-                      ? 'bg-blue-500/20 text-blue-300'
-                      : 'bg-neutral-800 border border-neutral-700 text-neutral-400'
-                  }`}
-                >
-                  {lastRoll.source === 'app' ? 'app roll' : 'self-reported'}
-                </span>
-              </div>
-            )}
             <div className="pt-2.5 border-t border-neutral-800">
               <p className="text-[11px] text-neutral-500 mb-1.5">Rolled it yourself? Log it here.</p>
               <div className="flex gap-1.5">

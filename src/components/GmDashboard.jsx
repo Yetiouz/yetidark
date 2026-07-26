@@ -97,7 +97,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'scene_log', filter: `campaign_id=eq.${campaignId}` },
-        (payload) => setLog((l) => [...l, payload.new])
+        (payload) => setLog((l) => (l.some((e) => e.id === payload.new.id) ? l : [...l, payload.new]))
       )
       .on(
         'postgres_changes',
@@ -276,13 +276,20 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     if (!message.trim() || !campaignId) return
     const text = message.trim()
     setMessage('')
-    await supabase.from('scene_log').insert({
-      campaign_id: campaignId,
-      type: 'gm',
-      sender_user_id: user?.id,
-      sender_name: displayName,
-      text,
-    })
+    const { data, error } = await supabase
+      .from('scene_log')
+      .insert({
+        campaign_id: campaignId,
+        type: 'gm',
+        sender_user_id: user?.id,
+        sender_name: displayName,
+        text,
+      })
+      .select()
+      .single()
+    if (!error && data) {
+      setLog((l) => (l.some((e) => e.id === data.id) ? l : [...l, data]))
+    }
   }
 
   return (
