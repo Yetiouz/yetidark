@@ -4,6 +4,7 @@ import SignIn from './components/SignIn.jsx'
 import Lobby from './components/Lobby.jsx'
 import CharacterPicker from './components/CharacterPicker.jsx'
 import CharacterBuilder from './components/CharacterBuilder.jsx'
+import CharacterSheet from './components/CharacterSheet.jsx'
 import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 import Profile from './components/Profile.jsx'
@@ -13,9 +14,11 @@ import Profile from './components/Profile.jsx'
 // trackers. mockData.js is no longer used anywhere.
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
-  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile'
+  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet'
   const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
   const [activeCharacter, setActiveCharacter] = useState(null) // real character row from Supabase
+  const [viewingCharacterId, setViewingCharacterId] = useState(null) // which character's full sheet is open
+  const [sheetReturnView, setSheetReturnView] = useState('table') // where "Back" on the sheet should go
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -47,6 +50,15 @@ export default function App() {
   const finishBuilding = (character) => {
     setActiveCharacter(character)
     setView('table')
+  }
+
+  // Opens a character's full sheet from wherever the player or GM clicked
+  // it (a party card on the table or the GM dashboard) -- "Back" returns
+  // to whichever view triggered it.
+  const openCharacterSheet = (characterId, fromView) => {
+    setViewingCharacterId(characterId)
+    setSheetReturnView(fromView)
+    setView('sheet')
   }
 
   const campaignName = activeCampaign?.name || ''
@@ -95,10 +107,29 @@ export default function App() {
         />
       )}
       {view === 'table' && (
-        <GameTable campaignId={activeCampaign?.id} session={session} campaignName={campaignName} onOpenGmView={() => setView('gm')} />
+        <GameTable
+          campaignId={activeCampaign?.id}
+          session={session}
+          campaignName={campaignName}
+          onOpenGmView={() => setView('gm')}
+          onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'table')}
+        />
       )}
       {view === 'gm' && (
-        <GmDashboard campaignId={activeCampaign?.id} session={session} campaignName={campaignName} onSwitchToPlayerView={() => setView('table')} />
+        <GmDashboard
+          campaignId={activeCampaign?.id}
+          session={session}
+          campaignName={campaignName}
+          onSwitchToPlayerView={() => setView('table')}
+          onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'gm')}
+        />
+      )}
+      {view === 'sheet' && (
+        <CharacterSheet
+          characterId={viewingCharacterId}
+          session={session}
+          onBack={() => setView(sheetReturnView)}
+        />
       )}
 
       {view !== 'lobby' && (
