@@ -4,15 +4,29 @@ import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 
 // Everything here is real Supabase data, synced live: the encounter
-// tracker, GM notes, turn order, and the map panel (upload, grid size,
-// party marker, reveal/re-fog).
-export default function GmDashboard({ campaignId, campaignName = 'The sunken keep', onSwitchToPlayerView }) {
+// tracker, GM notes, turn order, the scene log, and the map panel (upload,
+// grid size, party marker, reveal/re-fog).
+export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView }) {
+  const user = session?.user
+  const [displayName, setDisplayName] = useState('GM')
   const [encounter, setEncounter] = useState([])
   const [notes, setNotes] = useState([])
   const [noteDraft, setNoteDraft] = useState('')
   const [monsterDraft, setMonsterDraft] = useState('')
   const [party, setParty] = useState([])
   const [turnOrder, setTurnOrder] = useState([])
+  const [log, setLog] = useState([])
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (!user) return
+    supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setDisplayName(data?.display_name || user.email || 'GM'))
+  }, [user])
 
   const [mapInfo, setMapInfo] = useState(null)
   const [cellState, setCellState] = useState({})
@@ -71,8 +85,20 @@ export default function GmDashboard({ campaignId, campaignName = 'The sunken kee
         setCellState(next)
       })
 
+    supabase
+      .from('scene_log')
+      .select('id, type, sender_name, text, roll_source, created_at')
+      .eq('campaign_id', campaignId)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => { if (!cancelled) setLog(data || []) })
+
     const channel = supabase
       .channel(`gm-dashboard-${campaignId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'scene_log', filter: `campaign_id=eq.${campaignId}` },
+        (payload) => setLog((l) => [...l, payload.new])
+      )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'encounter_monsters', filter: `campaign_id=eq.${campaignId}` },
@@ -246,6 +272,19 @@ export default function GmDashboard({ campaignId, campaignName = 'The sunken kee
     setCellState({})
   }
 
+  const sendMessage = async () => {
+    if (!message.trim() || !campaignId) return
+    const text = message.trim()
+    setMessage('')
+    await supabase.from('scene_log').insert({
+      campaign_id: campaignId,
+      type: 'gm',
+      sender_user_id: user?.id,
+      sender_name: displayName,
+      text,
+    })
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-3">
@@ -371,6 +410,61 @@ export default function GmDashboard({ campaignId, campaignName = 'The sunken kee
               <Plus size={13} />
             </button>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-neutral-900 rounded-lg p-4 mb-3">
+        <p className="text-xs text-neutral-400 mb-2">Scene log</p>
+        <div className="h-[180px] overflow-y-auto flex flex-col gap-2 text-sm pr-1 mb-2.5">
+          {log.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- narrate something below.</p>}
+          {log.map((entry) => {
+            if (entry.type === 'narration') {
+              return <p key={entry.id} className="italic text-neutral-400">{entry.text}</p>
+            }
+            if (entry.type === 'gm') {
+              return (
+                <p key={entry.id}>
+                  <span className="font-medium text-blue-400">{entry.sender_name}:</span>{' '}
+                  <span className="text-neutral-300">{entry.text}</span>
+                </p>
+              )
+            }
+            if (entry.type === 'roll') {
+              return (
+                <p key={entry.id} className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-medium text-white">{entry.sender_name}:</span>
+                  <span className="text-neutral-300">{entry.text}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      entry.roll_source === 'app'
+                        ? 'bg-blue-500/20 text-blue-300'
+                        : 'bg-neutral-800 border border-neutral-700 text-neutral-400'
+                    }`}
+                  >
+                    {entry.roll_source === 'app' ? 'app roll' : 'self-reported'}
+                  </span>
+                </p>
+              )
+            }
+            return (
+              <p key={entry.id}>
+                <span className="font-medium text-white">{entry.sender_name}:</span>{' '}
+                <span className="text-neutral-300">{entry.text}</span>
+              </p>
+            )
+          })}
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+            placeholder="Narrate something to the party"
+            className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
+          />
+          <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 text-neutral-200 hover:bg-neutral-800">
+            Send
+          </button>
         </div>
       </div>
 

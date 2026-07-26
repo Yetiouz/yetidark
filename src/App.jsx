@@ -98,7 +98,7 @@ export default function App() {
         <GameTable campaignId={activeCampaign?.id} session={session} campaignName={campaignName} onOpenGmView={() => setView('gm')} />
       )}
       {view === 'gm' && (
-        <GmDashboard campaignId={activeCampaign?.id} campaignName={campaignName} onSwitchToPlayerView={() => setView('table')} />
+        <GmDashboard campaignId={activeCampaign?.id} session={session} campaignName={campaignName} onSwitchToPlayerView={() => setView('table')} />
       )}
 
       {view !== 'lobby' && (
