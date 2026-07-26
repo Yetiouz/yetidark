@@ -2,6 +2,7 @@ import { useState } from 'react'
 import SignIn from './components/SignIn.jsx'
 import Lobby from './components/Lobby.jsx'
 import CharacterPicker from './components/CharacterPicker.jsx'
+import CharacterBuilder from './components/CharacterBuilder.jsx'
 import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 
@@ -9,8 +10,9 @@ import GmDashboard from './components/GmDashboard.jsx'
 // prototype with mock data. Swap this for real routing + Supabase auth/state
 // once the screens are locked in.
 export default function App() {
-  const [view, setView] = useState('signin') // 'signin' | 'lobby' | 'characters' | 'table' | 'gm'
+  const [view, setView] = useState('signin') // 'signin' | 'lobby' | 'characters' | 'builder' | 'table' | 'gm'
   const [activeCampaign, setActiveCampaign] = useState(null)
+  const [newCharacter, setNewCharacter] = useState(null)
 
   const signedIn = () => setView('lobby')
 
@@ -19,7 +21,16 @@ export default function App() {
     setView('characters')
   }
 
-  const chooseCharacter = () => {
+  const chooseCharacter = ({ mode } = {}) => {
+    if (mode === 'create') {
+      setView('builder')
+    } else {
+      setView('table')
+    }
+  }
+
+  const finishBuilding = (character) => {
+    setNewCharacter(character)
     setView('table')
   }
 
@@ -31,6 +42,9 @@ export default function App() {
       {view === 'lobby' && <Lobby onEnterCampaign={enterCampaign} />}
       {view === 'characters' && (
         <CharacterPicker campaignName={campaignName} onChooseCharacter={chooseCharacter} />
+      )}
+      {view === 'builder' && (
+        <CharacterBuilder campaignName={campaignName} onComplete={finishBuilding} />
       )}
       {view === 'table' && (
         <GameTable campaignName={campaignName} onOpenGmView={() => setView('gm')} />
