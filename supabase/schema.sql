@@ -128,6 +128,29 @@ create table votes (
 );
 
 -- ---------------------------------------------------------------------
+-- Auto-create a profile row whenever someone signs up for the first time,
+-- so profiles.display_name always has something sensible without the app
+-- needing a separate "finish your profile" step.
+-- ---------------------------------------------------------------------
+
+create or replace function handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (id, display_name)
+  values (new.id, coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)));
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function handle_new_user();
+
+-- ---------------------------------------------------------------------
 -- Row level security: every table is scoped to campaigns a user belongs
 -- to. gm_notes additionally hides unrevealed notes from non-GM members,
 -- and encounter_monsters hides hidden monsters the same way.
@@ -174,8 +197,14 @@ create policy "profiles are self-readable" on profiles
 create policy "members can read their campaigns" on campaigns
   for select using (is_campaign_member(id));
 
+create policy "authenticated users can create campaigns" on campaigns
+  for insert with check (auth.uid() is not null);
+
 create policy "members can read the member list" on campaign_members
   for select using (is_campaign_member(campaign_id));
+
+create policy "users can add themselves as a member" on campaign_members
+  for insert with check (user_id = auth.uid());
 
 create policy "members can read campaign characters" on characters
   for select using (is_campaign_member(campaign_id));

@@ -7,13 +7,13 @@ import CharacterBuilder from './components/CharacterBuilder.jsx'
 import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 
-// Auth is real (Supabase magic link). Campaigns/characters/scene state are
-// still mock data in src/mockData.js -- that swap is next, once someone
-// has actually signed in for real and can be added to a campaign.
+// Auth and the lobby's campaign list/join-by-code are real Supabase now.
+// Characters, scene log, hex map, and GM dashboard are still mock data in
+// src/mockData.js -- next slices of Phase 4.
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
   const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm'
-  const [activeCampaign, setActiveCampaign] = useState(null)
+  const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
   const [newCharacter, setNewCharacter] = useState(null)
 
   useEffect(() => {
@@ -26,8 +26,8 @@ export default function App() {
 
   const signOut = () => supabase.auth.signOut()
 
-  const enterCampaign = (id) => {
-    setActiveCampaign(id)
+  const enterCampaign = (campaign) => {
+    setActiveCampaign(campaign)
     setView('characters')
   }
 
@@ -44,7 +44,7 @@ export default function App() {
     setView('table')
   }
 
-  const campaignName = activeCampaign === 'barrowfield' ? 'Barrowfield' : 'The sunken keep'
+  const campaignName = activeCampaign?.name || ''
 
   // Still resolving whether a session exists -- avoid flashing the sign-in
   // screen for a returning, already-authenticated user.
@@ -62,7 +62,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950">
-      {view === 'lobby' && <Lobby onEnterCampaign={enterCampaign} onSignOut={signOut} />}
+      {view === 'lobby' && (
+        <Lobby session={session} onEnterCampaign={enterCampaign} onSignOut={signOut} />
+      )}
       {view === 'characters' && (
         <CharacterPicker campaignName={campaignName} onChooseCharacter={chooseCharacter} />
       )}
