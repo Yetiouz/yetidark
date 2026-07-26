@@ -28,7 +28,7 @@ function hpBarColor(hp, maxHp) {
 // disadvantage on a lone d20 check, and automatic crit/fumble flagging.
 // Every roll (app-rolled or self-reported) is persisted to the `dice_rolls`
 // audit table, not just summarized in the scene log.
-export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView }) {
+export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('')
   const [isGm, setIsGm] = useState(false)
@@ -630,7 +630,12 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
           <p className="text-xs text-neutral-500 sm:col-span-3">No characters in this campaign yet.</p>
         )}
         {party.map((p) => (
-          <div key={p.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-3">
+          <button
+            key={p.id}
+            onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
+            disabled={!onOpenCharacterSheet}
+            className="text-left bg-neutral-900 border border-neutral-800 rounded-xl p-3 hover:border-neutral-600 disabled:cursor-default disabled:hover:border-neutral-800"
+          >
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-sm font-medium text-white">{p.name}</span>
             </div>
@@ -647,7 +652,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
               <span>{p.hp}/{p.max_hp} hp</span>
               <span>ac {p.ac}</span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>

@@ -13,7 +13,7 @@ import { rollDiceNotation } from '../lib/dice.js'
 // and are persisted to the `dice_rolls` audit table, not just summarized
 // in the scene log -- keeps every roll in the app on one consistent,
 // auditable dice path, matching the file-based GM system's dice.py.
-export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView }) {
+export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('GM')
   const [encounter, setEncounter] = useState([])
@@ -64,7 +64,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('characters')
-      .select('id, name')
+      .select('id, name, class, level, hp, max_hp, ac')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setParty(data || []) })
@@ -527,6 +527,28 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             {chatLog.length === 0 && <p className="text-xs text-neutral-500">Nothing from the players yet.</p>}
             {chatLog.map((entry) => renderLogEntry(entry))}
           </div>
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <p className="text-xs text-neutral-400 mb-2">Party</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {party.length === 0 && (
+            <p className="text-xs text-neutral-500 sm:col-span-3">No characters in this campaign yet.</p>
+          )}
+          {party.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
+              disabled={!onOpenCharacterSheet}
+              className="text-left bg-neutral-900 border border-neutral-800 rounded-xl p-3 hover:border-neutral-600 disabled:cursor-default disabled:hover:border-neutral-800"
+            >
+              <span className="text-sm font-medium text-white block mb-1.5">{p.name}</span>
+              <p className="text-[11px] text-neutral-400">
+                {p.class} &middot; lvl {p.level} &middot; {p.hp}/{p.max_hp} hp &middot; ac {p.ac}
+              </p>
+            </button>
+          ))}
         </div>
       </div>
 
