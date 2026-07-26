@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send, AlertCircle, User } from 'lucide-react'
+import { Dices, Send, AlertCircle, User, Settings } from 'lucide-react'
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { rollDiceNotation, flatDieNotation, DiceNotationError } from '../lib/dice.js'
@@ -28,7 +28,7 @@ function hpBarColor(hp, maxHp) {
 // disadvantage on a lone d20 check, and automatic crit/fumble flagging.
 // Every roll (app-rolled or self-reported) is persisted to the `dice_rolls`
 // audit table, not just summarized in the scene log.
-export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet }) {
+export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('')
   const [isGm, setIsGm] = useState(false)
@@ -402,11 +402,22 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
         <div className="flex items-center gap-2.5">
           <p className="text-white font-medium">{campaignName}</p>
         </div>
-        {onOpenGmView && (
-          <button onClick={onOpenGmView} className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-300 hover:bg-neutral-800">
-            GM view
-          </button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              title="Campaign settings"
+              className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+            >
+              <Settings size={14} />
+            </button>
+          )}
+          {onOpenGmView && (
+            <button onClick={onOpenGmView} className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-300 hover:bg-neutral-800">
+              GM view
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3 mb-3">

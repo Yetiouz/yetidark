@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Eye, Plus, Flag, Upload, RotateCcw, Dices, SkipForward, User } from 'lucide-react'
+import { Eye, Plus, Flag, Upload, RotateCcw, Dices, SkipForward, User, Settings } from 'lucide-react'
 
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
@@ -13,7 +13,7 @@ import { rollDiceNotation } from '../lib/dice.js'
 // and are persisted to the `dice_rolls` audit table, not just summarized
 // in the scene log -- keeps every roll in the app on one consistent,
 // auditable dice path, matching the file-based GM system's dice.py.
-export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet }) {
+export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('GM')
   const [encounter, setEncounter] = useState([])
@@ -379,14 +379,25 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
           <p className="text-white font-medium">{campaignName}</p>
           <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">GM view</span>
         </div>
-        {onSwitchToPlayerView && (
-          <button
-            onClick={onSwitchToPlayerView}
-            className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-neutral-300 hover:bg-neutral-800"
-          >
-            <Eye size={14} /> Switch to player view
-          </button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              title="Campaign settings"
+              className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+            >
+              <Settings size={14} />
+            </button>
+          )}
+          {onSwitchToPlayerView && (
+            <button
+              onClick={onSwitchToPlayerView}
+              className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-neutral-300 hover:bg-neutral-800"
+            >
+              <Eye size={14} /> Switch to player view
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_240px] gap-3 mb-3">

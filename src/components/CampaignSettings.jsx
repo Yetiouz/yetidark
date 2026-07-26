@@ -1,0 +1,161 @@
+import { useState, useEffect } from 'react'
+import { ArrowLeft, Save } from 'lucide-react'
+import { supabase } from '../lib/supabaseClient.js'
+
+// Paraphrased, generic descriptions of Shadowdark's optional Modes of
+// Play toggles -- not the rulebook's own wording, same approach used
+// throughout CharacterBuilder to avoid reproducing The Arcane Library's
+// copyrighted text.
+const MODES_OF_PLAY = [
+  { key: 'hunter', label: 'Hunter', description: 'Resources run out faster -- rations, torches, and ammo are scarcer.' },
+  { key: 'momentum', label: 'Momentum', description: 'Keeps the pace brisk -- shorter rests, less downtime between scenes.' },
+  { key: 'pulp', label: 'Pulp', description: 'Leans heroic and forgiving -- characters shrug off death more easily.' },
+  { key: 'blitz', label: 'Blitz', description: 'Combat moves fast -- streamlined turns, less bookkeeping mid-fight.' },
+  { key: 'chaos', label: 'Chaos', description: 'Embraces the unpredictable -- random tables and wild swings come up more.' },
+  { key: 'deadly', label: 'Deadly', description: 'Danger is real -- fights are riskier and death comes easier.' },
+  { key: 'fatality', label: 'Fatality', description: 'Death is final -- no fudging, no walking it back.' },
+  { key: 'grinder', label: 'Grinder', description: 'Attrition matters more over a long dungeon crawl.' },
+]
+
+// House rules + Modes of Play, shared by the whole table. Only the GM can
+// edit either; everyone else gets a read-only view -- same member-read /
+// gm-write split the campaigns row already has for the map and other
+// settings, so no new RLS was needed for this chunk.
+export default function CampaignSettings({ campaignId, session, campaignName = 'The sunken keep', onBack }) {
+  const user = session?.user
+  const [isGm, setIsGm] = useState(false)
+  const [houseRules, setHouseRules] = useState('')
+  const [modes, setModes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!campaignId) return
+    let cancelled = false
+
+    supabase
+      .from('campaigns')
+      .select('house_rules, modes_of_play')
+      .eq('id', campaignId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        setHouseRules(data?.house_rules || '')
+        setModes(data?.modes_of_play || [])
+        setLoading(false)
+      })
+
+    if (user) {
+      supabase
+        .from('campaign_members')
+        .select('role')
+        .eq('campaign_id', campaignId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+        .then(({ data }) => { if (!cancelled) setIsGm(data?.role === 'gm') })
+    }
+
+    const channel = supabase
+      .channel(`campaign-settings-${campaignId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
+        (payload) => {
+          setHouseRules(payload.new.house_rules || '')
+          setModes(payload.new.modes_of_play || [])
+        }
+      )
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      supabase.removeChannel(channel)
+    }
+  }, [campaignId, user])
+
+  const toggleMode = (key) => {
+    setModes((m) => (m.includes(key) ? m.filter((k) => k !== key) : [...m, key]))
+  }
+
+  const save = async () => {
+    setSaving(true)
+    await supabase.from('campaigns').update({ house_rules: houseRules, modes_of_play: modes }).eq('id', campaignId)
+    setSaving(false)
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-xl mx-auto p-6">
+        <p className="text-xs text-neutral-500">Loading campaign settings…</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-xl mx-auto p-6">
+      {onBack && (
+        <button onClick={onBack} className="text-xs text-neutral-400 hover:text-neutral-200 flex items-center gap-1 mb-3">
+          <ArrowLeft size={13} /> Back
+        </button>
+      )}
+
+      <h1 className="text-white text-lg font-medium mb-1">{campaignName}</h1>
+      <p className="text-xs text-neutral-400 mb-4">Campaign settings</p>
+
+      <div className="bg-neutral-900 rounded-lg p-4 mb-4">
+        <p className="text-xs text-neutral-400 mb-2">Modes of play</p>
+        <div className="flex flex-col gap-1.5">
+          {MODES_OF_PLAY.map((mode) => (
+            <label key={mode.key} className="flex items-start gap-2 text-xs">
+              {isGm ? (
+                <input
+                  type="checkbox"
+                  checked={modes.includes(mode.key)}
+                  onChange={() => toggleMode(mode.key)}
+                  className="mt-0.5"
+                />
+              ) : (
+                <span
+                  className={`w-2 h-2 rounded-full inline-block mt-1 shrink-0 ${
+                    modes.includes(mode.key) ? 'bg-blue-400' : 'bg-neutral-700'
+                  }`}
+                />
+              )}
+              <span>
+                <span className={`font-medium ${modes.includes(mode.key) ? 'text-white' : 'text-neutral-500'}`}>{mode.label}</span>
+                <span className="text-neutral-500"> -- {mode.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-neutral-900 rounded-lg p-4 mb-4">
+        <p className="text-xs text-neutral-400 mb-2">House rules</p>
+        {isGm ? (
+          <textarea
+            value={houseRules}
+            onChange={(e) => setHouseRules(e.target.value)}
+            placeholder="Anything the table has agreed on beyond the core rules..."
+            rows={6}
+            className="w-full text-sm bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-white resize-y"
+          />
+        ) : houseRules ? (
+          <p className="text-sm text-neutral-300 whitespace-pre-wrap">{houseRules}</p>
+        ) : (
+          <p className="text-xs text-neutral-500">No house rules set yet.</p>
+        )}
+      </div>
+
+      {isGm && (
+        <button
+          onClick={save}
+          disabled={saving}
+          className="text-xs border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+        >
+          <Save size={13} /> {saving ? 'Saving...' : 'Save settings'}
+        </button>
+      )}
+    </div>
+  )
+}

@@ -5,6 +5,7 @@ import Lobby from './components/Lobby.jsx'
 import CharacterPicker from './components/CharacterPicker.jsx'
 import CharacterBuilder from './components/CharacterBuilder.jsx'
 import CharacterSheet from './components/CharacterSheet.jsx'
+import CampaignSettings from './components/CampaignSettings.jsx'
 import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 import Profile from './components/Profile.jsx'
@@ -14,11 +15,12 @@ import Profile from './components/Profile.jsx'
 // trackers. mockData.js is no longer used anywhere.
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
-  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet'
+  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings'
   const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
   const [activeCharacter, setActiveCharacter] = useState(null) // real character row from Supabase
   const [viewingCharacterId, setViewingCharacterId] = useState(null) // which character's full sheet is open
   const [sheetReturnView, setSheetReturnView] = useState('table') // where "Back" on the sheet should go
+  const [settingsReturnView, setSettingsReturnView] = useState('table') // where "Back" on campaign settings should go
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -59,6 +61,14 @@ export default function App() {
     setViewingCharacterId(characterId)
     setSheetReturnView(fromView)
     setView('sheet')
+  }
+
+  // Same "remember where you came from" pattern as the character sheet --
+  // the gear icon lives on both GameTable and GmDashboard, so "Back" needs
+  // to return to whichever one opened it.
+  const openCampaignSettings = (fromView) => {
+    setSettingsReturnView(fromView)
+    setView('settings')
   }
 
   const campaignName = activeCampaign?.name || ''
@@ -113,6 +123,7 @@ export default function App() {
           campaignName={campaignName}
           onOpenGmView={() => setView('gm')}
           onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'table')}
+          onOpenSettings={() => openCampaignSettings('table')}
         />
       )}
       {view === 'gm' && (
@@ -122,6 +133,7 @@ export default function App() {
           campaignName={campaignName}
           onSwitchToPlayerView={() => setView('table')}
           onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'gm')}
+          onOpenSettings={() => openCampaignSettings('gm')}
         />
       )}
       {view === 'sheet' && (
@@ -129,6 +141,14 @@ export default function App() {
           characterId={viewingCharacterId}
           session={session}
           onBack={() => setView(sheetReturnView)}
+        />
+      )}
+      {view === 'settings' && (
+        <CampaignSettings
+          campaignId={activeCampaign?.id}
+          session={session}
+          campaignName={campaignName}
+          onBack={() => setView(settingsReturnView)}
         />
       )}
 
