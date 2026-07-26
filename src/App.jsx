@@ -1,37 +1,45 @@
 import { useState } from 'react'
+import SignIn from './components/SignIn.jsx'
 import Lobby from './components/Lobby.jsx'
+import CharacterPicker from './components/CharacterPicker.jsx'
 import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 
-// No routing library yet on purpose -- this is a click-through prototype
-// with mock data. Swap this for real routing + Supabase auth/state once
-// the screens are locked in.
+// No routing library or real auth yet on purpose -- this is a click-through
+// prototype with mock data. Swap this for real routing + Supabase auth/state
+// once the screens are locked in.
 export default function App() {
-  const [view, setView] = useState('lobby') // 'lobby' | 'table' | 'gm'
+  const [view, setView] = useState('signin') // 'signin' | 'lobby' | 'characters' | 'table' | 'gm'
   const [activeCampaign, setActiveCampaign] = useState(null)
+
+  const signedIn = () => setView('lobby')
 
   const enterCampaign = (id) => {
     setActiveCampaign(id)
+    setView('characters')
+  }
+
+  const chooseCharacter = () => {
     setView('table')
   }
 
+  const campaignName = activeCampaign === 'barrowfield' ? 'Barrowfield' : 'The sunken keep'
+
   return (
     <div className="min-h-screen bg-neutral-950">
+      {view === 'signin' && <SignIn onSignedIn={signedIn} />}
       {view === 'lobby' && <Lobby onEnterCampaign={enterCampaign} />}
+      {view === 'characters' && (
+        <CharacterPicker campaignName={campaignName} onChooseCharacter={chooseCharacter} />
+      )}
       {view === 'table' && (
-        <GameTable
-          campaignName={activeCampaign === 'barrowfield' ? 'Barrowfield' : 'The sunken keep'}
-          onOpenGmView={() => setView('gm')}
-        />
+        <GameTable campaignName={campaignName} onOpenGmView={() => setView('gm')} />
       )}
       {view === 'gm' && (
-        <GmDashboard
-          campaignName={activeCampaign === 'barrowfield' ? 'Barrowfield' : 'The sunken keep'}
-          onSwitchToPlayerView={() => setView('table')}
-        />
+        <GmDashboard campaignName={campaignName} onSwitchToPlayerView={() => setView('table')} />
       )}
 
-      {view !== 'lobby' && (
+      {view !== 'signin' && view !== 'lobby' && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2">
           <button
             onClick={() => setView('lobby')}

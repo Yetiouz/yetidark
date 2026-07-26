@@ -24,6 +24,27 @@ export const campaigns = [
   },
 ]
 
+export const myCharacters = [
+  {
+    id: 'yeti-priest',
+    name: "Yeti's priest",
+    className: 'Human priest',
+    level: 3,
+    campaign: 'The sunken keep',
+    initial: 'Y',
+    color: 'blue',
+  },
+  {
+    id: 'rendil',
+    name: 'Rendil the bold',
+    className: 'Dwarf fighter',
+    level: 1,
+    campaign: 'Barrowfield',
+    initial: 'R',
+    color: 'amber',
+  },
+]
+
 export const party = [
   {
     id: 'marcus',
