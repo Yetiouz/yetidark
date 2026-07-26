@@ -88,7 +88,9 @@ create table gm_notes (
 -- to 'explored' (transparent, map shows through) permanently -- per the
 -- honor-system fog-of-war design -- unless the GM uses the "re-fog" control
 -- to clear cells for a story reason like amnesia. Cells are created lazily:
--- a missing row for (campaign, row, col) just means 'fog'.
+-- a missing row for (campaign, row, col) just means 'fog'. Only the GM can
+-- write to this table -- players can read it (RLS below) so fog clears
+-- live for everyone, but revealing/re-fogging is a GM-only action.
 create table map_cells (
   campaign_id uuid references campaigns(id) on delete cascade,
   row int not null,
@@ -276,11 +278,11 @@ create policy "only gm writes notes" on gm_notes
 create policy "members can read map cells" on map_cells
   for select using (is_campaign_member(campaign_id));
 
-create policy "members can reveal map cells" on map_cells
-  for insert with check (is_campaign_member(campaign_id));
+create policy "gm can reveal map cells" on map_cells
+  for insert with check (is_campaign_gm(campaign_id));
 
-create policy "members can update map cells" on map_cells
-  for update using (is_campaign_member(campaign_id));
+create policy "gm can update map cells" on map_cells
+  for update using (is_campaign_gm(campaign_id));
 
 create policy "gm can delete map cells" on map_cells
   for delete using (is_campaign_gm(campaign_id));
