@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send } from 'lucide-react'
+import { Dices, Send, AlertCircle } from 'lucide-react'
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
+import { rollDiceNotation, flatDieNotation, DiceNotationError } from '../lib/dice.js'
 
 const dice = [20, 12, 10, 8, 6, 4]
 const VOTE_POLL_KEY = 'where-next'
@@ -21,6 +22,12 @@ function hpBarColor(hp, maxHp) {
 // table: the scene log, dice rolls (app-rolled and self-reported, tagged
 // per the honor-system design), the map, turn order, the "where to next?"
 // vote, and the party's HP/AC cards.
+//
+// Dice rolling goes through src/lib/dice.js, a client-side port of the
+// file-based GM system's dice.py -- real notation (1d8+3), advantage/
+// disadvantage on a lone d20 check, and automatic crit/fumble flagging.
+// Every roll (app-rolled or self-reported) is persisted to the `dice_rolls`
+// audit table, not just summarized in the scene log.
 export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('')
@@ -30,11 +37,18 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const [message, setMessage] = useState('')
   const [manualDie, setManualDie] = useState(20)
   const [manualValue, setManualValue] = useState('')
-  const [rollState, setRollState] = useState(null) // { sides, value, isRolling } -- drives the animated die
+  const [rollState, setRollState] = useState(null) // { label, value, isRolling, isCrit, isFumble } -- drives the animated die
   const [rollNonce, setRollNonce] = useState(0) // bumped every roll so the CSS animation replays even on repeat values
   const rollTimerRef = useRef(null)
   const sceneLogRef = useRef(null)
   const chatLogRef = useRef(null)
+
+  // Advanced roll controls: notation + advantage/disadvantage + an optional
+  // reason, mirroring `python3 dice.py <notation> [--adv|--disadv] --reason`.
+  const [notationInput, setNotationInput] = useState('1d20')
+  const [rollMode, setRollMode] = useState('flat') // 'flat' | 'advantage' | 'disadvantage'
+  const [reasonInput, setReasonInput] = useState('')
+  const [rollError, setRollError] = useState(null)
 
   useEffect(() => {
     return () => {
@@ -85,7 +99,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
 
     supabase
       .from('scene_log')
-      .select('id, type, sender_name, text, roll_source, created_at')
+      .select('id, type, sender_name, text, roll_source, dice_roll_id, created_at')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setLog(data || []) })
@@ -204,34 +218,105 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
     setMessage('')
   }
 
+  const rollSummaryText = (result) => {
+    const modeLabel = result.mode === 'advantage' ? ' (advantage)' : result.mode === 'disadvantage' ? ' (disadvantage)' : ''
+    const flag = result.isCrit ? ' — CRITICAL!' : result.isFumble ? ' — fumble!' : ''
+    const reasonSuffix = result.reason ? ` — ${result.reason}` : ''
+    return `rolled ${result.notation}${modeLabel}: ${result.total}${flag}${reasonSuffix}`
+  }
+
+  // Persists a completed roll to the dice_rolls audit table, then posts the
+  // human-readable summary to the scene log linked back to it -- so the
+  // log stays readable but the full breakdown/reason/crit flag is never
+  // lost, matching dice.py's terminal-output-plus-permanent-log behavior.
+  const logDiceRoll = async (result) => {
+    if (!campaignId) return null
+    const { data, error } = await supabase
+      .from('dice_rolls')
+      .insert({
+        campaign_id: campaignId,
+        roller_user_id: user?.id,
+        roller_name: displayName || 'You',
+        notation: result.notation,
+        mode: result.mode,
+        reason: result.reason,
+        breakdown: result.breakdown,
+        total: result.total,
+        raw_d20: result.rawD20,
+        is_crit: result.isCrit,
+        is_fumble: result.isFumble,
+      })
+      .select()
+      .single()
+    if (error) return null
+    await postToLog({ type: 'roll', text: rollSummaryText(result), roll_source: 'app', dice_roll_id: data.id })
+    return data
+  }
+
   // Spins the number in the die box a handful of times before landing on
   // the real result, then logs it -- purely cosmetic, the actual roll
-  // (`finalValue`) is decided up front so the animation never changes it.
-  const rollDie = (sides) => {
+  // (`result`, computed up front via rollDiceNotation) never changes.
+  const animateAndLog = (result) => {
     if (rollState?.isRolling) return
-    const finalValue = Math.floor(Math.random() * sides) + 1
     if (rollTimerRef.current) clearInterval(rollTimerRef.current)
     setRollNonce((n) => n + 1)
-    setRollState({ sides, value: Math.floor(Math.random() * sides) + 1, isRolling: true })
+    const flicker = () => Math.floor(Math.random() * Math.max(20, Math.abs(result.total) * 2 || 20)) + 1
+    setRollState({ label: result.notation, value: flicker(), isRolling: true })
     let ticks = 0
     rollTimerRef.current = setInterval(() => {
       ticks += 1
       if (ticks >= 9) {
         clearInterval(rollTimerRef.current)
         rollTimerRef.current = null
-        setRollState({ sides, value: finalValue, isRolling: false })
-        postToLog({ type: 'roll', text: `rolled a ${finalValue} (d${sides})`, roll_source: 'app' })
+        setRollState({
+          label: result.notation,
+          value: result.total,
+          isRolling: false,
+          isCrit: result.isCrit,
+          isFumble: result.isFumble,
+        })
+        logDiceRoll(result)
       } else {
-        setRollState({ sides, value: Math.floor(Math.random() * sides) + 1, isRolling: true })
+        setRollState({ label: result.notation, value: flicker(), isRolling: true })
       }
     }, 60)
   }
 
-  const logManualRoll = () => {
+  const rollQuickDie = (sides) => {
+    setRollError(null)
+    try {
+      const result = rollDiceNotation(flatDieNotation(sides), { mode: 'flat' })
+      animateAndLog(result)
+    } catch (e) {
+      setRollError(e instanceof DiceNotationError ? e.message : 'Could not roll that.')
+    }
+  }
+
+  const rollCustom = () => {
+    setRollError(null)
+    try {
+      const result = rollDiceNotation(notationInput, { mode: rollMode, reason: reasonInput.trim() || null })
+      animateAndLog(result)
+    } catch (e) {
+      setRollError(e instanceof DiceNotationError ? e.message : 'Could not roll that.')
+    }
+  }
+
+  const logManualRoll = async () => {
     if (!manualValue) return
+    const notation = `1d${manualDie}`
     setRollNonce((n) => n + 1)
-    setRollState({ sides: manualDie, value: manualValue, isRolling: false })
-    postToLog({ type: 'roll', text: `rolled a ${manualValue} (d${manualDie})`, roll_source: 'self' })
+    setRollState({ label: notation, value: manualValue, isRolling: false })
+    await logDiceRoll({
+      notation,
+      mode: 'self',
+      reason: null,
+      total: parseInt(manualValue, 10) || 0,
+      breakdown: 'self-reported',
+      rawD20: null,
+      isCrit: false,
+      isFumble: false,
+    })
     setManualValue('')
   }
 
@@ -404,7 +489,11 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
                 key={rollNonce}
                 className={`w-16 h-16 rounded-xl border-2 flex items-center justify-center text-2xl font-bold ${
                   rollState
-                    ? 'border-blue-500 text-white bg-blue-500/10'
+                    ? rollState.isCrit
+                      ? 'border-green-500 text-white bg-green-500/10'
+                      : rollState.isFumble
+                        ? 'border-red-500 text-white bg-red-500/10'
+                        : 'border-blue-500 text-white bg-blue-500/10'
                     : 'border-neutral-700 text-neutral-600 bg-neutral-950'
                 } ${rollState?.isRolling ? 'dice-rolling' : rollState ? 'dice-landed' : ''}`}
               >
@@ -412,7 +501,8 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
               </div>
               {rollState && (
                 <p className="text-[11px] text-neutral-500 mt-1.5">
-                  d{rollState.sides}{rollState.isRolling ? ' rolling…' : ''}
+                  {rollState.label}
+                  {rollState.isRolling ? ' rolling…' : rollState.isCrit ? ' — crit!' : rollState.isFumble ? ' — fumble!' : ''}
                 </p>
               )}
             </div>
@@ -421,7 +511,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
               {dice.map((sides) => (
                 <button
                   key={sides}
-                  onClick={() => rollDie(sides)}
+                  onClick={() => rollQuickDie(sides)}
                   disabled={rollState?.isRolling}
                   className="text-xs py-1.5 border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
                 >
@@ -429,6 +519,53 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
                 </button>
               ))}
             </div>
+
+            <div className="pt-2.5 border-t border-neutral-800">
+              <p className="text-[11px] text-neutral-500 mb-1.5">Custom roll (notation, advantage/disadvantage, reason)</p>
+              <div className="flex gap-1.5 mb-1.5">
+                <input
+                  value={notationInput}
+                  onChange={(e) => setNotationInput(e.target.value)}
+                  placeholder="1d20+3"
+                  className="w-20 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+                />
+                <div className="flex flex-1 gap-1">
+                  {['flat', 'advantage', 'disadvantage'].map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setRollMode(m)}
+                      className={`flex-1 text-[10px] py-1 rounded-md border ${
+                        rollMode === m ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-neutral-700 text-neutral-300'
+                      }`}
+                    >
+                      {m === 'flat' ? 'flat' : m === 'advantage' ? 'adv' : 'disadv'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-1.5 mb-1.5">
+                <input
+                  value={reasonInput}
+                  onChange={(e) => setReasonInput(e.target.value)}
+                  placeholder="reason (optional)"
+                  className="flex-1 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+                />
+                <button
+                  onClick={rollCustom}
+                  disabled={rollState?.isRolling}
+                  className="text-xs px-2.5 border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  Roll
+                </button>
+              </div>
+              {rollError && (
+                <div className="flex items-center gap-1.5 text-red-400 mb-1.5">
+                  <AlertCircle size={12} />
+                  <p className="text-[11px]">{rollError}</p>
+                </div>
+              )}
+            </div>
+
             <div className="pt-2.5 border-t border-neutral-800">
               <p className="text-[11px] text-neutral-500 mb-1.5">Rolled it yourself? Log it here.</p>
               <div className="flex gap-1.5">

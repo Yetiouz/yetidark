@@ -3,10 +3,16 @@ import { Eye, Plus, Flag, Upload, RotateCcw, Dices, SkipForward } from 'lucide-r
 
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
+import { rollDiceNotation } from '../lib/dice.js'
 
 // Everything here is real Supabase data, synced live: the encounter
 // tracker, GM notes, turn order, the scene log, and the map panel (upload,
 // grid size, party marker, reveal/re-fog).
+//
+// Initiative rolls go through src/lib/dice.js (same engine GameTable uses)
+// and are persisted to the `dice_rolls` audit table, not just summarized
+// in the scene log -- keeps every roll in the app on one consistent,
+// auditable dice path, matching the file-based GM system's dice.py.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('GM')
@@ -90,7 +96,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('scene_log')
-      .select('id, type, sender_name, text, roll_source, created_at')
+      .select('id, type, sender_name, text, roll_source, dice_roll_id, created_at')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setLog(data || []) })
@@ -188,6 +194,10 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     setNoteDraft('')
   }
 
+  // Rolls 1d20 for every party member + visible monster through the same
+  // dice engine as the player table, logs each roll to `dice_rolls` (so
+  // it's auditable like everything else), and posts the usual scene_log
+  // summary line linked back to that audit row.
   const rollInitiative = async () => {
     if (!campaignId) return
     const participants = [
@@ -197,19 +207,36 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     if (participants.length === 0) return
 
     const rolled = participants
-      .map((p) => ({ ...p, roll: Math.floor(Math.random() * 20) + 1 }))
-      .sort((a, b) => b.roll - a.roll)
+      .map((p) => ({ ...p, result: rollDiceNotation('1d20', { mode: 'flat', reason: `${p.name} — initiative` }) }))
+      .sort((a, b) => b.result.total - a.result.total)
 
     await Promise.all(
-      rolled.map((p) =>
-        supabase.from('scene_log').insert({
+      rolled.map(async (p) => {
+        const { data: diceRow } = await supabase
+          .from('dice_rolls')
+          .insert({
+            campaign_id: campaignId,
+            roller_name: p.name,
+            notation: p.result.notation,
+            mode: p.result.mode,
+            reason: p.result.reason,
+            breakdown: p.result.breakdown,
+            total: p.result.total,
+            raw_d20: p.result.rawD20,
+            is_crit: p.result.isCrit,
+            is_fumble: p.result.isFumble,
+          })
+          .select()
+          .single()
+        await supabase.from('scene_log').insert({
           campaign_id: campaignId,
           type: 'roll',
           sender_name: p.name,
-          text: `rolled a ${p.roll} (d20) for initiative`,
+          text: `rolled a ${p.result.total} (d20) for initiative${p.result.isCrit ? ' — crit!' : ''}`,
           roll_source: 'app',
+          dice_roll_id: diceRow?.id,
         })
-      )
+      })
     )
 
     const orderList = rolled.map((p, i) => ({ id: p.id, name: p.name, status: i === 0 ? 'acting' : 'waiting' }))
