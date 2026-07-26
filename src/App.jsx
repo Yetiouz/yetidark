@@ -7,14 +7,14 @@ import CharacterBuilder from './components/CharacterBuilder.jsx'
 import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 
-// Auth and the lobby's campaign list/join-by-code are real Supabase now.
-// Characters, scene log, hex map, and GM dashboard are still mock data in
-// src/mockData.js -- next slices of Phase 4.
+// Auth, the lobby, and characters are real Supabase now. Scene log, hex
+// map, and GM dashboard are still mock data in src/mockData.js -- next
+// slices of Phase 4.
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
   const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm'
   const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
-  const [newCharacter, setNewCharacter] = useState(null)
+  const [activeCharacter, setActiveCharacter] = useState(null) // real character row from Supabase
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -31,16 +31,20 @@ export default function App() {
     setView('characters')
   }
 
-  const chooseCharacter = ({ mode } = {}) => {
+  const chooseCharacter = async ({ mode, characterId } = {}) => {
     if (mode === 'create') {
       setView('builder')
-    } else {
-      setView('table')
+      return
     }
+    if (characterId) {
+      const { data } = await supabase.from('characters').select('*').eq('id', characterId).maybeSingle()
+      setActiveCharacter(data || null)
+    }
+    setView('table')
   }
 
   const finishBuilding = (character) => {
-    setNewCharacter(character)
+    setActiveCharacter(character)
     setView('table')
   }
 
@@ -66,10 +70,20 @@ export default function App() {
         <Lobby session={session} onEnterCampaign={enterCampaign} onSignOut={signOut} />
       )}
       {view === 'characters' && (
-        <CharacterPicker campaignName={campaignName} onChooseCharacter={chooseCharacter} />
+        <CharacterPicker
+          campaignId={activeCampaign?.id}
+          session={session}
+          campaignName={campaignName}
+          onChooseCharacter={chooseCharacter}
+        />
       )}
       {view === 'builder' && (
-        <CharacterBuilder campaignName={campaignName} onComplete={finishBuilding} />
+        <CharacterBuilder
+          campaignId={activeCampaign?.id}
+          session={session}
+          campaignName={campaignName}
+          onComplete={finishBuilding}
+        />
       )}
       {view === 'table' && (
         <GameTable campaignName={campaignName} onOpenGmView={() => setView('gm')} />

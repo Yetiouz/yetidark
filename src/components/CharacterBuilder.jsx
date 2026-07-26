@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Dices } from 'lucide-react'
+import { Dices, AlertCircle } from 'lucide-react'
+import { supabase } from '../lib/supabaseClient.js'
 
 const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 const STAT_LABELS = { str: 'STR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'WIS', cha: 'CHA' }
@@ -38,11 +39,13 @@ function modifier(score) {
 
 const emptyStats = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }
 
-export default function CharacterBuilder({ campaignName = 'The sunken keep', onComplete }) {
+export default function CharacterBuilder({ campaignId, session, campaignName = 'The sunken keep', onComplete }) {
   const [stats, setStats] = useState(emptyStats)
   const [ancestry, setAncestry] = useState('Dwarf')
   const [charClass, setCharClass] = useState('Fighter')
   const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
 
   const rollAll = () => {
     const next = {}
@@ -60,21 +63,53 @@ export default function CharacterBuilder({ campaignName = 'The sunken keep', onC
   const selectedClass = CLASSES.find((c) => c.name === charClass)
   const selectedAncestry = ANCESTRIES.find((a) => a.name === ancestry)
   const conMod = modifier(stats.con)
+  const dexMod = modifier(stats.dex)
   const hpBonus = selectedAncestry?.hpBonus || 0
   // Simplified for the quick builder: take the max hit die roll rather than
   // an actual roll, since Con modifier and ancestry bonuses already vary
   // outcomes. Real dice-roll-per-level HP can come later.
   const computedHp = Math.max(1, selectedClass.hitDie + conMod + hpBonus)
+  // Base AC before armor -- armor selection isn't part of the quick builder
+  // yet, so this is unarmored AC only.
+  const computedAc = 10 + dexMod
 
-  const start = () => {
-    onComplete &&
-      onComplete({
-        name: name.trim() || `${ancestry} ${charClass.toLowerCase()}`,
+  const start = async () => {
+    const finalName = name.trim() || `${ancestry} ${charClass.toLowerCase()}`
+
+    if (!campaignId || !session?.user) {
+      // No real campaign/session context (e.g. still on mock data) --
+      // fall back to just handing the character up without saving.
+      onComplete && onComplete({ name: finalName, ancestry, charClass, stats, hp: computedHp })
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+
+    const { data: character, error: insertError } = await supabase
+      .from('characters')
+      .insert({
+        campaign_id: campaignId,
+        owner_user_id: session.user.id,
+        name: finalName,
         ancestry,
-        charClass,
+        class: charClass,
+        level: 1,
         stats,
         hp: computedHp,
+        max_hp: computedHp,
+        ac: computedAc,
       })
+      .select()
+      .single()
+
+    setSaving(false)
+    if (insertError) {
+      setError(insertError.message)
+      return
+    }
+
+    onComplete && onComplete(character)
   }
 
   return (
@@ -162,15 +197,25 @@ export default function CharacterBuilder({ campaignName = 'The sunken keep', onC
       <div className="bg-neutral-900 rounded-md px-3.5 py-3 flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-white">
-            {ancestry} {charClass.toLowerCase()} · level 1
+            {ancestry} {charClass.toLowerCase()} &middot; level 1
           </p>
           <p className="text-[11px] text-neutral-400 mt-0.5">
             {computedHp} hp (1d{selectedClass.hitDie}{hpBonus ? ` + ${hpBonus} stout` : ''}
-            {conMod ? ` ${conMod >= 0 ? '+' : ''}${conMod} con` : ''}) · starting gear auto-added
+            {conMod ? ` ${conMod >= 0 ? '+' : ''}${conMod} con` : ''}) &middot; ac {computedAc} &middot; starting gear auto-added
           </p>
+          {error && (
+            <div className="flex items-center gap-1.5 text-red-400 mt-1.5">
+              <AlertCircle size={12} />
+              <p className="text-[11px]">{error}</p>
+            </div>
+          )}
         </div>
-        <button onClick={start} className="bg-blue-500 hover:bg-blue-400 text-white text-sm rounded-md px-3.5 py-2">
-          Start playing
+        <button
+          onClick={start}
+          disabled={saving}
+          className="bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white text-sm rounded-md px-3.5 py-2"
+        >
+          {saving ? 'Saving...' : 'Start playing'}
         </button>
       </div>
     </div>
