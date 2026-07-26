@@ -158,6 +158,30 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
 
+-- Auto-add the creator as a campaign_members row the instant a campaign is
+-- inserted. Without this, "create campaign" fails RLS: the client's
+-- .insert().select() needs the SELECT policy below (is_campaign_member) to
+-- pass for the row it just inserted, but that's only true once a membership
+-- row exists -- and this trigger makes sure one does before the INSERT's
+-- RETURNING is evaluated.
+create or replace function handle_new_campaign()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.campaign_members (campaign_id, user_id, role)
+  values (new.id, auth.uid(), case when new.gm_type = 'human' then 'gm' else 'player' end)
+  on conflict (campaign_id, user_id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_campaign_created on campaigns;
+create trigger on_campaign_created
+  after insert on campaigns
+  for each row execute function handle_new_campaign();
+
 -- ---------------------------------------------------------------------
 -- Row level security: every table is scoped to campaigns a user belongs
 -- to. gm_notes additionally hides unrevealed notes from non-GM members,

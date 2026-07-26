@@ -127,9 +127,15 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
       return
     }
 
+    // A DB trigger already adds the creator as a member the moment the
+    // campaign row is inserted (see on_campaign_created in schema.sql) --
+    // this upsert just makes sure it's there without erroring if it is.
     const { error: memberError } = await supabase
       .from('campaign_members')
-      .insert({ campaign_id: campaign.id, user_id: user.id, role: newGmType === 'human' ? 'gm' : 'player' })
+      .upsert(
+        { campaign_id: campaign.id, user_id: user.id, role: newGmType === 'human' ? 'gm' : 'player' },
+        { onConflict: 'campaign_id,user_id', ignoreDuplicates: true }
+      )
 
     setBusy(false)
     if (memberError) {
