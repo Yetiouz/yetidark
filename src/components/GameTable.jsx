@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send, AlertCircle, User, Settings } from 'lucide-react'
+import { Dices, Send, AlertCircle, User, Settings, ScrollText } from 'lucide-react'
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { rollDiceNotation, flatDieNotation, DiceNotationError } from '../lib/dice.js'
@@ -28,7 +28,7 @@ function hpBarColor(hp, maxHp) {
 // disadvantage on a lone d20 check, and automatic crit/fumble flagging.
 // Every roll (app-rolled or self-reported) is persisted to the `dice_rolls`
 // audit table, not just summarized in the scene log.
-export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings }) {
+export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings, onOpenLog }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('')
   const [isGm, setIsGm] = useState(false)
@@ -403,6 +403,15 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
           <p className="text-white font-medium">{campaignName}</p>
         </div>
         <div className="flex items-center gap-1.5">
+          {onOpenLog && (
+            <button
+              onClick={onOpenLog}
+              title="Campaign log"
+              className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+            >
+              <ScrollText size={14} />
+            </button>
+          )}
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
