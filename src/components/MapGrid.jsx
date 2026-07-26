@@ -18,9 +18,10 @@ import { MapPin, ImageOff } from 'lucide-react'
 // the campaign -- the GM's "re-fog" control is the manual override for a
 // story reason like amnesia.
 //
-// mode='reveal': only fogged cells are clickable, and clicking reveals them.
-// mode='move': every cell is clickable, used by the GM to drop the party
-// marker without changing any fog.
+// mode='reveal': only fogged cells are clickable, and clicking reveals them
+// (GM only -- see GameTable.jsx). mode='move': every cell is clickable,
+// used by the GM to drop the party marker without changing any fog.
+// mode='view': nothing is clickable -- this is what players see.
 const HEX_CLIP_PATH = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)'
 const HEX_ASPECT = 0.866 // height:width ratio of a regular flat-top hexagon (sqrt(3)/2)
 const OVERLAP = 1.03 // slightly oversize every hex so shared edges never leave a seam
@@ -89,7 +90,7 @@ export default function MapGrid({
           const state = cellState[`${r},${c}`] || 'fog'
           const isFog = state === 'fog'
           const isParty = r === partyRow && c === partyCol
-          const clickable = mode === 'move' ? true : isFog
+          const clickable = mode === 'move' ? true : mode === 'reveal' ? isFog : false
           const left = c * 0.75 * hexWpct - (drawW - hexWpct) / 2
           const top = r * hexHpct + (c % 2 === 1 ? hexHpct / 2 : 0) - (drawH - hexHpct) / 2
           return (

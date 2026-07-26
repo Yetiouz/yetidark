@@ -24,6 +24,7 @@ function hpBarColor(hp, maxHp) {
 export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('')
+  const [isGm, setIsGm] = useState(false)
 
   const [tab, setTab] = useState('map') // 'log' | 'map'
   const [log, setLog] = useState([])
@@ -46,6 +47,18 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
       .maybeSingle()
       .then(({ data }) => setDisplayName(data?.display_name || user.email || 'You'))
   }, [user])
+
+  // Only the GM can unfog the map -- everyone else sees a read-only view.
+  useEffect(() => {
+    if (!user || !campaignId) return
+    supabase
+      .from('campaign_members')
+      .select('role')
+      .eq('campaign_id', campaignId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setIsGm(data?.role === 'gm'))
+  }, [user, campaignId])
 
   const reloadVotes = (campaignIdArg) => {
     supabase
@@ -287,8 +300,8 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
                 cellState={cellState}
                 partyRow={mapInfo?.party_row}
                 partyCol={mapInfo?.party_col}
-                mode="reveal"
-                onCellClick={(r, c) => revealCell(r, c)}
+                mode={isGm ? 'reveal' : 'view'}
+                onCellClick={isGm ? (r, c) => revealCell(r, c) : undefined}
               />
               <div className="flex items-center gap-3.5 mt-2 text-[10px] text-neutral-500">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-neutral-300 inline-block" /> Explored</span>
