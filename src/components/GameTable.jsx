@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices } from 'lucide-react'
+import { Dices, Send } from 'lucide-react'
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 
@@ -26,7 +26,6 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const [displayName, setDisplayName] = useState('')
   const [isGm, setIsGm] = useState(false)
 
-  const [tab, setTab] = useState('map') // 'log' | 'map'
   const [log, setLog] = useState([])
   const [message, setMessage] = useState('')
   const [manualDie, setManualDie] = useState(20)
@@ -34,6 +33,8 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const [rollState, setRollState] = useState(null) // { sides, value, isRolling } -- drives the animated die
   const [rollNonce, setRollNonce] = useState(0) // bumped every roll so the CSS animation replays even on repeat values
   const rollTimerRef = useRef(null)
+  const sceneLogRef = useRef(null)
+  const chatLogRef = useRef(null)
 
   useEffect(() => {
     return () => {
@@ -257,8 +258,22 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   }, {})
   const myVote = votes.find((v) => v.voter_user_id === user?.id)?.option_key
 
-  // Shared with both the full Scene log tab and the "Latest" strip below,
-  // so a roll or chat message renders identically wherever it shows up.
+  // Split so the Scene log (narration/GM lines/rolls) and Party chat
+  // (player-to-player OOC chatter) can live in their own separate,
+  // always-visible panels instead of one merged, tabbed feed.
+  const narrationLog = log.filter((entry) => entry.type !== 'chat')
+  const chatLog = log.filter((entry) => entry.type === 'chat')
+
+  useEffect(() => {
+    if (sceneLogRef.current) sceneLogRef.current.scrollTop = sceneLogRef.current.scrollHeight
+  }, [narrationLog.length])
+
+  useEffect(() => {
+    if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight
+  }, [chatLog.length])
+
+  // Shared by both panels so a roll or chat message renders identically
+  // wherever it shows up.
   const renderLogEntry = (entry) => {
     if (entry.type === 'narration') {
       return <span key={entry.id} className="block italic text-neutral-400">{entry.text}</span>
@@ -309,88 +324,39 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
         )}
       </div>
 
-      {log.length > 0 && (
-        <button
-          type="button"
-          onClick={() => setTab('log')}
-          className="w-full text-left mb-3 text-xs bg-neutral-900/70 border border-neutral-800 rounded-md px-3 py-2 flex items-center gap-2 hover:bg-neutral-900"
-        >
-          <span className="text-neutral-500 shrink-0">Latest:</span>
-          {renderLogEntry(log[log.length - 1])}
-        </button>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3 mb-3">
         <div className="bg-neutral-900 rounded-lg p-4">
-          <div className="flex gap-1.5 mb-2.5">
-            <button
-              onClick={() => setTab('log')}
-              className={`text-xs px-2.5 py-1 rounded ${tab === 'log' ? 'bg-neutral-800 border border-neutral-600 text-white' : 'text-neutral-400'}`}
-            >
-              Scene log
-            </button>
-            <button
-              onClick={() => setTab('map')}
-              className={`text-xs px-2.5 py-1 rounded ${tab === 'map' ? 'bg-neutral-800 border border-neutral-600 text-white' : 'text-neutral-400'}`}
-            >
-              Map
-            </button>
+          <p className="text-xs text-neutral-400 mb-2">Map</p>
+          <MapGrid
+            mapUrl={mapInfo?.map_url}
+            cols={mapInfo?.map_cols || 10}
+            rows={mapInfo?.map_rows || 6}
+            cellState={cellState}
+            partyRow={mapInfo?.party_row}
+            partyCol={mapInfo?.party_col}
+            mode={isGm ? 'reveal' : 'view'}
+            onCellClick={isGm ? (r, c) => revealCell(r, c) : undefined}
+          />
+          <div className="flex items-center gap-3.5 mt-2 text-[10px] text-neutral-500">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-neutral-300 inline-block" /> Explored</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-neutral-700 inline-block" /> Fog, not yet seen</span>
           </div>
-
-          {tab === 'log' && (
-            <div className="h-[260px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
-              {log.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- say something below.</p>}
-              {log.map((entry) => renderLogEntry(entry))}
+          <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-neutral-800">
+            <span className="text-xs text-neutral-400">Where to next?</span>
+            <div className="flex gap-1.5">
+              {VOTE_OPTIONS.map((o) => (
+                <button
+                  key={o.key}
+                  onClick={() => vote(o.key)}
+                  className={`text-xs border rounded-md px-2 py-1 flex items-center gap-1.5 hover:bg-neutral-800 ${
+                    myVote === o.key ? 'border-blue-500 text-blue-200' : 'border-neutral-700 text-neutral-200'
+                  }`}
+                >
+                  {o.label}{' '}
+                  <span className="text-[10px] px-1.5 rounded-full bg-blue-500/20 text-blue-300">{voteCounts[o.key]}</span>
+                </button>
+              ))}
             </div>
-          )}
-
-          {tab === 'map' && (
-            <div>
-              <MapGrid
-                mapUrl={mapInfo?.map_url}
-                cols={mapInfo?.map_cols || 10}
-                rows={mapInfo?.map_rows || 6}
-                cellState={cellState}
-                partyRow={mapInfo?.party_row}
-                partyCol={mapInfo?.party_col}
-                mode={isGm ? 'reveal' : 'view'}
-                onCellClick={isGm ? (r, c) => revealCell(r, c) : undefined}
-              />
-              <div className="flex items-center gap-3.5 mt-2 text-[10px] text-neutral-500">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-neutral-300 inline-block" /> Explored</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-neutral-700 inline-block" /> Fog, not yet seen</span>
-              </div>
-              <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-neutral-800">
-                <span className="text-xs text-neutral-400">Where to next?</span>
-                <div className="flex gap-1.5">
-                  {VOTE_OPTIONS.map((o) => (
-                    <button
-                      key={o.key}
-                      onClick={() => vote(o.key)}
-                      className={`text-xs border rounded-md px-2 py-1 flex items-center gap-1.5 hover:bg-neutral-800 ${
-                        myVote === o.key ? 'border-blue-500 text-blue-200' : 'border-neutral-700 text-neutral-200'
-                      }`}
-                    >
-                      {o.label}{' '}
-                      <span className="text-[10px] px-1.5 rounded-full bg-blue-500/20 text-blue-300">{voteCounts[o.key]}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2 mt-2.5 pt-2.5 border-t border-neutral-800">
-            <input
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-              placeholder="Say or do something"
-              className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
-            />
-            <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800">
-              <Dices size={15} /> Send
-            </button>
           </div>
         </div>
 
@@ -487,6 +453,36 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div className="bg-neutral-900 rounded-lg p-4">
+          <p className="text-xs text-neutral-400 mb-2">Scene log</p>
+          <div ref={sceneLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
+            {narrationLog.length === 0 && <p className="text-xs text-neutral-500">Nothing has happened yet.</p>}
+            {narrationLog.map((entry) => renderLogEntry(entry))}
+          </div>
+        </div>
+
+        <div className="bg-neutral-900 rounded-lg p-4">
+          <p className="text-xs text-neutral-400 mb-2">Party chat</p>
+          <div ref={chatLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1 mb-2.5">
+            {chatLog.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- say something below.</p>}
+            {chatLog.map((entry) => renderLogEntry(entry))}
+          </div>
+          <div className="flex gap-2 pt-2.5 border-t border-neutral-800">
+            <input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+              placeholder="Say or do something"
+              className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
+            />
+            <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800">
+              <Send size={15} /> Send
+            </button>
           </div>
         </div>
       </div>

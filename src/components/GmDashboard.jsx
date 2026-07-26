@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Eye, Plus, Flag, Upload, RotateCcw, Dices, SkipForward } from 'lucide-react'
+
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 
@@ -17,6 +18,8 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [turnOrder, setTurnOrder] = useState([])
   const [log, setLog] = useState([])
   const [message, setMessage] = useState('')
+  const sceneLogRef = useRef(null)
+  const chatLogRef = useRef(null)
 
   useEffect(() => {
     if (!user) return
@@ -292,6 +295,56 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     }
   }
 
+  // Split the same way the player table does: Scene log is narration/GM
+  // lines/rolls, Party chat is the players' own OOC conversation.
+  const narrationLog = log.filter((entry) => entry.type !== 'chat')
+  const chatLog = log.filter((entry) => entry.type === 'chat')
+
+  useEffect(() => {
+    if (sceneLogRef.current) sceneLogRef.current.scrollTop = sceneLogRef.current.scrollHeight
+  }, [narrationLog.length])
+
+  useEffect(() => {
+    if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight
+  }, [chatLog.length])
+
+  const renderLogEntry = (entry) => {
+    if (entry.type === 'narration') {
+      return <p key={entry.id} className="italic text-neutral-400">{entry.text}</p>
+    }
+    if (entry.type === 'gm') {
+      return (
+        <p key={entry.id}>
+          <span className="font-medium text-blue-400">{entry.sender_name}:</span>{' '}
+          <span className="text-neutral-300">{entry.text}</span>
+        </p>
+      )
+    }
+    if (entry.type === 'roll') {
+      return (
+        <p key={entry.id} className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-medium text-white">{entry.sender_name}:</span>
+          <span className="text-neutral-300">{entry.text}</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.5 rounded ${
+              entry.roll_source === 'app'
+                ? 'bg-blue-500/20 text-blue-300'
+                : 'bg-neutral-800 border border-neutral-700 text-neutral-400'
+            }`}
+          >
+            {entry.roll_source === 'app' ? 'app roll' : 'self-reported'}
+          </span>
+        </p>
+      )
+    }
+    return (
+      <p key={entry.id}>
+        <span className="font-medium text-white">{entry.sender_name}:</span>{' '}
+        <span className="text-neutral-300">{entry.text}</span>
+      </p>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-3">
@@ -420,58 +473,33 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         </div>
       </div>
 
-      <div className="bg-neutral-900 rounded-lg p-4 mb-3">
-        <p className="text-xs text-neutral-400 mb-2">Scene log</p>
-        <div className="h-[180px] overflow-y-auto flex flex-col gap-2 text-sm pr-1 mb-2.5">
-          {log.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- narrate something below.</p>}
-          {log.map((entry) => {
-            if (entry.type === 'narration') {
-              return <p key={entry.id} className="italic text-neutral-400">{entry.text}</p>
-            }
-            if (entry.type === 'gm') {
-              return (
-                <p key={entry.id}>
-                  <span className="font-medium text-blue-400">{entry.sender_name}:</span>{' '}
-                  <span className="text-neutral-300">{entry.text}</span>
-                </p>
-              )
-            }
-            if (entry.type === 'roll') {
-              return (
-                <p key={entry.id} className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-medium text-white">{entry.sender_name}:</span>
-                  <span className="text-neutral-300">{entry.text}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded ${
-                      entry.roll_source === 'app'
-                        ? 'bg-blue-500/20 text-blue-300'
-                        : 'bg-neutral-800 border border-neutral-700 text-neutral-400'
-                    }`}
-                  >
-                    {entry.roll_source === 'app' ? 'app roll' : 'self-reported'}
-                  </span>
-                </p>
-              )
-            }
-            return (
-              <p key={entry.id}>
-                <span className="font-medium text-white">{entry.sender_name}:</span>{' '}
-                <span className="text-neutral-300">{entry.text}</span>
-              </p>
-            )
-          })}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div className="bg-neutral-900 rounded-lg p-4">
+          <p className="text-xs text-neutral-400 mb-2">Scene log</p>
+          <div ref={sceneLogRef} className="h-[180px] overflow-y-auto flex flex-col gap-2 text-sm pr-1 mb-2.5">
+            {narrationLog.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- narrate something below.</p>}
+            {narrationLog.map((entry) => renderLogEntry(entry))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+              placeholder="Narrate something to the party"
+              className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
+            />
+            <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 text-neutral-200 hover:bg-neutral-800">
+              Send
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Narrate something to the party"
-            className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
-          />
-          <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 text-neutral-200 hover:bg-neutral-800">
-            Send
-          </button>
+
+        <div className="bg-neutral-900 rounded-lg p-4">
+          <p className="text-xs text-neutral-400 mb-2">Party chat</p>
+          <div ref={chatLogRef} className="h-[180px] overflow-y-auto flex flex-col gap-2 text-sm pr-1">
+            {chatLog.length === 0 && <p className="text-xs text-neutral-500">Nothing from the players yet.</p>}
+            {chatLog.map((entry) => renderLogEntry(entry))}
+          </div>
         </div>
       </div>
 
