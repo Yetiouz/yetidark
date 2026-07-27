@@ -172,6 +172,17 @@ Deno.serve(async (req) => {
   ])
 
   const transcript = (log || []).slice().reverse()
+
+  // Idempotency guard: the client auto-triggers a turn after a debounce
+  // window of silence, and every connected client independently starts
+  // its own timer -- so near-simultaneous auto-triggers (or a stray
+  // double-click on Continue) are expected, not a bug. If the AI has
+  // already answered everything currently in the transcript, no-op
+  // instead of spending a second Gemini call and posting a duplicate turn.
+  if (transcript.length && transcript[transcript.length - 1].type === 'ai_gm') {
+    return corsResponse({ success: true, skipped: true })
+  }
+
   const lastAiIndex = [...transcript].map((e) => e.type).lastIndexOf('ai_gm')
 
   const lines: string[] = []
