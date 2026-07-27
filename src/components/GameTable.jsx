@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2 } from 'lucide-react'
+import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot } from 'lucide-react'
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { rollDiceNotation, flatDieNotation, DiceNotationError } from '../lib/dice.js'
@@ -28,7 +28,7 @@ function hpBarColor(hp, maxHp) {
 // disadvantage on a lone d20 check, and automatic crit/fumble flagging.
 // Every roll (app-rolled or self-reported) is persisted to the `dice_rolls`
 // audit table, not just summarized in the scene log.
-export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
+export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker, onOpenAiGmChat }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('')
   const [isGm, setIsGm] = useState(false)
@@ -62,8 +62,6 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const [votes, setVotes] = useState([])
   const [party, setParty] = useState([])
   const [gmType, setGmType] = useState(null) // 'human' | 'ai'
-  const [aiTurnPending, setAiTurnPending] = useState(false)
-  const [aiTurnError, setAiTurnError] = useState(null)
 
   useEffect(() => {
     if (!user) return
@@ -330,24 +328,6 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
     setManualValue('')
   }
 
-  // Compiles everything the party has done since the AI's last turn and
-  // asks it to respond -- the "party leader hits continue" pattern, so the
-  // AI replies once per turn instead of after every individual message.
-  // The Edge Function does all the real work (context assembly, the
-  // Claude call, real dice via its own roll_dice tool, and writing the
-  // result back into scene_log as a new 'ai_gm' entry); this just invokes
-  // it and surfaces a loading/error state while it's in flight.
-  const askAiGm = async () => {
-    if (!campaignId || aiTurnPending) return
-    setAiTurnPending(true)
-    setAiTurnError(null)
-    const { data, error } = await supabase.functions.invoke('ai-gm-turn', { body: { campaignId } })
-    setAiTurnPending(false)
-    if (error || data?.error) {
-      setAiTurnError(data?.error || error?.message || 'The AI GM call failed.')
-    }
-  }
-
   const vote = async (optionKey) => {
     if (!campaignId || !user) return
     const option = VOTE_OPTIONS.find((o) => o.key === optionKey)
@@ -478,14 +458,14 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
             </button>
           )}
           {gmType === 'ai' ? (
-            <button
-              onClick={askAiGm}
-              disabled={aiTurnPending}
-              className="text-xs border border-purple-500/40 bg-purple-500/10 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-purple-200 hover:bg-purple-500/20 disabled:opacity-60"
-            >
-              {aiTurnPending ? <Loader2 size={13} className="animate-spin" /> : <Bot size={13} />}
-              {aiTurnPending ? 'The GM is thinking...' : 'Continue'}
-            </button>
+            onOpenAiGmChat && (
+              <button
+                onClick={onOpenAiGmChat}
+                className="text-xs border border-purple-500/40 bg-purple-500/10 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-purple-200 hover:bg-purple-500/20"
+              >
+                <Bot size={13} /> AI GM
+              </button>
+            )
           ) : (
             onOpenGmView && (
               <button onClick={onOpenGmView} className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-300 hover:bg-neutral-800">
@@ -495,13 +475,6 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
           )}
         </div>
       </div>
-
-      {gmType === 'ai' && aiTurnError && (
-        <div className="mb-3 flex items-start gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
-          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-          <p>{aiTurnError}</p>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3 mb-3">
         <div className="bg-neutral-900 rounded-lg p-4">
