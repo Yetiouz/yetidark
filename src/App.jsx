@@ -7,6 +7,7 @@ import CharacterBuilder from './components/CharacterBuilder.jsx'
 import CharacterSheet from './components/CharacterSheet.jsx'
 import CampaignSettings from './components/CampaignSettings.jsx'
 import CampaignLog from './components/CampaignLog.jsx'
+import RulesLibrary from './components/RulesLibrary.jsx'
 import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 import Profile from './components/Profile.jsx'
@@ -16,13 +17,14 @@ import Profile from './components/Profile.jsx'
 // trackers. mockData.js is no longer used anywhere.
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
-  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log'
+  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log' | 'library'
   const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
   const [activeCharacter, setActiveCharacter] = useState(null) // real character row from Supabase
   const [viewingCharacterId, setViewingCharacterId] = useState(null) // which character's full sheet is open
   const [sheetReturnView, setSheetReturnView] = useState('table') // where "Back" on the sheet should go
   const [settingsReturnView, setSettingsReturnView] = useState('table') // where "Back" on campaign settings should go
   const [logReturnView, setLogReturnView] = useState('table') // where "Back" on the campaign log should go
+  const [libraryReturnView, setLibraryReturnView] = useState('table') // where "Back" on the rules library should go
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -79,6 +81,12 @@ export default function App() {
     setView('log')
   }
 
+  // Same pattern again for the rules library.
+  const openRulesLibrary = (fromView) => {
+    setLibraryReturnView(fromView)
+    setView('library')
+  }
+
   const campaignName = activeCampaign?.name || ''
 
   // Still resolving whether a session exists -- avoid flashing the sign-in
@@ -133,6 +141,7 @@ export default function App() {
           onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'table')}
           onOpenSettings={() => openCampaignSettings('table')}
           onOpenLog={() => openCampaignLog('table')}
+          onOpenLibrary={() => openRulesLibrary('table')}
         />
       )}
       {view === 'gm' && (
@@ -144,6 +153,7 @@ export default function App() {
           onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'gm')}
           onOpenSettings={() => openCampaignSettings('gm')}
           onOpenLog={() => openCampaignLog('gm')}
+          onOpenLibrary={() => openRulesLibrary('gm')}
         />
       )}
       {view === 'sheet' && (
@@ -167,6 +177,14 @@ export default function App() {
           session={session}
           campaignName={campaignName}
           onBack={() => setView(logReturnView)}
+        />
+      )}
+      {view === 'library' && (
+        <RulesLibrary
+          campaignId={activeCampaign?.id}
+          session={session}
+          campaignName={campaignName}
+          onBack={() => setView(libraryReturnView)}
         />
       )}
 
