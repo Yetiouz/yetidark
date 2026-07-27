@@ -1,17 +1,20 @@
-// Delve — AI GM turn (chunk 9 of the GM-brain integration).
+// Delve — AI GM turn (chunk 9 of the GM-brain integration; switched to
+// Gemini in a follow-up so it's usable on Google's free tier while you
+// don't have Anthropic API billing set up).
 //
 // Invoked when anyone in an AI-GM campaign hits "Continue": compiles what's
 // happened in the shared scene log since the AI's last turn, hands it to
-// Claude along with the campaign's house rules, NPCs, factions, and party
+// Gemini along with the campaign's house rules, NPCs, factions, and party
 // roster, and posts the response back into the same scene log everyone
 // already reads (as a new 'ai_gm' entry -- see 011_ai_gm.sql).
 //
 // Runs entirely under the calling user's own JWT (passed through from the
 // client's Authorization header), so every read/write here goes through
 // the exact same RLS policies as the rest of the app -- no service-role
-// key needed. The only secret this function needs is ANTHROPIC_API_KEY,
+// key needed. The only secret this function needs is GEMINI_API_KEY,
 // added as a Supabase Edge Function secret (never handled by the app or
-// sent through chat).
+// sent through chat). Get one free, no card required, at
+// aistudio.google.com -> "Get API key".
 //
 // Ported from the file-based GM system's Core GM Commitment #1: "real
 // dice, always -- every GM-side check, attack, damage roll, and random-
@@ -23,8 +26,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const ANTHROPIC_VERSION = '2023-06-01'
-const MODEL = 'claude-sonnet-5'
+const GEMINI_MODEL = 'gemini-3.5-flash'
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 const MAX_TOOL_ROUNDS = 6
 const TRANSCRIPT_LIMIT = 60
 
@@ -44,9 +47,6 @@ const MODES_OF_PLAY = {
   grinder: 'Grinder -- attrition matters more over a long dungeon crawl.',
 }
 
-// Condensed from GM_PERSONA.md -- the file-based system's "how the game
-// gets run" doc. Dynamic per-campaign specifics (house rules, modes of
-// play, NPCs, factions, party) get appended below at call time.
 const PERSONA = `You are the Game Master for a Shadowdark RPG campaign, running an async text game.
 
 CORE COMMITMENTS (non-negotiable):
@@ -72,9 +72,6 @@ function corsResponse(body: unknown, status = 200) {
   })
 }
 
-// Small, faithful-enough port of the same dice engine src/lib/dice.js
-// already uses client-side: "NdM+K" notation, advantage/disadvantage on a
-// lone d20, crit/fumble flagging on a lone d20's raw roll.
 function rollNotation(notation: string, mode: string): {
   total: number
   breakdown: string
@@ -124,10 +121,10 @@ function rollNotation(notation: string, mode: string): {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!anthropicKey) {
+  const geminiKey = Deno.env.get('GEMINI_API_KEY')
+  if (!geminiKey) {
     return corsResponse(
-      { error: "AI GM isn't set up yet -- add an ANTHROPIC_API_KEY secret in Supabase (Project Settings > Edge Functions > Secrets) to enable it." },
+      { error: "AI GM isn't set up yet -- add a GEMINI_API_KEY secret in Supabase (Project Settings > Edge Functions > Secrets). Get a free key at aistudio.google.com (no card required)." },
       500
     )
   }
@@ -217,43 +214,45 @@ ${transcriptText}
 
   const tools = [
     {
-      name: 'roll_dice',
-      description:
-        "Roll real dice for any GM-side check, attack, damage, or random lookup. Never narrate a roll's outcome without calling this first.",
-      input_schema: {
-        type: 'object',
-        properties: {
-          notation: { type: 'string', description: 'Dice notation, e.g. "1d20+3", "2d6".' },
-          mode: { type: 'string', enum: ['flat', 'advantage', 'disadvantage'], description: 'Only meaningful for a lone d20 check.' },
-          reason: { type: 'string', description: 'What this roll is for, e.g. "goblin attack vs Bjorn".' },
-          roller_name: { type: 'string', description: 'Who/what is rolling, e.g. "Goblin Scout".' },
+      functionDeclarations: [
+        {
+          name: 'roll_dice',
+          description:
+            "Roll real dice for any GM-side check, attack, damage, or random lookup. Never narrate a roll's outcome without calling this first.",
+          parameters: {
+            type: 'OBJECT',
+            properties: {
+              notation: { type: 'STRING', description: 'Dice notation, e.g. "1d20+3", "2d6".' },
+              mode: { type: 'STRING', enum: ['flat', 'advantage', 'disadvantage'], description: 'Only meaningful for a lone d20 check.' },
+              reason: { type: 'STRING', description: 'What this roll is for, e.g. "goblin attack vs Bjorn".' },
+              roller_name: { type: 'STRING', description: 'Who/what is rolling, e.g. "Goblin Scout".' },
+            },
+            required: ['notation', 'reason', 'roller_name'],
+          },
         },
-        required: ['notation', 'reason', 'roller_name'],
-      },
+      ],
     },
   ]
 
-  const messages: Array<Record<string, unknown>> = [{ role: 'user', content: context }]
+  const contents: Array<Record<string, unknown>> = [{ role: 'user', parts: [{ text: context }] }]
 
-  const callClaude = async () => {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+  const callGemini = async () => {
+    const resp = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': ANTHROPIC_VERSION,
+        'x-goog-api-key': geminiKey,
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 1500,
-        system: PERSONA,
+        system_instruction: { parts: [{ text: PERSONA }] },
+        contents,
         tools,
-        messages,
+        generationConfig: { maxOutputTokens: 1500 },
       }),
     })
     if (!resp.ok) {
       const errText = await resp.text()
-      throw new Error(`Claude API error (${resp.status}): ${errText.slice(0, 500)}`)
+      throw new Error(`Gemini API error (${resp.status}): ${errText.slice(0, 500)}`)
     }
     return resp.json()
   }
@@ -261,23 +260,31 @@ ${transcriptText}
   let finalText = ''
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const result = await callClaude()
-      messages.push({ role: 'assistant', content: result.content })
+      const result = await callGemini()
+      const candidate = result.candidates?.[0]
+      if (!candidate) {
+        const blockReason = result.promptFeedback?.blockReason
+        throw new Error(blockReason ? `Gemini blocked the response (${blockReason}).` : 'Gemini returned no response.')
+      }
 
-      const toolUses = (result.content || []).filter((b: { type: string }) => b.type === 'tool_use')
-      if (toolUses.length === 0) {
-        finalText = (result.content || [])
-          .filter((b: { type: string }) => b.type === 'text')
-          .map((b: { text: string }) => b.text)
+      const parts = candidate.content?.parts || []
+      contents.push({ role: 'model', parts })
+
+      const functionCalls = parts.filter((p: Record<string, unknown>) => p.functionCall)
+      if (functionCalls.length === 0) {
+        finalText = parts
+          .filter((p: Record<string, unknown>) => typeof p.text === 'string')
+          .map((p: { text: string }) => p.text)
           .join('\n')
           .trim()
         break
       }
 
-      const toolResults = []
-      for (const tu of toolUses) {
+      const functionResponseParts = []
+      for (const p of functionCalls) {
+        const call = p.functionCall as { name: string; args: Record<string, unknown> }
         try {
-          const { notation, mode, reason, roller_name } = tu.input as {
+          const { notation, mode, reason, roller_name } = call.args as {
             notation: string
             mode?: string
             reason: string
@@ -310,21 +317,25 @@ ${transcriptText}
             dice_roll_id: diceRow?.id,
           })
 
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: tu.id,
-            content: `Rolled ${notation}${mode && mode !== 'flat' ? ` with ${mode}` : ''}: total ${roll.total} (${roll.breakdown})${roll.isCrit ? ' -- CRITICAL' : ''}${roll.isFumble ? ' -- FUMBLE' : ''}.`,
+          functionResponseParts.push({
+            functionResponse: {
+              name: call.name,
+              response: {
+                name: call.name,
+                content: `Rolled ${notation}${mode && mode !== 'flat' ? ` with ${mode}` : ''}: total ${roll.total} (${roll.breakdown})${roll.isCrit ? ' -- CRITICAL' : ''}${roll.isFumble ? ' -- FUMBLE' : ''}.`,
+              },
+            },
           })
         } catch (e) {
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: tu.id,
-            content: `Error: ${e instanceof Error ? e.message : 'roll failed'}`,
-            is_error: true,
+          functionResponseParts.push({
+            functionResponse: {
+              name: call.name,
+              response: { name: call.name, content: `Error: ${e instanceof Error ? e.message : 'roll failed'}` },
+            },
           })
         }
       }
-      messages.push({ role: 'user', content: toolResults })
+      contents.push({ role: 'function', parts: functionResponseParts })
     }
   } catch (e) {
     return corsResponse({ error: e instanceof Error ? e.message : 'AI GM call failed.' }, 500)
