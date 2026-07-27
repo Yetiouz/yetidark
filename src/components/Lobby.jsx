@@ -12,14 +12,39 @@ function randomJoinCode() {
 export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfile }) {
   const user = session?.user
   const [joinCode, setJoinCode] = useState('')
+  const [joinPassword, setJoinPassword] = useState('')
+  const [needsPassword, setNeedsPassword] = useState(false)
   const [showJoin, setShowJoin] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [newGmType, setNewGmType] = useState('human')
   const [campaigns, setCampaigns] = useState([])
+  const [publicCampaigns, setPublicCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+
+  // Fills in the shared display fields (player count, GM display name) for
+  // a raw campaign row -- used for both "your campaigns" and the public
+  // list below.
+  const withDisplayInfo = async (c) => {
+    const { count } = await supabase
+      .from('campaign_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('campaign_id', c.id)
+
+    let gmName = null
+    if (c.gm_type === 'human' && c.gm_user_id) {
+      const { data: gmProfile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', c.gm_user_id)
+        .maybeSingle()
+      gmName = gmProfile?.display_name || null
+    }
+
+    return { ...c, playerCount: count || 0, gmName }
+  }
 
   const loadCampaigns = useCallback(async () => {
     if (!user) return
@@ -38,30 +63,29 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
     }
 
     const rows = (memberships || []).filter((m) => m.campaigns)
+    const myIds = new Set(rows.map((m) => m.campaigns.id))
 
     const withCounts = await Promise.all(
-      rows.map(async (m) => {
-        const c = m.campaigns
-        const { count } = await supabase
-          .from('campaign_members')
-          .select('*', { count: 'exact', head: true })
-          .eq('campaign_id', c.id)
-
-        let gmName = null
-        if (c.gm_type === 'human' && c.gm_user_id) {
-          const { data: gmProfile } = await supabase
-            .from('profiles')
-            .select('display_name')
-            .eq('id', c.gm_user_id)
-            .maybeSingle()
-          gmName = gmProfile?.display_name || null
-        }
-
-        return { ...c, myRole: m.role, playerCount: count || 0, gmName }
-      })
+      rows.map(async (m) => ({ ...(await withDisplayInfo(m.campaigns)), myRole: m.role }))
     )
 
     setCampaigns(withCounts)
+
+    // Public campaigns anyone signed in can browse and join with one
+    // click -- RLS lets any authenticated user read is_public rows
+    // regardless of membership (see 008_campaign_privacy.sql), so this is
+    // a second, simpler query rather than merging it into the
+    // membership-scoped one above.
+    const { data: publicRows } = await supabase
+      .from('campaigns')
+      .select('id, name, system, gm_type, gm_user_id, session_number, status')
+      .eq('is_public', true)
+
+    const publicWithCounts = await Promise.all(
+      (publicRows || []).filter((c) => !myIds.has(c.id)).map((c) => withDisplayInfo(c))
+    )
+
+    setPublicCampaigns(publicWithCounts)
     setLoading(false)
   }, [user])
 
@@ -69,27 +93,47 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
     loadCampaigns()
   }, [loadCampaigns])
 
+  // Joining a private campaign has to go through this RPC -- it checks
+  // the password server-side (never exposed to the client) before adding
+  // the member row. It also handles public campaigns via code (skips the
+  // password check), so this stays the one path for code-based joins.
   const joinWithCode = async () => {
     if (!joinCode.trim() || !user) return
     setBusy(true)
     setError(null)
 
-    const { data: campaign, error: lookupError } = await supabase
-      .from('campaigns')
-      .select('id')
-      .eq('join_code', joinCode.trim().toUpperCase())
-      .maybeSingle()
+    const { error: rpcError } = await supabase.rpc('join_campaign_by_code', {
+      p_code: joinCode.trim().toUpperCase(),
+      p_password: joinPassword.trim() || null,
+    })
 
-    if (lookupError || !campaign) {
-      setError("No campaign found with that code.")
-      setBusy(false)
+    setBusy(false)
+    if (rpcError) {
+      if (rpcError.message.toLowerCase().includes('password')) {
+        setNeedsPassword(true)
+      }
+      setError(rpcError.message)
       return
     }
+
+    setJoinCode('')
+    setJoinPassword('')
+    setNeedsPassword(false)
+    setShowJoin(false)
+    loadCampaigns()
+  }
+
+  // Public campaigns skip the code/password flow entirely -- direct
+  // self-insert is allowed by RLS as long as the campaign is public.
+  const joinPublicCampaign = async (campaignId) => {
+    if (!user) return
+    setBusy(true)
+    setError(null)
 
     const { error: joinError } = await supabase
       .from('campaign_members')
       .upsert(
-        { campaign_id: campaign.id, user_id: user.id, role: 'player' },
+        { campaign_id: campaignId, user_id: user.id, role: 'player' },
         { onConflict: 'campaign_id,user_id', ignoreDuplicates: true }
       )
 
@@ -99,8 +143,6 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
       return
     }
 
-    setJoinCode('')
-    setShowJoin(false)
     loadCampaigns()
   }
 
@@ -224,20 +266,33 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
       )}
 
       {showJoin && (
-        <div className="mb-4 flex gap-2">
-          <input
-            value={joinCode}
-            onChange={(e) => setJoinCode(e.target.value)}
-            placeholder="Enter join code"
-            className="flex-1 bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
-          />
-          <button
-            onClick={joinWithCode}
-            disabled={busy}
-            className="text-sm border border-neutral-700 rounded-md px-3 py-2 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
-          >
-            Join
-          </button>
+        <div className="mb-4 flex flex-col gap-2">
+          <div className="flex gap-2">
+            <input
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && joinWithCode()}
+              placeholder="Enter join code"
+              className="flex-1 bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
+            />
+            <button
+              onClick={joinWithCode}
+              disabled={busy}
+              className="text-sm border border-neutral-700 rounded-md px-3 py-2 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+            >
+              Join
+            </button>
+          </div>
+          {needsPassword && (
+            <input
+              type="password"
+              value={joinPassword}
+              onChange={(e) => setJoinPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && joinWithCode()}
+              placeholder="Campaign password"
+              className="flex-1 bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
+            />
+          )}
         </div>
       )}
 
@@ -326,9 +381,53 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
         </div>
       )}
 
+      {!loading && publicCampaigns.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-white text-base font-medium mb-3">Public campaigns</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {publicCampaigns.map((c) => (
+              <div key={c.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-white font-medium">{c.name}</p>
+                  {c.gm_type === 'ai' ? (
+                    <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">AI GM</span>
+                  ) : (
+                    <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">Public</span>
+                  )}
+                </div>
+                <p className="text-sm text-neutral-400 mb-3">
+                  {c.system} &middot; session {c.session_number}
+                </p>
+                <div className="flex items-center justify-between text-xs text-neutral-400 mb-3">
+                  <span className="flex items-center gap-1.5">
+                    {c.gm_type === 'human' ? <Crown size={14} /> : <Bot size={14} />}
+                    {c.gm_type === 'human'
+                      ? c.gmName
+                        ? `${c.gmName} is GM`
+                        : 'Human GM'
+                      : 'AI is running this one'}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Users size={14} /> {c.playerCount}
+                  </span>
+                </div>
+                <button
+                  onClick={() => joinPublicCampaign(c.id)}
+                  disabled={busy}
+                  className="w-full text-sm border border-neutral-700 rounded-md py-2 text-neutral-100 hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  Join
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-6 pt-4 border-t border-neutral-800">
         <p className="text-xs text-neutral-500">
-          Invite friends by sharing a campaign's join code from inside the session.
+          Public campaigns show up above automatically for anyone signed in. Invite friends to a private
+          campaign by sharing its join code and password from inside the session (campaign settings).
         </p>
       </div>
     </div>

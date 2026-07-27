@@ -17,10 +17,14 @@ const MODES_OF_PLAY = [
   { key: 'grinder', label: 'Grinder', description: 'Attrition matters more over a long dungeon crawl.' },
 ]
 
-// House rules + Modes of Play, shared by the whole table. Only the GM can
-// edit either; everyone else gets a read-only view -- same member-read /
-// gm-write split the campaigns row already has for the map and other
-// settings, so no new RLS was needed for this chunk.
+// House rules + Modes of Play + privacy, shared by the whole table. Only
+// the GM can edit any of it; everyone else gets a read-only view -- same
+// member-read / gm-write split the campaigns row already has for the map
+// and other settings, so no new RLS was needed for house rules/modes.
+// Privacy (public/private + password) goes through dedicated RPCs instead
+// of a plain column update -- see 008_campaign_privacy.sql -- since the
+// password has to be hashed server-side and never round-tripped as
+// plaintext through the client.
 export default function CampaignSettings({ campaignId, session, campaignName = 'The sunken keep', onBack }) {
   const user = session?.user
   const [isGm, setIsGm] = useState(false)
@@ -32,19 +36,29 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
   // (campaignId, user) and would otherwise close over a stale isGm=false.
   const isGmRef = useRef(false)
 
+  const [joinCode, setJoinCode] = useState('')
+  const [isPublic, setIsPublic] = useState(true)
+  const [privacyPassword, setPrivacyPassword] = useState('')
+  const [privacySaving, setPrivacySaving] = useState(false)
+  const [privacyError, setPrivacyError] = useState(null)
+  const [privacySaved, setPrivacySaved] = useState(false)
+  const [copied, setCopied] = useState(false)
+
   useEffect(() => {
     if (!campaignId) return
     let cancelled = false
 
     supabase
       .from('campaigns')
-      .select('house_rules, modes_of_play')
+      .select('house_rules, modes_of_play, join_code, is_public')
       .eq('id', campaignId)
       .maybeSingle()
       .then(({ data }) => {
         if (cancelled) return
         setHouseRules(data?.house_rules || '')
         setModes(data?.modes_of_play || [])
+        setJoinCode(data?.join_code || '')
+        setIsPublic(data?.is_public ?? true)
         setLoading(false)
       })
 
@@ -66,9 +80,10 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
     // Only apply incoming realtime updates for non-GM viewers. The
     // campaigns row changes constantly for unrelated reasons (party
     // marker moves, map uploads, grid resizes), and every one of those
-    // broadcasts the last-*saved* house_rules/modes_of_play alongside it --
-    // applying that here mid-edit would silently revert the GM's unsaved
-    // checkbox toggles. Players have nothing to lose by staying live.
+    // broadcasts the last-*saved* house_rules/modes_of_play/is_public
+    // alongside it -- applying that here mid-edit would silently revert
+    // the GM's unsaved checkbox toggles. Players have nothing to lose by
+    // staying live.
     const channel = supabase
       .channel(`campaign-settings-${campaignId}`)
       .on(
@@ -78,6 +93,8 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
           if (isGmRef.current) return
           setHouseRules(payload.new.house_rules || '')
           setModes(payload.new.modes_of_play || [])
+          setJoinCode(payload.new.join_code || '')
+          setIsPublic(payload.new.is_public ?? true)
         }
       )
       .subscribe()
@@ -98,6 +115,30 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
     setSaving(false)
   }
 
+  const copyJoinCode = () => {
+    navigator.clipboard?.writeText(joinCode)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  const savePrivacy = async () => {
+    setPrivacySaving(true)
+    setPrivacyError(null)
+    setPrivacySaved(false)
+    const { error } = await supabase.rpc('set_campaign_privacy', {
+      p_campaign_id: campaignId,
+      p_is_public: isPublic,
+      p_password: privacyPassword.trim() || null,
+    })
+    setPrivacySaving(false)
+    if (error) {
+      setPrivacyError(error.message)
+      return
+    }
+    setPrivacyPassword('')
+    setPrivacySaved(true)
+  }
+
   if (loading) {
     return (
       <div className="max-w-xl mx-auto p-6">
@@ -116,6 +157,69 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
 
       <h1 className="text-white text-lg font-medium mb-1">{campaignName}</h1>
       <p className="text-xs text-neutral-400 mb-4">Campaign settings</p>
+
+      {isGm && (
+        <div className="bg-neutral-900 rounded-lg p-4 mb-4">
+          <p className="text-xs text-neutral-400 mb-2">Privacy</p>
+
+          <div className="flex items-center justify-between mb-3 text-xs">
+            <span className="text-neutral-400">Join code</span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-white tracking-wide">{joinCode}</span>
+              <button
+                onClick={copyJoinCode}
+                className="text-[11px] px-2 py-0.5 border border-neutral-700 rounded text-neutral-300 hover:bg-neutral-800"
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 mb-2.5">
+            <button
+              onClick={() => setIsPublic(true)}
+              className={`flex-1 text-xs py-1.5 rounded-md border ${
+                isPublic ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300'
+              }`}
+            >
+              Public
+            </button>
+            <button
+              onClick={() => setIsPublic(false)}
+              className={`flex-1 text-xs py-1.5 rounded-md border ${
+                !isPublic ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300'
+              }`}
+            >
+              Private
+            </button>
+          </div>
+          <p className="text-[11px] text-neutral-500 mb-2.5">
+            {isPublic
+              ? 'Anyone signed in can see and join this campaign from the lobby.'
+              : 'Hidden from the public list -- joinable only with the code and password below.'}
+          </p>
+
+          {!isPublic && (
+            <input
+              type="password"
+              value={privacyPassword}
+              onChange={(e) => setPrivacyPassword(e.target.value)}
+              placeholder="Set a new password (leave blank to keep the current one)"
+              className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white mb-2.5"
+            />
+          )}
+
+          {privacyError && <p className="text-xs text-red-400 mb-2">{privacyError}</p>}
+
+          <button
+            onClick={savePrivacy}
+            disabled={privacySaving}
+            className="text-xs border border-neutral-700 rounded-md px-3 py-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+          >
+            {privacySaving ? 'Saving...' : privacySaved ? 'Saved' : 'Save privacy settings'}
+          </button>
+        </div>
+      )}
 
       <div className="bg-neutral-900 rounded-lg p-4 mb-4">
         <p className="text-xs text-neutral-400 mb-2">Modes of play</p>
