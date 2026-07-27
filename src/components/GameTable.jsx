@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users } from 'lucide-react'
+import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2 } from 'lucide-react'
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { rollDiceNotation, flatDieNotation, DiceNotationError } from '../lib/dice.js'
@@ -61,6 +61,9 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const [turnOrder, setTurnOrder] = useState([])
   const [votes, setVotes] = useState([])
   const [party, setParty] = useState([])
+  const [gmType, setGmType] = useState(null) // 'human' | 'ai'
+  const [aiTurnPending, setAiTurnPending] = useState(false)
+  const [aiTurnError, setAiTurnError] = useState(null)
 
   useEffect(() => {
     if (!user) return
@@ -106,10 +109,14 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
 
     supabase
       .from('campaigns')
-      .select('map_url, map_cols, map_rows, party_row, party_col')
+      .select('map_url, map_cols, map_rows, party_row, party_col, gm_type')
       .eq('id', campaignId)
       .maybeSingle()
-      .then(({ data }) => { if (!cancelled) setMapInfo(data) })
+      .then(({ data }) => {
+        if (cancelled) return
+        setMapInfo(data)
+        setGmType(data?.gm_type || null)
+      })
 
     supabase
       .from('map_cells')
@@ -157,7 +164,10 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
-        (payload) => setMapInfo(payload.new)
+        (payload) => {
+          setMapInfo(payload.new)
+          setGmType(payload.new?.gm_type || null)
+        }
       )
       .on(
         'postgres_changes',
@@ -320,6 +330,24 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
     setManualValue('')
   }
 
+  // Compiles everything the party has done since the AI's last turn and
+  // asks it to respond -- the "party leader hits continue" pattern, so the
+  // AI replies once per turn instead of after every individual message.
+  // The Edge Function does all the real work (context assembly, the
+  // Claude call, real dice via its own roll_dice tool, and writing the
+  // result back into scene_log as a new 'ai_gm' entry); this just invokes
+  // it and surfaces a loading/error state while it's in flight.
+  const askAiGm = async () => {
+    if (!campaignId || aiTurnPending) return
+    setAiTurnPending(true)
+    setAiTurnError(null)
+    const { data, error } = await supabase.functions.invoke('ai-gm-turn', { body: { campaignId } })
+    setAiTurnPending(false)
+    if (error || data?.error) {
+      setAiTurnError(data?.error || error?.message || 'The AI GM call failed.')
+    }
+  }
+
   const vote = async (optionKey) => {
     if (!campaignId || !user) return
     const option = VOTE_OPTIONS.find((o) => o.key === optionKey)
@@ -368,6 +396,16 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
         <span key={entry.id} className="block">
           <span className="font-medium text-blue-400">{entry.sender_name}:</span>{' '}
           <span className="text-neutral-300">{entry.text}</span>
+        </span>
+      )
+    }
+    if (entry.type === 'ai_gm') {
+      return (
+        <span key={entry.id} className="block bg-purple-500/10 border border-purple-500/20 rounded-md px-2.5 py-2 -mx-0.5">
+          <span className="font-medium text-purple-300 flex items-center gap-1.5 mb-1">
+            <Bot size={12} /> AI GM
+          </span>
+          <span className="text-neutral-200 whitespace-pre-wrap">{entry.text}</span>
         </span>
       )
     }
@@ -439,13 +477,31 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
               <Settings size={14} />
             </button>
           )}
-          {onOpenGmView && (
-            <button onClick={onOpenGmView} className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-300 hover:bg-neutral-800">
-              GM view
+          {gmType === 'ai' ? (
+            <button
+              onClick={askAiGm}
+              disabled={aiTurnPending}
+              className="text-xs border border-purple-500/40 bg-purple-500/10 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-purple-200 hover:bg-purple-500/20 disabled:opacity-60"
+            >
+              {aiTurnPending ? <Loader2 size={13} className="animate-spin" /> : <Bot size={13} />}
+              {aiTurnPending ? 'The GM is thinking...' : 'Continue'}
             </button>
+          ) : (
+            onOpenGmView && (
+              <button onClick={onOpenGmView} className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-300 hover:bg-neutral-800">
+                GM view
+              </button>
+            )
           )}
         </div>
       </div>
+
+      {gmType === 'ai' && aiTurnError && (
+        <div className="mb-3 flex items-start gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
+          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+          <p>{aiTurnError}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3 mb-3">
         <div className="bg-neutral-900 rounded-lg p-4">
