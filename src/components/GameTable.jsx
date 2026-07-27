@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot } from 'lucide-react'
+import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2 } from 'lucide-react'
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { rollDiceNotation, flatDieNotation, DiceNotationError } from '../lib/dice.js'
@@ -28,7 +28,7 @@ function hpBarColor(hp, maxHp) {
 // disadvantage on a lone d20 check, and automatic crit/fumble flagging.
 // Every roll (app-rolled or self-reported) is persisted to the `dice_rolls`
 // audit table, not just summarized in the scene log.
-export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker, onOpenAiGmChat }) {
+export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('')
   const [isGm, setIsGm] = useState(false)
@@ -62,6 +62,8 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const [votes, setVotes] = useState([])
   const [party, setParty] = useState([])
   const [gmType, setGmType] = useState(null) // 'human' | 'ai'
+  const [aiTurnPending, setAiTurnPending] = useState(false)
+  const [aiTurnError, setAiTurnError] = useState(null)
 
   useEffect(() => {
     if (!user) return
@@ -100,7 +102,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
 
     supabase
       .from('scene_log')
-      .select('id, type, sender_name, text, roll_source, dice_roll_id, created_at')
+      .select('id, type, sender_user_id, sender_name, text, roll_source, dice_roll_id, created_at')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setLog(data || []) })
@@ -328,6 +330,24 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
     setManualValue('')
   }
 
+  // Compiles everything the party has done since the AI's last turn and
+  // asks it to respond -- the "anyone hits continue" pattern, so the AI
+  // replies once per turn instead of after every individual message.
+  // The Edge Function does all the real work (context assembly, the
+  // Gemini call, real dice via its own roll_dice tool, and writing the
+  // result back into scene_log as a new 'ai_gm' entry); this just invokes
+  // it and surfaces a loading/error state while it's in flight.
+  const askAiGm = async () => {
+    if (!campaignId || aiTurnPending) return
+    setAiTurnPending(true)
+    setAiTurnError(null)
+    const { data, error } = await supabase.functions.invoke('ai-gm-turn', { body: { campaignId } })
+    setAiTurnPending(false)
+    if (error || data?.error) {
+      setAiTurnError(data?.error || error?.message || 'The AI GM call failed.')
+    }
+  }
+
   const vote = async (optionKey) => {
     if (!campaignId || !user) return
     const option = VOTE_OPTIONS.find((o) => o.key === optionKey)
@@ -357,9 +377,12 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const narrationLog = log.filter((entry) => entry.type !== 'chat')
   const chatLog = log.filter((entry) => entry.type === 'chat')
 
+  // Shared by the human-GM Scene log panel and the AI-GM unified chat feed
+  // (same ref, reused) -- keyed on the full log so it scrolls correctly
+  // whichever one is showing.
   useEffect(() => {
     if (sceneLogRef.current) sceneLogRef.current.scrollTop = sceneLogRef.current.scrollHeight
-  }, [narrationLog.length])
+  }, [log.length])
 
   useEffect(() => {
     if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight
@@ -414,6 +437,50 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
     )
   }
 
+  // AI-GM campaigns get one unified, chat-shaped feed (party messages +
+  // AI narration + rolls, in order) right here on the table instead of
+  // the two-panel Scene log / Party chat split -- the map, dice roller,
+  // and everything else on this page stays put either way.
+  const renderChatBubble = (entry) => {
+    if (entry.type === 'ai_gm') {
+      return (
+        <div key={entry.id} className="flex justify-start">
+          <div className="max-w-[85%] bg-purple-500/10 border border-purple-500/20 rounded-xl px-3.5 py-2.5">
+            <p className="font-medium text-purple-300 flex items-center gap-1.5 mb-1 text-xs">
+              <Bot size={12} /> AI GM
+            </p>
+            <p className="text-sm text-neutral-100 whitespace-pre-wrap">{entry.text}</p>
+          </div>
+        </div>
+      )
+    }
+    if (entry.type === 'roll') {
+      return (
+        <div key={entry.id} className="flex justify-center">
+          <p className="text-[11px] text-neutral-500 italic px-2 py-1">
+            {entry.sender_name} {entry.text}
+          </p>
+        </div>
+      )
+    }
+    if (entry.type === 'narration' || entry.type === 'gm') {
+      return (
+        <div key={entry.id} className="flex justify-center">
+          <p className="text-xs text-neutral-400 italic px-2 py-1 text-center">{entry.text}</p>
+        </div>
+      )
+    }
+    const isMine = entry.sender_user_id === user?.id
+    return (
+      <div key={entry.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+        <div className={`max-w-[75%] rounded-xl px-3.5 py-2 ${isMine ? 'bg-blue-500/20' : 'bg-neutral-800'}`}>
+          {!isMine && <p className="text-[11px] font-medium text-neutral-400 mb-0.5">{entry.sender_name}</p>}
+          <p className="text-sm text-neutral-100 whitespace-pre-wrap">{entry.text}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-3">
@@ -457,24 +524,20 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
               <Settings size={14} />
             </button>
           )}
-          {gmType === 'ai' ? (
-            onOpenAiGmChat && (
-              <button
-                onClick={onOpenAiGmChat}
-                className="text-xs border border-purple-500/40 bg-purple-500/10 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-purple-200 hover:bg-purple-500/20"
-              >
-                <Bot size={13} /> AI GM
-              </button>
-            )
-          ) : (
-            onOpenGmView && (
-              <button onClick={onOpenGmView} className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-300 hover:bg-neutral-800">
-                GM view
-              </button>
-            )
+          {gmType !== 'ai' && onOpenGmView && (
+            <button onClick={onOpenGmView} className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-300 hover:bg-neutral-800">
+              GM view
+            </button>
           )}
         </div>
       </div>
+
+      {gmType === 'ai' && aiTurnError && (
+        <div className="mb-3 flex items-start gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
+          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+          <p>{aiTurnError}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3 mb-3">
         <div className="bg-neutral-900 rounded-lg p-4">
@@ -661,20 +724,16 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-        <div className="bg-neutral-900 rounded-lg p-4">
-          <p className="text-xs text-neutral-400 mb-2">Scene log</p>
-          <div ref={sceneLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
-            {narrationLog.length === 0 && <p className="text-xs text-neutral-500">Nothing has happened yet.</p>}
-            {narrationLog.map((entry) => renderLogEntry(entry))}
-          </div>
-        </div>
-
-        <div className="bg-neutral-900 rounded-lg p-4">
-          <p className="text-xs text-neutral-400 mb-2">Party chat</p>
-          <div ref={chatLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1 mb-2.5">
-            {chatLog.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- say something below.</p>}
-            {chatLog.map((entry) => renderLogEntry(entry))}
+      {gmType === 'ai' ? (
+        <div className="bg-neutral-900 rounded-lg p-4 mb-3">
+          <p className="text-xs text-neutral-400 mb-2">AI GM</p>
+          <div ref={sceneLogRef} className="h-[360px] overflow-y-auto flex flex-col gap-2.5 pr-1 mb-2.5">
+            {log.length === 0 && (
+              <p className="text-xs text-neutral-500 text-center mt-4">
+                Nothing has happened yet. Say or do something below, then hit Continue when the party's ready.
+              </p>
+            )}
+            {log.map((entry) => renderChatBubble(entry))}
           </div>
           <div className="flex gap-2 pt-2.5 border-t border-neutral-800">
             <input
@@ -685,11 +744,49 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
               className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
             />
             <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800">
-              <Send size={15} /> Send
+              <Send size={15} />
+            </button>
+            <button
+              onClick={askAiGm}
+              disabled={aiTurnPending}
+              className="text-sm border border-purple-500/40 bg-purple-500/10 rounded-md px-3.5 py-1.5 flex items-center gap-1.5 text-purple-200 hover:bg-purple-500/20 disabled:opacity-60 whitespace-nowrap"
+            >
+              {aiTurnPending ? <Loader2 size={15} className="animate-spin" /> : <Bot size={15} />}
+              {aiTurnPending ? 'Thinking…' : 'Continue'}
             </button>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <div className="bg-neutral-900 rounded-lg p-4">
+            <p className="text-xs text-neutral-400 mb-2">Scene log</p>
+            <div className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
+              {narrationLog.length === 0 && <p className="text-xs text-neutral-500">Nothing has happened yet.</p>}
+              {narrationLog.map((entry) => renderLogEntry(entry))}
+            </div>
+          </div>
+
+          <div className="bg-neutral-900 rounded-lg p-4">
+            <p className="text-xs text-neutral-400 mb-2">Party chat</p>
+            <div ref={chatLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1 mb-2.5">
+              {chatLog.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- say something below.</p>}
+              {chatLog.map((entry) => renderLogEntry(entry))}
+            </div>
+            <div className="flex gap-2 pt-2.5 border-t border-neutral-800">
+              <input
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                placeholder="Say or do something"
+                className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
+              />
+              <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800">
+                <Send size={15} /> Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <p className="text-xs text-neutral-400 mb-2">Party</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">

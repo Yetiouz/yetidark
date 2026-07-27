@@ -9,7 +9,6 @@ import CampaignSettings from './components/CampaignSettings.jsx'
 import CampaignLog from './components/CampaignLog.jsx'
 import RulesLibrary from './components/RulesLibrary.jsx'
 import CampaignTracker from './components/CampaignTracker.jsx'
-import AiGmChat from './components/AiGmChat.jsx'
 import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 import Profile from './components/Profile.jsx'
@@ -19,7 +18,7 @@ import Profile from './components/Profile.jsx'
 // trackers. mockData.js is no longer used anywhere.
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
-  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log' | 'library' | 'tracker' | 'aigm'
+  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log' | 'library' | 'tracker'
   const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
   const [activeCharacter, setActiveCharacter] = useState(null) // real character row from Supabase
   const [viewingCharacterId, setViewingCharacterId] = useState(null) // which character's full sheet is open
@@ -28,7 +27,6 @@ export default function App() {
   const [logReturnView, setLogReturnView] = useState('table') // where "Back" on the campaign log should go
   const [libraryReturnView, setLibraryReturnView] = useState('table') // where "Back" on the rules library should go
   const [trackerReturnView, setTrackerReturnView] = useState('table') // where "Back" on the NPC/faction/treasure tracker should go
-  const [aiGmReturnView, setAiGmReturnView] = useState('table') // where "Back" on the AI GM chat should go
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -97,12 +95,6 @@ export default function App() {
     setView('tracker')
   }
 
-  // Same pattern again for the AI GM chat.
-  const openAiGmChat = (fromView) => {
-    setAiGmReturnView(fromView)
-    setView('aigm')
-  }
-
   const campaignName = activeCampaign?.name || ''
 
   // Still resolving whether a session exists -- avoid flashing the sign-in
@@ -159,7 +151,6 @@ export default function App() {
           onOpenLog={() => openCampaignLog('table')}
           onOpenLibrary={() => openRulesLibrary('table')}
           onOpenTracker={() => openTracker('table')}
-          onOpenAiGmChat={() => openAiGmChat('table')}
         />
       )}
       {view === 'gm' && (
@@ -214,15 +205,6 @@ export default function App() {
           onBack={() => setView(trackerReturnView)}
         />
       )}
-      {view === 'aigm' && (
-        <AiGmChat
-          campaignId={activeCampaign?.id}
-          session={session}
-          campaignName={campaignName}
-          onBack={() => setView(aiGmReturnView)}
-        />
-      )}
-
       {view !== 'lobby' && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2">
           <button
