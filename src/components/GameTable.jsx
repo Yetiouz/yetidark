@@ -678,7 +678,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
                   value={reasonInput}
                   onChange={(e) => setReasonInput(e.target.value)}
                   placeholder="reason (optional)"
-                  className="flex-1 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+                  className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
                 />
                 <button
                   onClick={rollCustom}
@@ -741,7 +741,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
               placeholder="Say or do something"
-              className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
+              className="flex-1 min-w-0 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
             />
             <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800">
               <Send size={15} />
@@ -778,7 +778,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
                 placeholder="Say or do something"
-                className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
+                className="flex-1 min-w-0 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
               />
               <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800">
                 <Send size={15} /> Send

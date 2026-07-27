@@ -123,19 +123,22 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
     loadCampaigns()
   }
 
-  // Public campaigns skip the code/password flow entirely -- direct
-  // self-insert is allowed by RLS as long as the campaign is public.
+  // Public campaigns skip the code/password flow entirely -- but this goes
+  // through an RPC rather than a direct client-side upsert. A raw upsert
+  // from here gets sent by PostgREST as an INSERT ... SELECT ... FROM
+  // json_to_record() (that's how it builds every insert/upsert), and that
+  // specific query shape was silently breaking the RLS policy's auth.uid()
+  // check -- every join failed with "new row violates row-level security
+  // policy" even though the same check passes for a plain VALUES insert.
+  // The RPC does that plain insert server-side instead, sidestepping it.
   const joinPublicCampaign = async (campaignId) => {
     if (!user) return
     setBusy(true)
     setError(null)
 
-    const { error: joinError } = await supabase
-      .from('campaign_members')
-      .upsert(
-        { campaign_id: campaignId, user_id: user.id, role: 'player' },
-        { onConflict: 'campaign_id,user_id', ignoreDuplicates: true }
-      )
+    const { error: joinError } = await supabase.rpc('join_public_campaign', {
+      p_campaign_id: campaignId,
+    })
 
     setBusy(false)
     if (joinError) {
