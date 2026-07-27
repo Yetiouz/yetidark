@@ -306,4 +306,574 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   // Spins the number in the die box a handful of times before landing on
   // the real result, then logs it -- purely cosmetic, the actual roll
   // (`result`, computed up front via rollDiceNotation) never changes.
-  const animateAndLog = (result)
+  const animateAndLog = (result) => {
+    if (rollState?.isRolling) return
+    if (rollTimerRef.current) clearInterval(rollTimerRef.current)
+    setRollNonce((n) => n + 1)
+    const flicker = () => Math.floor(Math.random() * Math.max(20, Math.abs(result.total) * 2 || 20)) + 1
+    setRollState({ label: result.notation, value: flicker(), isRolling: true })
+    let ticks = 0
+    rollTimerRef.current = setInterval(() => {
+      ticks += 1
+      if (ticks >= 9) {
+        clearInterval(rollTimerRef.current)
+        rollTimerRef.current = null
+        setRollState({
+          label: result.notation,
+          value: result.total,
+          isRolling: false,
+          isCrit: result.isCrit,
+          isFumble: result.isFumble,
+        })
+        logDiceRoll(result)
+      } else {
+        setRollState({ label: result.notation, value: flicker(), isRolling: true })
+      }
+    }, 60)
+  }
+
+  const rollQuickDie = (sides) => {
+    setRollError(null)
+    try {
+      const result = rollDiceNotation(flatDieNotation(sides), { mode: 'flat' })
+      animateAndLog(result)
+    } catch (e) {
+      setRollError(e instanceof DiceNotationError ? e.message : 'Could not roll that.')
+    }
+  }
+
+  const rollCustom = () => {
+    setRollError(null)
+    try {
+      const result = rollDiceNotation(notationInput, { mode: rollMode, reason: reasonInput.trim() || null })
+      animateAndLog(result)
+    } catch (e) {
+      setRollError(e instanceof DiceNotationError ? e.message : 'Could not roll that.')
+    }
+  }
+
+  const logManualRoll = async () => {
+    if (!manualValue) return
+    const notation = `1d${manualDie}`
+    setRollNonce((n) => n + 1)
+    setRollState({ label: notation, value: manualValue, isRolling: false })
+    await logDiceRoll({
+      notation,
+      mode: 'self',
+      reason: null,
+      total: parseInt(manualValue, 10) || 0,
+      breakdown: 'self-reported',
+      rawD20: null,
+      isCrit: false,
+      isFumble: false,
+    })
+    setManualValue('')
+  }
+
+  // Compiles everything the party has done since the AI's last turn and
+  // asks it to respond -- the "anyone hits continue" pattern, so the AI
+  // replies once per turn instead of after every individual message.
+  // The Edge Function does all the real work (context assembly, the
+  // Gemini call, real dice via its own roll_dice tool, and writing the
+  // result back into scene_log as a new 'ai_gm' entry); this just invokes
+  // it and surfaces a loading/error state while it's in flight.
+  const askAiGm = async () => {
+    if (!campaignId || aiTurnPending) return
+    setAiTurnPending(true)
+    setAiTurnError(null)
+    const { data, error } = await supabase.functions.invoke('ai-gm-turn', { body: { campaignId } })
+    setAiTurnPending(false)
+    if (error || data?.error) {
+      setAiTurnError(data?.error || error?.message || 'The AI GM call failed.')
+    }
+  }
+
+  // Kept current every render so the realtime handler set up once in the
+  // effect above (closed over campaignId only) always calls the latest
+  // askAiGm -- otherwise it'd keep calling a stale closure whose
+  // aiTurnPending guard never reflects reality.
+  useEffect(() => {
+    askAiGmRef.current = askAiGm
+  })
+
+  const vote = async (optionKey) => {
+    if (!campaignId || !user) return
+    const option = VOTE_OPTIONS.find((o) => o.key === optionKey)
+    await supabase
+      .from('votes')
+      .upsert(
+        {
+          campaign_id: campaignId,
+          poll_key: VOTE_POLL_KEY,
+          option_key: optionKey,
+          option_label: option.label,
+          voter_user_id: user.id,
+        },
+        { onConflict: 'campaign_id,poll_key,voter_user_id' }
+      )
+  }
+
+  const voteCounts = VOTE_OPTIONS.reduce((acc, o) => {
+    acc[o.key] = votes.filter((v) => v.option_key === o.key).length
+    return acc
+  }, {})
+  const myVote = votes.find((v) => v.voter_user_id === user?.id)?.option_key
+
+  // Split so the Scene log (narration/GM lines/rolls) and Party chat
+  // (player-to-player OOC chatter) can live in their own separate,
+  // always-visible panels instead of one merged, tabbed feed.
+  const narrationLog = log.filter((entry) => entry.type !== 'chat')
+  const chatLog = log.filter((entry) => entry.type === 'chat')
+
+  // Shared by the human-GM Scene log panel and the AI-GM unified chat feed
+  // (same ref, reused) -- keyed on the full log so it scrolls correctly
+  // whichever one is showing.
+  useEffect(() => {
+    if (sceneLogRef.current) sceneLogRef.current.scrollTop = sceneLogRef.current.scrollHeight
+  }, [log.length])
+
+  useEffect(() => {
+    if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight
+  }, [chatLog.length])
+
+  // Shared by both panels so a roll or chat message renders identically
+  // wherever it shows up.
+  const renderLogEntry = (entry) => {
+    if (entry.type === 'narration') {
+      return <span key={entry.id} className="block italic text-neutral-400">{entry.text}</span>
+    }
+    if (entry.type === 'gm') {
+      return (
+        <span key={entry.id} className="block">
+          <span className="font-medium text-blue-400">{entry.sender_name}:</span>{' '}
+          <span className="text-neutral-300">{entry.text}</span>
+        </span>
+      )
+    }
+    if (entry.type === 'ai_gm') {
+      return (
+        <span key={entry.id} className="block bg-purple-500/10 border border-purple-500/20 rounded-md px-2.5 py-2 -mx-0.5">
+          <span className="font-medium text-purple-300 flex items-center gap-1.5 mb-1">
+            <Bot size={12} /> AI GM
+          </span>
+          <span className="text-neutral-200 whitespace-pre-wrap">{entry.text}</span>
+        </span>
+      )
+    }
+    if (entry.type === 'roll') {
+      return (
+        <span key={entry.id} className="inline-flex items-center gap-1.5 flex-wrap">
+          <span className="font-medium text-white">{entry.sender_name}:</span>
+          <span className="text-neutral-300">{entry.text}</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.5 rounded ${
+              entry.roll_source === 'app'
+                ? 'bg-blue-500/20 text-blue-300'
+                : 'bg-neutral-800 border border-neutral-700 text-neutral-400'
+            }`}
+          >
+            {entry.roll_source === 'app' ? 'app roll' : 'self-reported'}
+          </span>
+        </span>
+      )
+    }
+    return (
+      <span key={entry.id} className="block">
+        <span className="font-medium text-white">{entry.sender_name}:</span>{' '}
+        <span className="text-neutral-300">{entry.text}</span>
+      </span>
+    )
+  }
+
+  // AI-GM campaigns get one unified, chat-shaped feed (party messages +
+  // AI narration + rolls, in order) right here on the table instead of
+  // the two-panel Scene log / Party chat split -- the map, dice roller,
+  // and everything else on this page stays put either way.
+  const renderChatBubble = (entry) => {
+    if (entry.type === 'ai_gm') {
+      return (
+        <div key={entry.id} className="flex justify-start">
+          <div className="max-w-[85%] bg-purple-500/10 border border-purple-500/20 rounded-xl px-3.5 py-2.5">
+            <p className="font-medium text-purple-300 flex items-center gap-1.5 mb-1 text-xs">
+              <Bot size={12} /> AI GM
+            </p>
+            <p className="text-sm text-neutral-100 whitespace-pre-wrap">{entry.text}</p>
+          </div>
+        </div>
+      )
+    }
+    if (entry.type === 'roll') {
+      return (
+        <div key={entry.id} className="flex justify-center">
+          <p className="text-[11px] text-neutral-500 italic px-2 py-1">
+            {entry.sender_name} {entry.text}
+          </p>
+        </div>
+      )
+    }
+    if (entry.type === 'narration' || entry.type === 'gm') {
+      return (
+        <div key={entry.id} className="flex justify-center">
+          <p className="text-xs text-neutral-400 italic px-2 py-1 text-center">{entry.text}</p>
+        </div>
+      )
+    }
+    const isMine = entry.sender_user_id === user?.id
+    return (
+      <div key={entry.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+        <div className={`max-w-[75%] rounded-xl px-3.5 py-2 ${isMine ? 'bg-blue-500/20' : 'bg-neutral-800'}`}>
+          {!isMine && <p className="text-[11px] font-medium text-neutral-400 mb-0.5">{entry.sender_name}</p>}
+          <p className="text-sm text-neutral-100 whitespace-pre-wrap">{entry.text}</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2.5">
+          <p className="text-white font-medium">{campaignName}</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {onOpenLog && (
+            <button
+              onClick={onOpenLog}
+              title="Campaign log"
+              className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+            >
+              <ScrollText size={14} />
+            </button>
+          )}
+          {onOpenLibrary && (
+            <button
+              onClick={onOpenLibrary}
+              title="Rules library"
+              className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+            >
+              <BookOpen size={14} />
+            </button>
+          )}
+          {onOpenTracker && (
+            <button
+              onClick={onOpenTracker}
+              title="NPCs, factions & treasure"
+              className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+            >
+              <Users size={14} />
+            </button>
+          )}
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              title="Campaign settings"
+              className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+            >
+              <Settings size={14} />
+            </button>
+          )}
+          {gmType !== 'ai' && onOpenGmView && (
+            <button onClick={onOpenGmView} className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-300 hover:bg-neutral-800">
+              GM view
+            </button>
+          )}
+        </div>
+      </div>
+
+      {gmType === 'ai' && aiTurnError && (
+        <div className="mb-3 flex items-start gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
+          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+          <p>{aiTurnError}</p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3 mb-3">
+        <div className="bg-neutral-900 rounded-lg p-4">
+          <p className="text-xs text-neutral-400 mb-2">Map</p>
+          <MapGrid
+            mapUrl={mapInfo?.map_url}
+            cols={mapInfo?.map_cols || 10}
+            rows={mapInfo?.map_rows || 6}
+            cellState={cellState}
+            partyRow={mapInfo?.party_row}
+            partyCol={mapInfo?.party_col}
+            mode={isGm ? 'reveal' : 'view'}
+            onCellClick={isGm ? (r, c) => revealCell(r, c) : undefined}
+          />
+          <div className="flex items-center gap-3.5 mt-2 text-[10px] text-neutral-500">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-neutral-300 inline-block" /> Explored</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-neutral-700 inline-block" /> Fog, not yet seen</span>
+          </div>
+          <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-neutral-800">
+            <span className="text-xs text-neutral-400">Where to next?</span>
+            <div className="flex gap-1.5">
+              {VOTE_OPTIONS.map((o) => (
+                <button
+                  key={o.key}
+                  onClick={() => vote(o.key)}
+                  className={`text-xs border rounded-md px-2 py-1 flex items-center gap-1.5 hover:bg-neutral-800 ${
+                    myVote === o.key ? 'border-blue-500 text-blue-200' : 'border-neutral-700 text-neutral-200'
+                  }`}
+                >
+                  {o.label}{' '}
+                  <span className="text-[10px] px-1.5 rounded-full bg-blue-500/20 text-blue-300">{voteCounts[o.key]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <div className="bg-neutral-900 rounded-lg p-3">
+            <p className="text-xs text-neutral-400 mb-2">Turn order</p>
+            {turnOrder.length === 0 ? (
+              <p className="text-xs text-neutral-500">Not set yet -- the GM rolls initiative to start.</p>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {turnOrder.map((t, i) => (
+                  <div
+                    key={t.id || i}
+                    className={`flex items-center justify-between text-xs px-2 py-1.5 rounded ${
+                      t.status === 'acting' ? 'bg-blue-500/20 text-blue-300 font-medium' : 'text-neutral-300'
+                    }`}
+                  >
+                    <span>{t.name}</span>
+                    <span className={t.status === 'acting' ? '' : 'text-neutral-500'}>{t.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-neutral-900 rounded-lg p-3">
+            <style>{`
+              @keyframes dice-spin {
+                0% { transform: rotate(0deg) scale(1); }
+                50% { transform: rotate(180deg) scale(1.12); }
+                100% { transform: rotate(360deg) scale(1); }
+              }
+              @keyframes dice-land {
+                0% { transform: scale(1.35); }
+                60% { transform: scale(0.92); }
+                100% { transform: scale(1); }
+              }
+              .dice-rolling { animation: dice-spin 0.3s linear infinite; }
+              .dice-landed { animation: dice-land 0.3s ease-out; }
+            `}</style>
+            <p className="text-xs text-neutral-400 mb-2">Roll a die</p>
+
+            <div className="flex flex-col items-center justify-center mb-3">
+              <div
+                key={rollNonce}
+                className={`w-16 h-16 rounded-xl border-2 flex items-center justify-center text-2xl font-bold ${
+                  rollState
+                    ? rollState.isCrit
+                      ? 'border-green-500 text-white bg-green-500/10'
+                      : rollState.isFumble
+                        ? 'border-red-500 text-white bg-red-500/10'
+                        : 'border-blue-500 text-white bg-blue-500/10'
+                    : 'border-neutral-700 text-neutral-600 bg-neutral-950'
+                } ${rollState?.isRolling ? 'dice-rolling' : rollState ? 'dice-landed' : ''}`}
+              >
+                {rollState ? rollState.value : <Dices size={22} />}
+              </div>
+              {rollState && (
+                <p className="text-[11px] text-neutral-500 mt-1.5">
+                  {rollState.label}
+                  {rollState.isRolling ? ' rolling…' : rollState.isCrit ? ' — crit!' : rollState.isFumble ? ' — fumble!' : ''}
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5 mb-2.5">
+              {dice.map((sides) => (
+                <button
+                  key={sides}
+                  onClick={() => rollQuickDie(sides)}
+                  disabled={rollState?.isRolling}
+                  className="text-xs py-1.5 border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  d{sides}
+                </button>
+              ))}
+            </div>
+
+            <div className="pt-2.5 border-t border-neutral-800">
+              <p className="text-[11px] text-neutral-500 mb-1.5">Custom roll (notation, advantage/disadvantage, reason)</p>
+              <div className="flex gap-1.5 mb-1.5">
+                <input
+                  value={notationInput}
+                  onChange={(e) => setNotationInput(e.target.value)}
+                  placeholder="1d20+3"
+                  className="w-20 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+                />
+                <div className="flex flex-1 gap-1">
+                  {['flat', 'advantage', 'disadvantage'].map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setRollMode(m)}
+                      className={`flex-1 text-[10px] py-1 rounded-md border ${
+                        rollMode === m ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-neutral-700 text-neutral-300'
+                      }`}
+                    >
+                      {m === 'flat' ? 'flat' : m === 'advantage' ? 'adv' : 'disadv'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-1.5 mb-1.5">
+                <input
+                  value={reasonInput}
+                  onChange={(e) => setReasonInput(e.target.value)}
+                  placeholder="reason (optional)"
+                  className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+                />
+                <button
+                  onClick={rollCustom}
+                  disabled={rollState?.isRolling}
+                  className="text-xs px-2.5 border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  Roll
+                </button>
+              </div>
+              {rollError && (
+                <div className="flex items-center gap-1.5 text-red-400 mb-1.5">
+                  <AlertCircle size={12} />
+                  <p className="text-[11px]">{rollError}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2.5 border-t border-neutral-800">
+              <p className="text-[11px] text-neutral-500 mb-1.5">Rolled it yourself? Log it here.</p>
+              <div className="flex gap-1.5">
+                <select
+                  value={manualDie}
+                  onChange={(e) => setManualDie(e.target.value)}
+                  className="w-14 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1 py-1 text-white"
+                >
+                  {dice.map((d) => (
+                    <option key={d} value={d}>d{d}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={manualValue}
+                  onChange={(e) => setManualValue(e.target.value)}
+                  placeholder="14"
+                  className="w-14 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+                />
+                <button onClick={logManualRoll} className="flex-1 text-xs border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800">
+                  Log
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {gmType === 'ai' ? (
+        <div className="bg-neutral-900 rounded-lg p-4 mb-3">
+          <p className="text-xs text-neutral-400 mb-2">AI GM</p>
+          <div ref={sceneLogRef} className="h-[360px] overflow-y-auto flex flex-col gap-2.5 pr-1 mb-2.5">
+            {log.length === 0 && (
+              <p className="text-xs text-neutral-500 text-center mt-4">
+                Nothing has happened yet. Say or do something below, then hit Continue when the party's ready.
+              </p>
+            )}
+            {log.map((entry) => renderChatBubble(entry))}
+          </div>
+          <div className="flex gap-2 pt-2.5 border-t border-neutral-800">
+            <input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+              placeholder="Say or do something"
+              className="flex-1 min-w-0 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
+            />
+            <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800">
+              <Send size={15} />
+            </button>
+            <button
+              onClick={askAiGm}
+              disabled={aiTurnPending}
+              className="text-sm border border-purple-500/40 bg-purple-500/10 rounded-md px-3.5 py-1.5 flex items-center gap-1.5 text-purple-200 hover:bg-purple-500/20 disabled:opacity-60 whitespace-nowrap"
+            >
+              {aiTurnPending ? <Loader2 size={15} className="animate-spin" /> : <Bot size={15} />}
+              {aiTurnPending ? 'Thinking…' : 'Continue'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <div className="bg-neutral-900 rounded-lg p-4">
+            <p className="text-xs text-neutral-400 mb-2">Scene log</p>
+            <div className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
+              {narrationLog.length === 0 && <p className="text-xs text-neutral-500">Nothing has happened yet.</p>}
+              {narrationLog.map((entry) => renderLogEntry(entry))}
+            </div>
+          </div>
+
+          <div className="bg-neutral-900 rounded-lg p-4">
+            <p className="text-xs text-neutral-400 mb-2">Party chat</p>
+            <div ref={chatLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1 mb-2.5">
+              {chatLog.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- say something below.</p>}
+              {chatLog.map((entry) => renderLogEntry(entry))}
+            </div>
+            <div className="flex gap-2 pt-2.5 border-t border-neutral-800">
+              <input
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                placeholder="Say or do something"
+                className="flex-1 min-w-0 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
+              />
+              <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800">
+                <Send size={15} /> Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-neutral-400 mb-2">Party</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        {party.length === 0 && (
+          <p className="text-xs text-neutral-500 sm:col-span-3">No characters in this campaign yet.</p>
+        )}
+        {party.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
+            disabled={!onOpenCharacterSheet}
+            className="text-left bg-neutral-900 border border-neutral-800 rounded-xl p-3 hover:border-neutral-600 disabled:cursor-default disabled:hover:border-neutral-800"
+          >
+            <div className="flex items-center gap-2 mb-1.5">
+              {p.avatar_url ? (
+                <img src={p.avatar_url} alt={p.name} className="w-8 h-8 rounded-full object-cover border border-neutral-700" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center shrink-0">
+                  <User size={14} className="text-neutral-500" />
+                </div>
+              )}
+              <span className="text-sm font-medium text-white">{p.name}</span>
+            </div>
+            <p className="text-[11px] text-neutral-400 mb-2">
+              {p.class} &middot; lvl {p.level}
+            </p>
+            <div className="h-1.5 rounded-full bg-red-900/40 overflow-hidden">
+              <div
+                className={`h-full ${hpBarColor(p.hp, p.max_hp)}`}
+                style={{ width: `${p.max_hp ? (p.hp / p.max_hp) * 100 : 0}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[11px] text-neutral-500 mt-1">
+              <span>{p.hp}/{p.max_hp} hp</span>
+              <span>ac {p.ac}</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
