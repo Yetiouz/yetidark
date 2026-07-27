@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Eye, Plus, Flag, Upload, RotateCcw, Dices, SkipForward, User, Settings, ScrollText, BookOpen } from 'lucide-react'
+import { Eye, Plus, Flag, Upload, RotateCcw, Dices, SkipForward, User, Settings, ScrollText, BookOpen, Users } from 'lucide-react'
 
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
@@ -13,7 +13,7 @@ import { rollDiceNotation } from '../lib/dice.js'
 // and are persisted to the `dice_rolls` audit table, not just summarized
 // in the scene log -- keeps every roll in the app on one consistent,
 // auditable dice path, matching the file-based GM system's dice.py.
-export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary }) {
+export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('GM')
   const [encounter, setEncounter] = useState([])
@@ -396,6 +396,15 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
             >
               <BookOpen size={14} />
+            </button>
+          )}
+          {onOpenTracker && (
+            <button
+              onClick={onOpenTracker}
+              title="NPCs, factions & treasure"
+              className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+            >
+              <Users size={14} />
             </button>
           )}
           {onOpenSettings && (

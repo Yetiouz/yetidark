@@ -8,6 +8,7 @@ import CharacterSheet from './components/CharacterSheet.jsx'
 import CampaignSettings from './components/CampaignSettings.jsx'
 import CampaignLog from './components/CampaignLog.jsx'
 import RulesLibrary from './components/RulesLibrary.jsx'
+import CampaignTracker from './components/CampaignTracker.jsx'
 import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 import Profile from './components/Profile.jsx'
@@ -17,7 +18,7 @@ import Profile from './components/Profile.jsx'
 // trackers. mockData.js is no longer used anywhere.
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
-  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log' | 'library'
+  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log' | 'library' | 'tracker'
   const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
   const [activeCharacter, setActiveCharacter] = useState(null) // real character row from Supabase
   const [viewingCharacterId, setViewingCharacterId] = useState(null) // which character's full sheet is open
@@ -25,6 +26,7 @@ export default function App() {
   const [settingsReturnView, setSettingsReturnView] = useState('table') // where "Back" on campaign settings should go
   const [logReturnView, setLogReturnView] = useState('table') // where "Back" on the campaign log should go
   const [libraryReturnView, setLibraryReturnView] = useState('table') // where "Back" on the rules library should go
+  const [trackerReturnView, setTrackerReturnView] = useState('table') // where "Back" on the NPC/faction/treasure tracker should go
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -87,6 +89,12 @@ export default function App() {
     setView('library')
   }
 
+  // Same pattern again for the NPC/faction/treasure tracker.
+  const openTracker = (fromView) => {
+    setTrackerReturnView(fromView)
+    setView('tracker')
+  }
+
   const campaignName = activeCampaign?.name || ''
 
   // Still resolving whether a session exists -- avoid flashing the sign-in
@@ -142,6 +150,7 @@ export default function App() {
           onOpenSettings={() => openCampaignSettings('table')}
           onOpenLog={() => openCampaignLog('table')}
           onOpenLibrary={() => openRulesLibrary('table')}
+          onOpenTracker={() => openTracker('table')}
         />
       )}
       {view === 'gm' && (
@@ -154,6 +163,7 @@ export default function App() {
           onOpenSettings={() => openCampaignSettings('gm')}
           onOpenLog={() => openCampaignLog('gm')}
           onOpenLibrary={() => openRulesLibrary('gm')}
+          onOpenTracker={() => openTracker('gm')}
         />
       )}
       {view === 'sheet' && (
@@ -185,6 +195,14 @@ export default function App() {
           session={session}
           campaignName={campaignName}
           onBack={() => setView(libraryReturnView)}
+        />
+      )}
+      {view === 'tracker' && (
+        <CampaignTracker
+          campaignId={activeCampaign?.id}
+          session={session}
+          campaignName={campaignName}
+          onBack={() => setView(trackerReturnView)}
         />
       )}
 
