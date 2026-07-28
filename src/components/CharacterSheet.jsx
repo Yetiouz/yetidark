@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Plus, Trash2, Upload, User } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 
 const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
@@ -31,9 +31,11 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   const [character, setCharacter] = useState(null)
   const [gear, setGear] = useState([])
   const [talents, setTalents] = useState([])
+  const [spells, setSpells] = useState([])
   const [canEdit, setCanEdit] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
   const [gearDraft, setGearDraft] = useState('')
+  const [spellDraft, setSpellDraft] = useState({ name: '', tier: 1, range: '', duration: '', description: '' })
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState(null)
@@ -62,13 +64,15 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         if (!cancelled) setCanEdit(membership?.role === 'gm')
       }
 
-      const [{ data: gearRows }, { data: talentRows }] = await Promise.all([
+      const [{ data: gearRows }, { data: talentRows }, { data: spellRows }] = await Promise.all([
         supabase.from('character_gear').select('*').eq('character_id', characterId).order('created_at', { ascending: true }),
         supabase.from('character_talents').select('*').eq('character_id', characterId).order('created_at', { ascending: true }),
+        supabase.from('character_spells').select('*').eq('character_id', characterId).order('tier', { ascending: true }),
       ])
       if (!cancelled) {
         setGear(gearRows || [])
         setTalents(talentRows || [])
+        setSpells(spellRows || [])
       }
       setLoading(false)
     }
@@ -94,6 +98,15 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'character_talents', filter: `character_id=eq.${characterId}` },
         (payload) => setTalents((t) => [...t, payload.new])
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'character_spells', filter: `character_id=eq.${characterId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') setSpells((s) => [...s, payload.new])
+          else if (payload.eventType === 'UPDATE') setSpells((s) => s.map((i) => (i.id === payload.new.id ? payload.new : i)))
+          else if (payload.eventType === 'DELETE') setSpells((s) => s.filter((i) => i.id !== payload.old.id))
+        }
       )
       .subscribe()
 
@@ -139,6 +152,41 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     if (!name || !characterId) return
     await supabase.from('character_gear').insert({ character_id: characterId, name, slots: 1, quantity: 1, equipped: false })
     setGearDraft('')
+  }
+
+  const togglePrepared = async (spell) => {
+    setSpells((s) => s.map((i) => (i.id === spell.id ? { ...i, prepared: !i.prepared } : i)))
+    await supabase.from('character_spells').update({ prepared: !spell.prepared }).eq('id', spell.id)
+  }
+
+  // Toggling a spell back from Lost is the "benefited from a full rest"
+  // moment in Shadowdark's rules -- there's no separate rest-tracking
+  // feature yet, so this is a manual acknowledgement rather than
+  // something the app enforces on a timer.
+  const toggleLost = async (spell) => {
+    setSpells((s) => s.map((i) => (i.id === spell.id ? { ...i, lost: !i.lost } : i)))
+    await supabase.from('character_spells').update({ lost: !spell.lost }).eq('id', spell.id)
+  }
+
+  const removeSpell = async (spell) => {
+    setSpells((s) => s.filter((i) => i.id !== spell.id))
+    await supabase.from('character_spells').delete().eq('id', spell.id)
+  }
+
+  const addSpell = async () => {
+    const name = spellDraft.name.trim()
+    if (!name || !characterId) return
+    await supabase.from('character_spells').insert({
+      character_id: characterId,
+      name,
+      tier: Number(spellDraft.tier) || 1,
+      range: spellDraft.range.trim() || null,
+      duration: spellDraft.duration.trim() || null,
+      description: spellDraft.description.trim() || null,
+      prepared: false,
+      lost: false,
+    })
+    setSpellDraft({ name: '', tier: 1, range: '', duration: '', description: '' })
   }
 
   // Owner-only, unlike HP/XP/coin/gear which the GM can also touch -- a
@@ -318,7 +366,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         </div>
       </div>
 
-      <div className="bg-neutral-900 rounded-lg p-4">
+      <div className="bg-neutral-900 rounded-lg p-4 mb-4">
         <p className="text-xs text-neutral-400 mb-2">Talents</p>
         {talents.length === 0 && <p className="text-xs text-neutral-500">None yet.</p>}
         <ul>
@@ -328,6 +376,116 @@ export default function CharacterSheet({ characterId, session, onBack }) {
             </li>
           ))}
         </ul>
+      </div>
+
+      <div className="bg-neutral-900 rounded-lg p-4">
+        <p className="text-xs text-neutral-400 mb-2.5 flex items-center gap-1.5">
+          <Sparkles size={12} /> Spells
+        </p>
+        <div className="flex flex-col gap-1.5 mb-3">
+          {spells.length === 0 && <p className="text-xs text-neutral-500">None known yet.</p>}
+          {spells.map((spell) => (
+            <div key={spell.id} className="text-xs p-2.5 bg-neutral-800/60 rounded-md border border-neutral-700">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-white font-medium ${spell.lost ? 'line-through text-neutral-500' : ''}`}>{spell.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/20">
+                    tier {spell.tier}
+                  </span>
+                  {(spell.range || spell.duration) && (
+                    <span className="text-neutral-500 text-[11px]">
+                      {[spell.range, spell.duration].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                </div>
+                {canEdit && (
+                  <button onClick={() => removeSpell(spell)} className="text-neutral-500 hover:text-red-400 shrink-0">
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+              {spell.description && <p className="text-neutral-400 mt-1">{spell.description}</p>}
+              <div className="flex items-center gap-3 mt-2">
+                <label className="flex items-center gap-1.5 text-[11px] text-neutral-400">
+                  {canEdit ? (
+                    <input type="checkbox" checked={spell.prepared} onChange={() => togglePrepared(spell)} />
+                  ) : (
+                    <span className={`w-2 h-2 rounded-full inline-block ${spell.prepared ? 'bg-blue-400' : 'bg-neutral-600'}`} />
+                  )}
+                  prepared
+                </label>
+                {canEdit ? (
+                  <button
+                    onClick={() => toggleLost(spell)}
+                    className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border ${
+                      spell.lost
+                        ? 'text-red-300 border-red-500/30 bg-red-500/10'
+                        : 'text-neutral-500 border-neutral-700 hover:text-neutral-300'
+                    }`}
+                  >
+                    <Ban size={11} /> {spell.lost ? 'lost -- click to restore' : 'mark lost'}
+                  </button>
+                ) : (
+                  spell.lost && (
+                    <span className="flex items-center gap-1 text-[11px] text-red-300">
+                      <Ban size={11} /> lost
+                    </span>
+                  )
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {canEdit && (
+          <div className="pt-3 border-t border-neutral-800 flex flex-col gap-1.5">
+            <div className="flex gap-1.5">
+              <input
+                value={spellDraft.name}
+                onChange={(e) => setSpellDraft((d) => ({ ...d, name: e.target.value }))}
+                placeholder="Spell name"
+                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
+              />
+              <select
+                value={spellDraft.tier}
+                onChange={(e) => setSpellDraft((d) => ({ ...d, tier: e.target.value }))}
+                className="text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+              >
+                {[1, 2, 3, 4, 5].map((t) => (
+                  <option key={t} value={t}>
+                    tier {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-1.5">
+              <input
+                value={spellDraft.range}
+                onChange={(e) => setSpellDraft((d) => ({ ...d, range: e.target.value }))}
+                placeholder="Range (e.g. Near)"
+                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
+              />
+              <input
+                value={spellDraft.duration}
+                onChange={(e) => setSpellDraft((d) => ({ ...d, duration: e.target.value }))}
+                placeholder="Duration (e.g. Focus)"
+                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
+              />
+            </div>
+            <div className="flex gap-1.5">
+              <input
+                value={spellDraft.description}
+                onChange={(e) => setSpellDraft((d) => ({ ...d, description: e.target.value }))}
+                onKeyDown={(e) => e.key === 'Enter' && addSpell()}
+                placeholder="Quick reminder of the effect (optional -- full text lives in the rules library)"
+                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
+              />
+              <button onClick={addSpell} className="text-xs border border-neutral-700 rounded-md px-2 py-1 flex items-center gap-1 text-neutral-200 hover:bg-neutral-800 shrink-0">
+                <Plus size={13} /> Add
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
