@@ -73,6 +73,25 @@ const WEAPONS = [
   { name: 'Warhammer', cost: '10 gp', damage: '1d10', properties: 'Two-handed', slots: 1 },
 ]
 
+// New weapons from Cursed Scroll 2 (Red Sands) and Cursed Scroll 3
+// (Midnight Sun) -- appended separately from the core table so it's clear
+// which book each comes from, but they live in the same WEAPONS list the
+// picker reads from.
+const CURSED_SCROLL_WEAPONS = [
+  { name: 'Blowgun', cost: '5 gp', damage: '1', properties: 'Ranged, silent from hiding', slots: 1 },
+  { name: 'Bolas', cost: '2 gp', damage: '-', properties: 'Ranged, entangles legs', slots: 1 },
+  { name: 'Morningstar', cost: '5 gp', damage: '1d6/1d8', properties: 'Versatile', slots: 1 },
+  { name: 'Pike', cost: '10 gp', damage: '1d10', properties: 'Two-handed, reach', slots: 2 },
+  { name: 'Razor chain', cost: '12 gp', damage: '1d6', properties: 'Finesse, lash', slots: 1 },
+  { name: 'Scimitar', cost: '8 gp', damage: '1d6', properties: 'Finesse', slots: 1 },
+  { name: 'Shuriken', cost: '1 gp', damage: '1d4', properties: 'Ranged', slots: 1 },
+  { name: 'Sling', cost: '5 sp', damage: '1d4', properties: '-', slots: 1 },
+  { name: 'Whip', cost: '10 gp', damage: '1d4', properties: 'Finesse, lash', slots: 1 },
+  { name: 'Handaxe', cost: '2 gp', damage: '1d6', properties: 'Finesse, thrown', slots: 1 },
+  { name: 'Stave', cost: '2 gp', damage: '1d6', properties: 'Two-handed', slots: 1 },
+]
+WEAPONS.push(...CURSED_SCROLL_WEAPONS)
+
 // baseAc is the flat number in "X + DEX mod"; dexApplies is false for
 // plate, which caps out at a flat 15 regardless of Dexterity.
 const ARMOR = [
@@ -200,6 +219,252 @@ const CLASSES = [
 ]
 
 // Generic adventuring kit, same for every class (Gear, pg. 34).
+// Cursed Scroll classes -- Diablerie (CS1), Red Sands (CS2), Midnight Sun
+// (CS3). No new ancestries in any of the three zines, only classes. Several
+// of these reference subsystems the app doesn't model in full (Patron Boon
+// tables, the Black Lotus Talents table, mounts, Old Gods) -- those live as
+// plain-text feature descriptions the player/GM reads and self-manages,
+// same approach as Priest/Wizard spellcasting pointing at the Spells
+// section instead of an in-app spell picker.
+const MELEE_PLUS_CROSSBOW = WEAPONS.map((w) => w.name).filter((n) => !['Longbow', 'Shortbow'].includes(n))
+
+const CURSED_SCROLL_CLASSES = [
+  {
+    name: 'Knight of St. Ydris',
+    source: 'Cursed Scroll 1: Diablerie',
+    hitDie: 6,
+    weaponsAllowed: MELEE_PLUS_CROSSBOW,
+    armorAllowed: ARMOR.map((a) => a.name),
+    shieldAllowed: true,
+    blurb: 'All melee weapons, crossbow. All armor and shields.',
+    features: [
+      { name: 'Languages', description: 'You know Diabolic.' },
+      {
+        name: 'Demonic Possession',
+        description:
+          '3/day, gain a +1 bonus to your damage rolls that lasts 3 rounds, plus half your level added to the bonus (round down).',
+        dailyUses: 3,
+      },
+      {
+        name: 'Spellcasting',
+        description:
+          'You can cast witch spells you know (shared list with the Witch class) -- add them in the Spells section below.',
+      },
+    ],
+    talentTable: [
+      { min: 2, max: 2, text: 'Your Demonic Possession bonus increases by 1 point' },
+      { min: 3, max: 6, text: '+1 to melee or ranged attacks' },
+      { min: 7, max: 9, text: '+2 to Strength, Dexterity, or Constitution stat' },
+      { min: 10, max: 11, text: '+2 to Charisma stat or +1 to witch spellcasting checks' },
+      { min: 12, max: 12, text: 'Choose a talent or +2 points to distribute to stats' },
+    ],
+  },
+  {
+    name: 'Warlock',
+    source: 'Cursed Scroll 1: Diablerie',
+    hitDie: 6,
+    weaponsAllowed: ['Club', 'Crossbow', 'Dagger', 'Mace', 'Longsword'],
+    armorAllowed: ['Leather armor', 'Chainmail'],
+    shieldAllowed: true,
+    blurb: 'Club, crossbow, dagger, mace, longsword. Leather armor, chainmail, and shields.',
+    features: [
+      { name: 'Languages', description: 'You know one of Celestial, Diabolic, Draconic, Primordial, or Sylvan (your choice).' },
+      {
+        name: 'Patron',
+        description:
+          "Choose a patron to serve. Your patron is the source of your supernatural gifts and can choose to grant or withhold them at any time -- you can gain new Patron Boons (or lose them) as a result.",
+      },
+      {
+        name: 'Patron Boon',
+        description:
+          'At 1st level you gain a random Patron Boon talent based on your chosen patron (see the Patron Boon tables in your rules library). Whenever you gain a new talent roll, you may roll on your Patron Boon table instead of the Warlock Talents table.',
+      },
+    ],
+    talentTable: [
+      { min: 2, max: 2, text: 'Roll a Patron Boon from any patron; an unexplained gift' },
+      { min: 3, max: 6, text: 'Add +1 point to two different stats' },
+      { min: 7, max: 9, text: '+1 to melee or ranged attacks' },
+      { min: 10, max: 11, text: 'Roll two Patron Boons and choose one to keep' },
+      { min: 12, max: 12, text: 'Choose a talent or +2 points to distribute to stats' },
+    ],
+  },
+  {
+    name: 'Witch',
+    source: 'Cursed Scroll 1: Diablerie',
+    hitDie: 4,
+    weaponsAllowed: ['Dagger', 'Staff'],
+    armorAllowed: ['Leather armor'],
+    shieldAllowed: false,
+    blurb: 'Dagger, staff. Leather armor only.',
+    features: [
+      { name: 'Languages', description: 'You know Diabolic, Primordial, and Sylvan.' },
+      {
+        name: 'Familiar',
+        description:
+          "You have a small animal familiar (raven, rat, frog, etc.) who serves you loyally and can speak Common. It can be the source of spells you cast -- treat it as though it were you for determining spell ranges. If it dies, you can restore it to life by permanently sacrificing 1d4 HP.",
+      },
+      {
+        name: 'Spellcasting',
+        description:
+          'You can cast witch spells you know using Charisma. You know three tier 1 spells of your choice from the witch spell list -- add them in the Spells section below.',
+      },
+    ],
+    talentTable: [
+      { min: 2, max: 2, text: "1/day, teleport to your familiar's location as a move" },
+      { min: 3, max: 7, text: '+2 to Charisma stat or +1 to witch spellcasting checks' },
+      { min: 8, max: 9, text: 'Gain advantage on casting one spell you know' },
+      { min: 10, max: 11, text: 'Learn an additional witch spell of any tier you can cast' },
+      { min: 12, max: 12, text: 'Choose a talent or +2 points to distribute to stats' },
+    ],
+  },
+  {
+    name: 'Desert Rider',
+    source: 'Cursed Scroll 2: Red Sands',
+    hitDie: 8,
+    weaponsAllowed: ['Club', 'Dagger', 'Javelin', 'Longsword', 'Pike', 'Shortbow', 'Scimitar', 'Spear', 'Whip'],
+    armorAllowed: ['Leather armor'],
+    shieldAllowed: true,
+    blurb: 'Club, dagger, javelin, longsword, pike, shortbow, scimitar, spear, whip. Leather armor and shields.',
+    features: [
+      {
+        name: 'Mount',
+        description:
+          'You have a common camel or horse mount that comes when called and never spooks. While riding, both you and your mount get a bonus to AC equal to half your level (round down), and your mount gains additional levels equal to half your level (round down). You can freely mount or dismount once per round.',
+      },
+      {
+        name: 'Charge',
+        description: '3/day, charge into combat by moving at least near before attacking -- that attack deals double melee damage.',
+        dailyUses: 3,
+      },
+    ],
+    talentTable: [
+      { min: 2, max: 2, text: 'You can use any rider-bearing creature as your mount' },
+      { min: 3, max: 6, text: '+1 to attacks or damage' },
+      { min: 7, max: 9, text: '+2 to Strength or Dexterity stat, or +1 to melee attacks' },
+      { min: 10, max: 11, text: 'Gain an additional use of your Charge talent each day' },
+      { min: 12, max: 12, text: 'Choose a talent or +2 points to distribute to stats' },
+    ],
+  },
+  {
+    name: 'Pit Fighter',
+    source: 'Cursed Scroll 2: Red Sands',
+    hitDie: 8,
+    weaponsAllowed: 'ALL',
+    armorAllowed: ['Leather armor'],
+    shieldAllowed: true,
+    blurb: 'All weapons. Leather armor and shields.',
+    features: [
+      { name: 'Flourish', description: '3/day, regain 1d6 HP when you hit an enemy with a melee attack.', dailyUses: 3 },
+      { name: 'Implacable', description: 'Advantage on Constitution checks to resist injury, poison, or endure extreme environments.' },
+      { name: 'Last Stand', description: 'You get up from dying with 1 HP on a natural d20 roll of 18-20.' },
+      {
+        name: 'Relentless',
+        description:
+          "3/day, when you're reduced to 0 HP, make a DC 18 Constitution check (Implacable applies) -- on a success you go to 1 HP instead.",
+        dailyUses: 3,
+      },
+    ],
+    talentTable: [
+      { min: 2, max: 2, text: '1/day, ignore all damage and effects from one attack' },
+      { min: 3, max: 6, text: 'You gain +1 to melee weapon damage' },
+      { min: 7, max: 9, text: '+2 to Strength or Constitution stat, or +1 to melee attacks' },
+      { min: 10, max: 11, text: 'Increase the HP you gain from Flourish by 1d6' },
+      { min: 12, max: 12, text: 'Choose a talent or +2 points to distribute to stats' },
+    ],
+  },
+  {
+    name: 'Ras-Godai',
+    source: 'Cursed Scroll 2: Red Sands',
+    hitDie: 6,
+    weaponsAllowed: ['Blowgun', 'Bolas', 'Dagger', 'Razor chain', 'Scimitar', 'Shuriken', 'Spear'],
+    armorAllowed: ['Leather armor'],
+    shieldAllowed: false,
+    blurb: 'Blowgun, bolas, dagger, razor chain, scimitar, shuriken, spear. Leather armor only.',
+    features: [
+      { name: 'Languages', description: 'You know Diabolic.' },
+      {
+        name: 'Assassin',
+        description: 'Advantage on checks to sneak and hide. Your attacks deal double damage against targets unaware of your presence.',
+      },
+      {
+        name: 'Smoke Step',
+        description: "3/day, teleport to a location you can see within near range. Doesn't use your action.",
+        dailyUses: 3,
+      },
+      {
+        name: 'Black Lotus',
+        description:
+          'You survived eating a petal of the fabled black lotus flower. Roll one talent on the Black Lotus Talents table (d12, see your rules library) and record the result as a note on this sheet.',
+      },
+    ],
+    talentTable: [
+      { min: 2, max: 2, text: 'You are trained in the use of poisons' },
+      { min: 3, max: 6, text: 'Roll an additional talent on the Black Lotus Talents table' },
+      { min: 7, max: 9, text: '+2 to Strength or Dexterity stat, or +1 to melee attacks' },
+      { min: 10, max: 11, text: 'Gain an additional use of your Smoke Step talent' },
+      { min: 12, max: 12, text: 'Choose a talent or +2 points to distribute to stats' },
+    ],
+  },
+  {
+    name: 'Sea Wolf',
+    source: 'Cursed Scroll 3: Midnight Sun',
+    hitDie: 8,
+    weaponsAllowed: ['Dagger', 'Greataxe', 'Handaxe', 'Longbow', 'Longsword', 'Spear'],
+    armorAllowed: ['Leather armor', 'Chainmail'],
+    shieldAllowed: true,
+    blurb: 'Dagger, greataxe, handaxe, longbow, longsword, spear. Leather armor, chainmail, and shields.',
+    features: [
+      { name: 'Seafarer', description: 'Advantage on checks related to navigating and crewing boats.' },
+      {
+        name: 'Old Gods',
+        description:
+          "Each day after you complete a rest, choose one until your next rest: Odin (regain 1d4 HP whenever you kill an enemy), Freya (once a day, gain a luck token if you don't have one; using a luck token adds 1d6), or Loki (advantage on checks to lie, sneak, and hide).",
+      },
+      {
+        name: 'Shield Wall',
+        description: 'If wielding a shield, use your action to take a defensive stance -- your AC becomes 20 until the stance ends.',
+      },
+    ],
+    talentTable: [
+      { min: 2, max: 2, text: '1/day, go berserk: immune to damage for 3 rounds' },
+      { min: 3, max: 6, text: 'Your attacks deal +1 damage' },
+      { min: 7, max: 9, text: '+2 to Strength or Constitution stat, or +1 to attacks' },
+      { min: 10, max: 11, text: 'Duality; choose two different Old Gods effects each day' },
+      { min: 12, max: 12, text: 'Choose a talent or +2 points to distribute to stats' },
+    ],
+  },
+  {
+    name: 'Seer',
+    source: 'Cursed Scroll 3: Midnight Sun',
+    hitDie: 6,
+    weaponsAllowed: ['Dagger', 'Spear', 'Stave'],
+    armorAllowed: ['Leather armor'],
+    shieldAllowed: false,
+    blurb: 'Dagger, stave, spear. Leather armor only.',
+    features: [
+      { name: 'Destined', description: 'Whenever you use a luck token, add 1d6 to the roll.' },
+      {
+        name: 'Omen',
+        description: "3/day, make a DC 9 WIS check -- on a success, gain a luck token (you can't have more than one at a time).",
+        dailyUses: 3,
+      },
+      {
+        name: 'Spellcasting',
+        description:
+          'You can cast seer spells you know using Wisdom. You know one tier 1 spell of your choice from the seer spell list -- add them in the Spells section below.',
+      },
+    ],
+    talentTable: [
+      { min: 2, max: 2, text: 'Learn an additional seer spell from any tier you can cast' },
+      { min: 3, max: 6, text: 'Gain an additional use of your Omen talent each day' },
+      { min: 7, max: 9, text: '+2 to WIS or CHA stat, or +1 to spellcasting checks' },
+      { min: 10, max: 11, text: 'Increase the die category of your Destined talent by one' },
+      { min: 12, max: 12, text: 'Choose a talent or +2 points to distribute to stats' },
+    ],
+  },
+]
+CLASSES.push(...CURSED_SCROLL_CLASSES)
+
 const STARTING_KIT = [
   { name: 'Backpack', slots: 0 },
   { name: 'Torch', slots: 1, quantity: 2 },
@@ -437,6 +702,8 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
           source: 'class',
           name: f.name,
           description,
+          uses_max: f.dailyUses || null,
+          uses_current: f.dailyUses || null,
         }
       }),
     ]
