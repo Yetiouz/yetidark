@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Dices, AlertCircle } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Dices, AlertCircle, User, Upload, Check, X as XIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 
 const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
@@ -533,9 +533,44 @@ function rollStartingGold() {
   return roll2d6() * 5
 }
 
-const emptyStats = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }
+// Classes grouped by source book for the Class step -- flat grids of 12+
+// options get hard to scan once the Cursed Scrolls are mixed in with the
+// corebook four, so the picker clusters them under a small heading per
+// source instead.
+function classesBySource() {
+  const groups = [{ label: 'Core rulebook', classes: [] }]
+  const bySource = {}
+  for (const c of CLASSES) {
+    if (!c.source) {
+      groups[0].classes.push(c)
+      continue
+    }
+    if (!bySource[c.source]) {
+      bySource[c.source] = { label: c.source, classes: [] }
+      groups.push(bySource[c.source])
+    }
+    bySource[c.source].classes.push(c)
+  }
+  return groups
+}
 
-export default function CharacterBuilder({ campaignId, session, campaignName = 'The sunken keep', onComplete }) {
+const emptyStats = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }
+const STEPS = ['Method', 'Stats', 'Ancestry', 'Class', 'Background', 'Gear', 'Review']
+
+// Character creation, rebuilt as a step-by-step wizard (matches the rest
+// of Delve's onboarding flows) instead of one long scrolling form. Every
+// step reuses the same data tables and computed values the old single-page
+// builder used -- this pass is a layout/navigation change, not a rules
+// change. Two things intentionally NOT built yet, left for a follow-up
+// chunk: a richer per-die stat-roll breakdown with the "no stat 14+, reroll
+// the set once" rule, and a "best fit" class recommendation engine in the
+// sidebar. "Save draft" also isn't wired to real persistence yet -- leaving
+// the wizard mid-way loses progress, same as the old form did if you
+// navigated away, so the button is left out rather than implying a save
+// that doesn't happen.
+export default function CharacterBuilder({ campaignId, session, campaignName = 'The sunken keep', onComplete, onCancel }) {
+  const [step, setStep] = useState(0)
+  const [rollMethod, setRollMethod] = useState('digital') // 'digital' | 'physical' -- affects the Stats step only
   const [stats, setStats] = useState(emptyStats)
   const [ancestry, setAncestry] = useState('Dwarf')
   const [charClass, setCharClass] = useState('Fighter')
@@ -552,6 +587,9 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
   const [deity, setDeity] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [portraitFile, setPortraitFile] = useState(null)
+  const [portraitPreview, setPortraitPreview] = useState(null)
+  const portraitInputRef = useRef(null)
 
   const selectedAncestry = ANCESTRIES.find((a) => a.name === ancestry)
   const selectedClass = CLASSES.find((c) => c.name === charClass)
@@ -577,6 +615,12 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [charClass])
 
+  useEffect(() => {
+    return () => {
+      if (portraitPreview) URL.revokeObjectURL(portraitPreview)
+    }
+  }, [portraitPreview])
+
   const rerollTalents = () => {
     const count = 1 + (selectedAncestry?.talentBonus || 0)
     setTalents(rollClassTalents(charClass, count))
@@ -597,6 +641,13 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
 
   const rollBackground = () => setBackground(BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)])
 
+  const pickPortrait = (file) => {
+    if (!file) return
+    if (portraitPreview) URL.revokeObjectURL(portraitPreview)
+    setPortraitFile(file)
+    setPortraitPreview(URL.createObjectURL(file))
+  }
+
   const conMod = modifier(stats.con)
   const dexMod = modifier(stats.dex)
   const hpBonus = selectedAncestry?.hpBonus || 0
@@ -608,6 +659,10 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
   const selectedArmor = ARMOR.find((a) => a.name === armorChoice)
   const armorAcValue = selectedArmor ? selectedArmor.baseAc + (selectedArmor.dexApplies ? dexMod : 0) : 10 + dexMod
   const computedAc = armorAcValue + (shieldChoice && selectedClass.shieldAllowed ? SHIELD.acBonus : 0)
+  const gearSlots = Math.max(stats.str || 10, 10) + (conMod > 0 ? conMod : 0)
+
+  const goNext = () => setStep((s) => Math.min(STEPS.length - 1, s + 1))
+  const goBack = () => setStep((s) => Math.max(0, s - 1))
 
   const start = async () => {
     const finalName = name.trim() || `${ancestry} ${charClass.toLowerCase()}`
@@ -714,265 +769,490 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
       supabase.from('character_features').insert(featureRows),
     ])
 
-    setSaving(false)
     if (gearError || talentError || featureError) {
+      setSaving(false)
       setError((gearError || talentError || featureError).message)
       return
     }
 
+    // Portrait upload happens last, after the character row exists --
+    // same storage path/upsert/cache-bust pattern CharacterSheet.jsx uses
+    // for a portrait added after the fact, so either path produces an
+    // identical avatar_url shape.
+    if (portraitFile) {
+      const path = `${character.id}/avatar`
+      const { error: storageError } = await supabase.storage.from('avatars').upload(path, portraitFile, { upsert: true })
+      if (!storageError) {
+        const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path)
+        const avatarUrl = `${pub.publicUrl}?v=${Date.now()}`
+        await supabase.from('characters').update({ avatar_url: avatarUrl }).eq('id', character.id)
+        character.avatar_url = avatarUrl
+      }
+    }
+
+    setSaving(false)
     onComplete && onComplete(character)
   }
 
-  return (
-    <div className="max-w-xl mx-auto p-6">
-      <p className="text-xs text-neutral-400 mb-0.5">{campaignName}</p>
-      <h1 className="text-white text-lg font-medium mb-4">Build your character</h1>
+  const stepper = (
+    <div className="hidden md:flex items-center gap-1.5 overflow-x-auto">
+      {STEPS.map((label, i) => (
+        <div key={label} className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setStep(i)}
+            className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] border shrink-0 ${
+              i < step
+                ? 'bg-green-500/20 border-green-500 text-green-400'
+                : i === step
+                  ? 'bg-blue-500 border-blue-500 text-white'
+                  : 'border-neutral-700 text-neutral-500'
+            }`}
+          >
+            {i < step ? <Check size={12} /> : i + 1}
+          </button>
+          <span className={`text-xs whitespace-nowrap ${i === step ? 'text-white' : 'text-neutral-500'}`}>{label}</span>
+          {i < STEPS.length - 1 && <span className="w-5 h-px bg-neutral-800 shrink-0" />}
+        </div>
+      ))}
+    </div>
+  )
 
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-neutral-400">1. Roll your stats (3d6 each)</p>
+  const sidebar = (
+    <div className="bg-neutral-900 rounded-lg p-4 h-fit md:sticky md:top-6">
+      <input
+        ref={portraitInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => pickPortrait(e.target.files?.[0])}
+      />
+      <div className="flex flex-col items-center text-center mb-3">
         <button
-          onClick={rollAll}
-          className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
+          onClick={() => portraitInputRef.current?.click()}
+          className="w-16 h-16 rounded-full overflow-hidden bg-neutral-950 border border-neutral-700 flex items-center justify-center hover:border-neutral-500 mb-1.5"
         >
-          <Dices size={13} /> Roll all
+          {portraitPreview ? (
+            <img src={portraitPreview} alt="Portrait preview" className="w-full h-full object-cover" />
+          ) : (
+            <User size={22} className="text-neutral-600" />
+          )}
         </button>
-      </div>
-      <div className="grid grid-cols-6 gap-1.5 mb-1.5">
-        {STAT_KEYS.map((k) => (
-          <div key={k} className="bg-neutral-900 rounded-md p-1.5 text-center">
-            <p className="text-[10px] text-neutral-400 mb-1">{STAT_LABELS[k]}</p>
-            <input
-              type="number"
-              value={stats[k]}
-              onChange={(e) => setStat(k, e.target.value)}
-              className="w-full bg-neutral-950 border border-neutral-700 rounded text-center text-sm text-white py-0.5"
-            />
-            <p className="text-[10px] text-neutral-500 mt-1">
-              {modifier(stats[k]) >= 0 ? `+${modifier(stats[k])}` : modifier(stats[k])}
-            </p>
-          </div>
-        ))}
-      </div>
-      <p className="text-[11px] text-neutral-500 mb-4">
-        "Roll all" fills these in for you, or type in numbers straight off your own dice.
-      </p>
-
-      <p className="text-xs text-neutral-400 mb-2">2. Pick your ancestry</p>
-      <div className="grid grid-cols-3 gap-1.5 mb-1.5">
-        {ANCESTRIES.map((a) => (
-          <button
-            key={a.name}
-            onClick={() => setAncestry(a.name)}
-            className={`text-xs py-2 rounded-md border ${
-              ancestry === a.name
-                ? 'bg-neutral-800 border-blue-500 text-white'
-                : 'border-neutral-700 text-neutral-200 hover:bg-neutral-800'
-            }`}
-          >
-            {a.name}
-          </button>
-        ))}
-      </div>
-      <p className="text-[11px] text-neutral-400 mb-4">
-        <span className="text-neutral-300">{selectedAncestry.traitName}.</span> {selectedAncestry.trait}
-        <span className="block text-neutral-600 mt-0.5">Languages: {selectedAncestry.languages}</span>
-      </p>
-
-      <p className="text-xs text-neutral-400 mb-2">3. Pick your class</p>
-      <div className="grid grid-cols-4 gap-1.5 mb-1.5">
-        {CLASSES.map((c) => (
-          <button
-            key={c.name}
-            onClick={() => setCharClass(c.name)}
-            className={`text-xs py-2 rounded-md border ${
-              charClass === c.name
-                ? 'bg-neutral-800 border-blue-500 text-white'
-                : 'border-neutral-700 text-neutral-200 hover:bg-neutral-800'
-            }`}
-          >
-            {c.name}
-          </button>
-        ))}
-      </div>
-      <p className="text-[11px] text-neutral-400 mb-2">
-        {charClass} &middot; 1d{selectedClass.hitDie} hit points per level. {selectedClass.blurb}
-      </p>
-      <ul className="mb-4">
-        {selectedClass.features.map((f) => (
-          <li key={f.name} className="text-[11px] text-neutral-400 bg-neutral-900 rounded-md px-2.5 py-1.5 mb-1">
-            <span className="text-neutral-300">{f.name}.</span> {f.description}
-          </li>
-        ))}
-      </ul>
-
-      {charClass === 'Fighter' && (
-        <div className="grid grid-cols-2 gap-1.5 mb-4">
-          <div>
-            <p className="text-[11px] text-neutral-400 mb-1">Grit stat</p>
-            <select
-              value={gritStat}
-              onChange={(e) => setGritStat(e.target.value)}
-              className="w-full text-xs bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
-            >
-              <option>Strength</option>
-              <option>Dexterity</option>
-            </select>
-          </div>
-          <div>
-            <p className="text-[11px] text-neutral-400 mb-1">Weapon Mastery</p>
-            <select
-              value={masteryWeapon}
-              onChange={(e) => setMasteryWeapon(e.target.value)}
-              className="w-full text-xs bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
-            >
-              {classWeapons.map((w) => (
-                <option key={w}>{w}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-      {charClass === 'Priest' && (
-        <div className="mb-4">
-          <p className="text-[11px] text-neutral-400 mb-1">Deity (optional)</p>
-          <input
-            value={deity}
-            onChange={(e) => setDeity(e.target.value)}
-            placeholder="Name of the god you serve"
-            className="w-full text-xs bg-neutral-900 border border-neutral-700 rounded-md px-2.5 py-1.5 text-white"
-          />
-        </div>
-      )}
-
-      <p className="text-xs text-neutral-400 mb-2">4. Weapon &amp; armor</p>
-      <div className="grid grid-cols-2 gap-1.5 mb-1.5">
-        <select
-          value={weaponChoice}
-          onChange={(e) => setWeaponChoice(e.target.value)}
-          className="text-xs bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
+        <button
+          onClick={() => portraitInputRef.current?.click()}
+          className="text-[11px] text-neutral-500 hover:text-neutral-300 flex items-center gap-1 mb-2.5"
         >
-          {classWeapons.map((wname) => {
-            const w = WEAPONS.find((x) => x.name === wname)
-            return (
-              <option key={wname} value={wname}>
-                {wname} ({w.damage}, {w.slots} slot{w.slots === 1 ? '' : 's'})
-              </option>
-            )
-          })}
-        </select>
-        {classArmors.length > 0 ? (
-          <select
-            value={armorChoice}
-            onChange={(e) => setArmorChoice(e.target.value)}
-            className="text-xs bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
-          >
-            <option value="">No armor</option>
-            {classArmors.map((aname) => {
-              const a = ARMOR.find((x) => x.name === aname)
-              return (
-                <option key={aname} value={aname}>
-                  {aname} (AC {a.baseAc}{a.dexApplies ? '+dex' : ''}, {a.slots} slots)
-                </option>
-              )
-            })}
-          </select>
-        ) : (
-          <p className="text-[11px] text-neutral-500 self-center">No armor allowed for this class.</p>
+          <Upload size={11} /> {portraitPreview ? 'Replace portrait' : 'Add portrait'}
+        </button>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Unnamed adventurer"
+          className="w-full text-sm bg-neutral-950 border border-neutral-700 rounded-md px-2.5 py-1.5 text-white text-center"
+        />
+      </div>
+
+      <div className="grid grid-cols-4 gap-1.5 text-center mb-3 pb-3 border-b border-neutral-800">
+        <div>
+          <p className="text-[10px] text-neutral-500">Level</p>
+          <p className="text-sm text-white">1</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-neutral-500">HP</p>
+          <p className="text-sm text-white">{computedHp}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-neutral-500">AC</p>
+          <p className="text-sm text-white">{computedAc}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-neutral-500">Gear slots</p>
+          <p className="text-sm text-white">{gearSlots}</p>
+        </div>
+      </div>
+
+      <p className="text-xs text-neutral-400 mb-1.5">Current choices</p>
+      <div className="flex flex-col gap-1 text-[11px]">
+        <div className="flex justify-between">
+          <span className="text-neutral-500">Ancestry</span>
+          <span className="text-neutral-200">{ancestry || '—'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-neutral-500">Class</span>
+          <span className="text-neutral-200">{charClass || '—'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-neutral-500">Background</span>
+          <span className="text-neutral-200 truncate max-w-[140px]" title={background}>
+            {background ? background.split(' -- ')[0] : '—'}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-neutral-500">Alignment</span>
+          <span className="text-neutral-200">{alignment || '—'}</span>
+        </div>
+      </div>
+      <p className="text-[11px] text-neutral-600 mt-3">You can change any choice before creating the character.</p>
+    </div>
+  )
+
+  return (
+    <div className="h-screen flex flex-col overflow-hidden">
+      <div className="shrink-0 border-b border-neutral-800 px-6 py-3.5 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs text-neutral-400 truncate">{campaignName}</p>
+          <h1 className="text-white font-medium">Create a character</h1>
+        </div>
+        {stepper}
+        {onCancel && (
+          <button onClick={onCancel} className="text-neutral-400 hover:text-white shrink-0">
+            <XIcon size={18} />
+          </button>
         )}
       </div>
-      {selectedClass.shieldAllowed && (
-        <label className="flex items-center gap-1.5 text-[11px] text-neutral-400 mb-4">
-          <input type="checkbox" checked={shieldChoice} onChange={(e) => setShieldChoice(e.target.checked)} />
-          Carry a shield (+2 AC, 1 slot, occupies one hand)
-        </label>
-      )}
-      {!selectedClass.shieldAllowed && <div className="mb-4" />}
 
-      <p className="text-xs text-neutral-400 mb-2">5. Alignment &amp; background</p>
-      <div className="grid grid-cols-3 gap-1.5 mb-1.5">
-        {ALIGNMENTS.map((a) => (
-          <button
-            key={a}
-            onClick={() => setAlignment(a)}
-            className={`text-xs py-1.5 rounded-md border ${
-              alignment === a
-                ? 'bg-neutral-800 border-blue-500 text-white'
-                : 'border-neutral-700 text-neutral-200 hover:bg-neutral-800'
-            }`}
-          >
-            {a}
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-1.5 mb-4">
-        <input
-          value={background}
-          onChange={(e) => setBackground(e.target.value)}
-          placeholder="Background (e.g. Urchin, Soldier, Scholar)"
-          className="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
-        />
-        <button
-          onClick={rollBackground}
-          className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800 shrink-0"
-        >
-          <Dices size={13} /> Roll (d20)
-        </button>
-      </div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-5xl mx-auto p-6 grid grid-cols-1 md:grid-cols-[1fr_260px] gap-4">
+          <div className="bg-neutral-900 rounded-lg p-5 min-h-[420px]">
+            {step === 0 && (
+              <div>
+                <h2 className="text-white text-sm font-medium mb-1">How do you want to roll your stats?</h2>
+                <p className="text-xs text-neutral-500 mb-4">You can still edit any number by hand on the next step either way.</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    onClick={() => setRollMethod('digital')}
+                    className={`text-left p-4 rounded-lg border ${
+                      rollMethod === 'digital' ? 'border-blue-500 bg-neutral-800' : 'border-neutral-700 hover:bg-neutral-800/50'
+                    }`}
+                  >
+                    <p className="text-sm text-white mb-1">Roll digitally</p>
+                    <p className="text-[11px] text-neutral-500">Delve rolls 3d6 for each stat for you. Reroll all six anytime.</p>
+                  </button>
+                  <button
+                    onClick={() => setRollMethod('physical')}
+                    className={`text-left p-4 rounded-lg border ${
+                      rollMethod === 'physical' ? 'border-blue-500 bg-neutral-800' : 'border-neutral-700 hover:bg-neutral-800/50'
+                    }`}
+                  >
+                    <p className="text-sm text-white mb-1">Physical dice</p>
+                    <p className="text-[11px] text-neutral-500">Roll your own 3d6 and type each stat's total in on the next step.</p>
+                  </button>
+                </div>
+              </div>
+            )}
 
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-neutral-400">6. Talents ({charClass} table, 2d6)</p>
-        <button
-          onClick={rerollTalents}
-          className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
-        >
-          <Dices size={13} /> Reroll
-        </button>
-      </div>
-      <ul className="mb-4">
-        {talents.map((t, i) => (
-          <li key={i} className="text-[11px] text-neutral-300 bg-neutral-900 rounded-md px-2.5 py-1.5 mb-1">
-            {t}
-          </li>
-        ))}
-      </ul>
+            {step === 1 && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-white text-sm font-medium">Roll your stats</h2>
+                  {rollMethod === 'digital' && (
+                    <button
+                      onClick={rollAll}
+                      className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
+                    >
+                      <Dices size={13} /> Roll all
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-neutral-500 mb-4">
+                  {rollMethod === 'digital'
+                    ? '"Roll all" fills these in for you, or type in numbers straight off your own dice.'
+                    : 'Roll 3d6 for each stat on your own dice, then type each total in below.'}
+                </p>
+                <div className="grid grid-cols-6 gap-1.5 mb-1.5">
+                  {STAT_KEYS.map((k) => (
+                    <div key={k} className="bg-neutral-950 rounded-md p-1.5 text-center">
+                      <p className="text-[10px] text-neutral-400 mb-1">{STAT_LABELS[k]}</p>
+                      <input
+                        type="number"
+                        value={stats[k]}
+                        onChange={(e) => setStat(k, e.target.value)}
+                        className="w-full bg-neutral-900 border border-neutral-700 rounded text-center text-sm text-white py-0.5"
+                      />
+                      <p className="text-[10px] text-neutral-500 mt-1">
+                        {modifier(stats[k]) >= 0 ? `+${modifier(stats[k])}` : modifier(stats[k])}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-      <p className="text-xs text-neutral-400 mb-2">7. Name your character</p>
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="e.g. Rendil the bold"
-        className="w-full bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white mb-4"
-      />
+            {step === 2 && (
+              <div>
+                <h2 className="text-white text-sm font-medium mb-3">Pick your ancestry</h2>
+                <div className="grid grid-cols-3 gap-1.5 mb-1.5">
+                  {ANCESTRIES.map((a) => (
+                    <button
+                      key={a.name}
+                      onClick={() => setAncestry(a.name)}
+                      className={`text-xs py-2 rounded-md border ${
+                        ancestry === a.name
+                          ? 'bg-neutral-800 border-blue-500 text-white'
+                          : 'border-neutral-700 text-neutral-200 hover:bg-neutral-800'
+                      }`}
+                    >
+                      {a.name}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-neutral-400">
+                  <span className="text-neutral-300">{selectedAncestry.traitName}.</span> {selectedAncestry.trait}
+                  <span className="block text-neutral-600 mt-0.5">Languages: {selectedAncestry.languages}</span>
+                </p>
+              </div>
+            )}
 
-      <div className="bg-neutral-900 rounded-md px-3.5 py-3">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <p className="text-sm font-medium text-white">
-              {ancestry} {charClass.toLowerCase()} &middot; level 1 &middot; {alignment}
-            </p>
-            <p className="text-[11px] text-neutral-400 mt-0.5">
-              {computedHp} hp (1d{selectedClass.hitDie}{hpBonus ? ` + ${hpBonus} stout` : ''}
-              {conMod ? ` ${conMod >= 0 ? '+' : ''}${conMod} con` : ''}) &middot; ac {computedAc} &middot; {coin} gp
-            </p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">
-              {weaponChoice}
-              {armorChoice ? `, ${armorChoice}` : ''}
-              {shieldChoice && selectedClass.shieldAllowed ? ', shield' : ''}, backpack &amp; adventuring kit
-            </p>
-            {error && (
-              <div className="flex items-center gap-1.5 text-red-400 mt-1.5">
-                <AlertCircle size={12} />
-                <p className="text-[11px]">{error}</p>
+            {step === 3 && (
+              <div>
+                <h2 className="text-white text-sm font-medium mb-3">Pick your class</h2>
+                {classesBySource().map((group) => (
+                  <div key={group.label} className="mb-3">
+                    <p className="text-[10px] uppercase tracking-wide text-neutral-600 mb-1.5">{group.label}</p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {group.classes.map((c) => (
+                        <button
+                          key={c.name}
+                          onClick={() => setCharClass(c.name)}
+                          className={`text-xs py-2 rounded-md border ${
+                            charClass === c.name
+                              ? 'bg-neutral-800 border-blue-500 text-white'
+                              : 'border-neutral-700 text-neutral-200 hover:bg-neutral-800'
+                          }`}
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <p className="text-[11px] text-neutral-400 mb-2 mt-2">
+                  {charClass} &middot; 1d{selectedClass.hitDie} hit points per level. {selectedClass.blurb}
+                </p>
+                <ul className="mb-3">
+                  {selectedClass.features.map((f) => (
+                    <li key={f.name} className="text-[11px] text-neutral-400 bg-neutral-950 rounded-md px-2.5 py-1.5 mb-1">
+                      <span className="text-neutral-300">{f.name}.</span> {f.description}
+                    </li>
+                  ))}
+                </ul>
+
+                {charClass === 'Fighter' && (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <p className="text-[11px] text-neutral-400 mb-1">Grit stat</p>
+                      <select
+                        value={gritStat}
+                        onChange={(e) => setGritStat(e.target.value)}
+                        className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
+                      >
+                        <option>Strength</option>
+                        <option>Dexterity</option>
+                      </select>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-neutral-400 mb-1">Weapon Mastery</p>
+                      <select
+                        value={masteryWeapon}
+                        onChange={(e) => setMasteryWeapon(e.target.value)}
+                        className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
+                      >
+                        {classWeapons.map((w) => (
+                          <option key={w}>{w}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+                {charClass === 'Priest' && (
+                  <div>
+                    <p className="text-[11px] text-neutral-400 mb-1">Deity (optional)</p>
+                    <input
+                      value={deity}
+                      onChange={(e) => setDeity(e.target.value)}
+                      placeholder="Name of the god you serve"
+                      className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2.5 py-1.5 text-white"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === 4 && (
+              <div>
+                <h2 className="text-white text-sm font-medium mb-3">Alignment &amp; background</h2>
+                <div className="grid grid-cols-3 gap-1.5 mb-3">
+                  {ALIGNMENTS.map((a) => (
+                    <button
+                      key={a}
+                      onClick={() => setAlignment(a)}
+                      className={`text-xs py-1.5 rounded-md border ${
+                        alignment === a
+                          ? 'bg-neutral-800 border-blue-500 text-white'
+                          : 'border-neutral-700 text-neutral-200 hover:bg-neutral-800'
+                      }`}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-1.5 mb-4">
+                  <input
+                    value={background}
+                    onChange={(e) => setBackground(e.target.value)}
+                    placeholder="Background (e.g. Urchin, Soldier, Scholar)"
+                    className="flex-1 min-w-0 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
+                  />
+                  <button
+                    onClick={rollBackground}
+                    className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800 shrink-0"
+                  >
+                    <Dices size={13} /> Roll (d20)
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-neutral-400">Talents ({charClass} table, 2d6)</p>
+                  <button
+                    onClick={rerollTalents}
+                    className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
+                  >
+                    <Dices size={13} /> Reroll
+                  </button>
+                </div>
+                <ul>
+                  {talents.map((t, i) => (
+                    <li key={i} className="text-[11px] text-neutral-300 bg-neutral-950 rounded-md px-2.5 py-1.5 mb-1">
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {step === 5 && (
+              <div>
+                <h2 className="text-white text-sm font-medium mb-3">Weapon &amp; armor</h2>
+                <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+                  <select
+                    value={weaponChoice}
+                    onChange={(e) => setWeaponChoice(e.target.value)}
+                    className="text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
+                  >
+                    {classWeapons.map((wname) => {
+                      const w = WEAPONS.find((x) => x.name === wname)
+                      return (
+                        <option key={wname} value={wname}>
+                          {wname} ({w.damage}, {w.slots} slot{w.slots === 1 ? '' : 's'})
+                        </option>
+                      )
+                    })}
+                  </select>
+                  {classArmors.length > 0 ? (
+                    <select
+                      value={armorChoice}
+                      onChange={(e) => setArmorChoice(e.target.value)}
+                      className="text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
+                    >
+                      <option value="">No armor</option>
+                      {classArmors.map((aname) => {
+                        const a = ARMOR.find((x) => x.name === aname)
+                        return (
+                          <option key={aname} value={aname}>
+                            {aname} (AC {a.baseAc}{a.dexApplies ? '+dex' : ''}, {a.slots} slots)
+                          </option>
+                        )
+                      })}
+                    </select>
+                  ) : (
+                    <p className="text-[11px] text-neutral-500 self-center">No armor allowed for this class.</p>
+                  )}
+                </div>
+                {selectedClass.shieldAllowed && (
+                  <label className="flex items-center gap-1.5 text-[11px] text-neutral-400 mb-2">
+                    <input type="checkbox" checked={shieldChoice} onChange={(e) => setShieldChoice(e.target.checked)} />
+                    Carry a shield (+2 AC, 1 slot, occupies one hand)
+                  </label>
+                )}
+                <p className="text-[11px] text-neutral-500">
+                  Starting kit (every class): backpack, 2 torches, 3 rations, flint and steel, 60' rope.
+                </p>
+              </div>
+            )}
+
+            {step === 6 && (
+              <div>
+                <h2 className="text-white text-sm font-medium mb-3">Review</h2>
+                <div className="bg-neutral-950 rounded-md px-3.5 py-3 mb-3">
+                  <p className="text-sm font-medium text-white">
+                    {name.trim() || `${ancestry} ${charClass.toLowerCase()}`}
+                  </p>
+                  <p className="text-[11px] text-neutral-400 mt-0.5">
+                    {ancestry} {charClass.toLowerCase()} &middot; level 1 &middot; {alignment}
+                    {background ? ` · ${background.split(' -- ')[0]}` : ''}
+                  </p>
+                  <p className="text-[11px] text-neutral-400 mt-0.5">
+                    {computedHp} hp (1d{selectedClass.hitDie}{hpBonus ? ` + ${hpBonus} stout` : ''}
+                    {conMod ? ` ${conMod >= 0 ? '+' : ''}${conMod} con` : ''}) &middot; ac {computedAc} &middot; {coin} gp
+                  </p>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                    {weaponChoice}
+                    {armorChoice ? `, ${armorChoice}` : ''}
+                    {shieldChoice && selectedClass.shieldAllowed ? ', shield' : ''}, backpack &amp; adventuring kit
+                  </p>
+                </div>
+                <p className="text-xs text-neutral-400 mb-1.5">Talents</p>
+                <ul className="mb-3">
+                  {talents.map((t, i) => (
+                    <li key={i} className="text-[11px] text-neutral-300 bg-neutral-950 rounded-md px-2.5 py-1.5 mb-1">
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+                {error && (
+                  <div className="flex items-center gap-1.5 text-red-400">
+                    <AlertCircle size={12} />
+                    <p className="text-[11px]">{error}</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
-          <button
-            onClick={start}
-            disabled={saving}
-            className="bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white text-sm rounded-md px-3.5 py-2 whitespace-nowrap"
-          >
-            {saving ? 'Saving...' : 'Start playing'}
-          </button>
+
+          {sidebar}
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-neutral-800 px-6 py-3">
+        <div className="max-w-5xl mx-auto grid grid-cols-[1fr_260px] gap-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={goBack}
+              disabled={step === 0}
+              className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <ChevronLeft size={14} /> Back
+            </button>
+            <span className="text-xs text-neutral-500">
+              Step {step + 1} of {STEPS.length} &middot; {STEPS[step]}
+            </span>
+            {step < STEPS.length - 1 ? (
+              <button
+                onClick={goNext}
+                className="text-sm bg-blue-500 hover:bg-blue-400 text-white rounded-md px-3.5 py-1.5 flex items-center gap-1.5"
+              >
+                Continue <ChevronRight size={14} />
+              </button>
+            ) : (
+              <button
+                onClick={start}
+                disabled={saving}
+                className="text-sm bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white rounded-md px-3.5 py-1.5"
+              >
+                {saving ? 'Saving...' : 'Start playing'}
+              </button>
+            )}
+          </div>
+          <div className="hidden md:block" />
         </div>
       </div>
     </div>
