@@ -384,7 +384,22 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
     const { data, error } = await supabase.functions.invoke('ai-gm-turn', { body: { campaignId } })
     setAiTurnPending(false)
     if (error || data?.error) {
-      setAiTurnError(data?.error || error?.message || 'The AI GM call failed.')
+      // supabase-js collapses any non-2xx edge function response into a
+      // generic "Edge Function returned a non-2xx status code" on `error`,
+      // discarding the actual JSON body the function sent back. The real
+      // message (e.g. "too many tool calls, try again") lives on
+      // error.context, which is the still-unread Response object -- read
+      // it directly so the real reason shows up instead of the generic one.
+      let message = data?.error || error?.message || 'The AI GM call failed.'
+      if (error?.context && typeof error.context.json === 'function') {
+        try {
+          const body = await error.context.json()
+          if (body?.error) message = body.error
+        } catch {
+          // context wasn't JSON (or already consumed) -- fall back silently
+        }
+      }
+      setAiTurnError(message)
     }
   }
 
@@ -693,7 +708,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
                   disabled={rollState?.isRolling}
                   className="text-xs py-1.5 border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
                 >
-                  d{sides}
+                  ${sides}
                 </button>
               ))}
             </div>
@@ -871,7 +886,8 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
               <span>{p.hp}/{p.max_hp} hp</span>
               <span>ac {p.ac}</span>
             </div>
-          </button>
+          >
+            </button>
         ))}
       </div>
     </div>
