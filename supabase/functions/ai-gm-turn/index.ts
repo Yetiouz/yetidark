@@ -48,6 +48,41 @@ const MODES_OF_PLAY = {
   grinder: 'Grinder -- attrition matters more over a long dungeon crawl.',
 }
 
+// Per-campaign AI GM preferences, captured by the campaign creation wizard
+// (015_campaign_wizard_fields.sql) but not previously read by this
+// function -- the columns existed, this is what actually wires them into
+// the prompt. Every map falls back to the wizard's own default (balanced /
+// guided / ask_major) so older campaigns created before this migration,
+// or a campaign with an unset field, still get sane behavior.
+const GM_TONE = {
+  grim: 'Grim -- danger feels constant, victories are hard-won.',
+  balanced: 'Balanced -- danger is real, with room for humor and dramatic moments.',
+  heroic: 'Heroic -- leans pulpy and cinematic, the party is the main event.',
+}
+
+const GM_RULES_STYLE = {
+  strict: 'Strict -- rules as written, minimal GM fiat.',
+  flexible: 'Flexible -- rule of cool over rules as written when it makes the scene better.',
+  guided: 'Guided -- rules as written by default, with GM judgment calls when it clearly serves the story.',
+}
+
+const GM_AUTONOMY = {
+  ask_major:
+    "Ask before major, hard-to-reverse story decisions (a PC's death, a campaign-altering twist) -- present the moment and the stakes, then let the table weigh in, rather than resolving it unilaterally in this turn's narration. Everything else, just run it.",
+  ask_every:
+    'Check in with the table before significant choices more often, even some mid-scene ones -- lean toward presenting options rather than deciding for the party.',
+  auto: "Full autonomy -- run the campaign forward without pausing to check in, including major twists and PC death. Don't hold back waiting for permission.",
+}
+
+function lethalityLabel(n: number | null | undefined): string {
+  if (n == null) return 'Default -- moderate danger, no thumb on the scale either way.'
+  if (n <= 20) return `${n}/100 -- very forgiving. Bad rolls rarely end in death; look for plausible ways characters survive close calls.`
+  if (n <= 40) return `${n}/100 -- forgiving. Death is possible but lean toward giving characters an out when the dice allow it.`
+  if (n <= 60) return `${n}/100 -- moderate. Play it straight -- consequences land exactly as rolled.`
+  if (n <= 80) return `${n}/100 -- dangerous. Bad rolls and bad decisions have real teeth; don't pull punches.`
+  return `${n}/100 -- lethal, rules as written. Death is on the table constantly and should never be softened.`
+}
+
 const PERSONA = `You are the Game Master for a Shadowdark RPG campaign, running an async text game.
 
 CORE COMMITMENTS (non-negotiable):
@@ -153,7 +188,7 @@ Deno.serve(async (req) => {
 
   const { data: campaign, error: campaignError } = await supabase
     .from('campaigns')
-    .select('id, name, system, gm_type, house_rules, modes_of_play, session_number')
+    .select('id, name, system, gm_type, house_rules, modes_of_play, session_number, ai_gm_tone, ai_gm_rules_style, ai_gm_lethality, ai_gm_autonomy')
     .eq('id', campaignId)
     .maybeSingle()
 
@@ -210,6 +245,12 @@ ${campaign.house_rules?.trim() || '(none set)'}
 
 ACTIVE MODES OF PLAY:
 ${modesActive.length ? modesActive.join('\n') : '(none active -- play it straight, RAW)'}
+
+GM STYLE PREFERENCES (set by the campaign's creator, follow these):
+Tone: ${GM_TONE[campaign.ai_gm_tone as keyof typeof GM_TONE] || GM_TONE.balanced}
+Rules style: ${GM_RULES_STYLE[campaign.ai_gm_rules_style as keyof typeof GM_RULES_STYLE] || GM_RULES_STYLE.guided}
+Lethality: ${lethalityLabel(campaign.ai_gm_lethality)}
+Autonomy: ${GM_AUTONOMY[campaign.ai_gm_autonomy as keyof typeof GM_AUTONOMY] || GM_AUTONOMY.ask_major}
 
 PARTY:
 ${(party || []).map((c) => `- ${c.name}, ${c.ancestry} ${c.class} (lvl ${c.level}), ${c.hp}/${c.max_hp} hp, ac ${c.ac}`).join('\n') || '(no characters yet)'}
