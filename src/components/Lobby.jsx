@@ -2,22 +2,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { Swords, Key, Plus, Crown, Bot, Users, LogOut, AlertCircle, Settings } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 
-function randomJoinCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no 0/O/1/I ambiguity
-  let code = ''
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
-  return `${code.slice(0, 3)}-${code.slice(3)}`
-}
-
-export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfile }) {
+// Campaign creation moved out to CampaignBuilder.jsx (a full step-by-step
+// wizard) -- onCreateCampaign just switches App.jsx to that view instead
+// of this component managing an inline create panel/form itself.
+export default function Lobby({ session, onEnterCampaign, onCreateCampaign, onSignOut, onOpenProfile }) {
   const user = session?.user
   const [joinCode, setJoinCode] = useState('')
   const [joinPassword, setJoinPassword] = useState('')
   const [needsPassword, setNeedsPassword] = useState(false)
   const [showJoin, setShowJoin] = useState(false)
-  const [showCreate, setShowCreate] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [newGmType, setNewGmType] = useState('human')
   const [campaigns, setCampaigns] = useState([])
   const [publicCampaigns, setPublicCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
@@ -149,55 +142,6 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
     loadCampaigns()
   }
 
-  const createCampaign = async () => {
-    if (!newName.trim() || !user) return
-    setBusy(true)
-    setError(null)
-
-    // Generate the id client-side and skip .select() on the insert entirely.
-    // Postgres checks the SELECT policy against RETURNING rows, and this
-    // user isn't a campaign_members row yet at that instant -- even with
-    // the on_campaign_created trigger, that check loses the race. Since we
-    // already know every field we're inserting, there's nothing to read
-    // back; the campaign_members insert below (or its trigger) happens
-    // before anyone ever tries to re-select this campaign.
-    const id = crypto.randomUUID()
-    const { error: createError } = await supabase.from('campaigns').insert({
-      id,
-      name: newName.trim(),
-      system: 'Shadowdark',
-      gm_type: newGmType,
-      gm_user_id: newGmType === 'human' ? user.id : null,
-      join_code: randomJoinCode(),
-    })
-
-    if (createError) {
-      setError(createError.message)
-      setBusy(false)
-      return
-    }
-
-    // A DB trigger already adds the creator as a member the moment the
-    // campaign row is inserted (see on_campaign_created in schema.sql) --
-    // this upsert just makes sure it's there without erroring if it is.
-    const { error: memberError } = await supabase
-      .from('campaign_members')
-      .upsert(
-        { campaign_id: id, user_id: user.id, role: newGmType === 'human' ? 'gm' : 'player' },
-        { onConflict: 'campaign_id,user_id', ignoreDuplicates: true }
-      )
-
-    setBusy(false)
-    if (memberError) {
-      setError(memberError.message)
-      return
-    }
-
-    setNewName('')
-    setShowCreate(false)
-    loadCampaigns()
-  }
-
   return (
     <div className="max-w-3xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
@@ -241,19 +185,13 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
         <h1 className="text-white text-lg font-medium">Your campaigns</h1>
         <div className="flex gap-2">
           <button
-            onClick={() => {
-              setShowJoin((s) => !s)
-              setShowCreate(false)
-            }}
+            onClick={() => setShowJoin((s) => !s)}
             className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
           >
             <Key size={15} /> Join with code
           </button>
           <button
-            onClick={() => {
-              setShowCreate((s) => !s)
-              setShowJoin(false)
-            }}
+            onClick={onCreateCampaign}
             className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
           >
             <Plus size={15} /> New campaign
@@ -296,42 +234,6 @@ export default function Lobby({ session, onEnterCampaign, onSignOut, onOpenProfi
               className="flex-1 bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
             />
           )}
-        </div>
-      )}
-
-      {showCreate && (
-        <div className="mb-4 bg-neutral-900 border border-neutral-800 rounded-xl p-3 flex flex-col gap-2.5">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Campaign name"
-            className="w-full bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={() => setNewGmType('human')}
-              className={`flex-1 text-xs py-1.5 rounded-md border ${
-                newGmType === 'human' ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300'
-              }`}
-            >
-              I'll be GM
-            </button>
-            <button
-              onClick={() => setNewGmType('ai')}
-              className={`flex-1 text-xs py-1.5 rounded-md border ${
-                newGmType === 'ai' ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300'
-              }`}
-            >
-              AI is GM
-            </button>
-          </div>
-          <button
-            onClick={createCampaign}
-            disabled={busy}
-            className="text-sm border border-neutral-700 rounded-md py-2 text-neutral-100 hover:bg-neutral-800 disabled:opacity-50"
-          >
-            Create
-          </button>
         </div>
       )}
 

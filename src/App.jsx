@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabaseClient.js'
 import SignIn from './components/SignIn.jsx'
 import Lobby from './components/Lobby.jsx'
+import CampaignBuilder from './components/CampaignBuilder.jsx'
 import CharacterPicker from './components/CharacterPicker.jsx'
 import CharacterBuilder from './components/CharacterBuilder.jsx'
 import CharacterSheet from './components/CharacterSheet.jsx'
@@ -18,7 +19,7 @@ import Profile from './components/Profile.jsx'
 // trackers. mockData.js is no longer used anywhere.
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
-  const [view, setView] = useState('lobby') // 'lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log' | 'library' | 'tracker'
+  const [view, setView] = useState('lobby') // 'lobby' | 'campaign-builder' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log' | 'library' | 'tracker'
   const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
   const [activeCharacter, setActiveCharacter] = useState(null) // real character row from Supabase
   const [viewingCharacterId, setViewingCharacterId] = useState(null) // which character's full sheet is open
@@ -117,9 +118,13 @@ export default function App() {
         <Lobby
           session={session}
           onEnterCampaign={enterCampaign}
+          onCreateCampaign={() => setView('campaign-builder')}
           onSignOut={signOut}
           onOpenProfile={() => setView('profile')}
         />
+      )}
+      {view === 'campaign-builder' && (
+        <CampaignBuilder session={session} onComplete={enterCampaign} onCancel={() => setView('lobby')} />
       )}
       {view === 'profile' && (
         <Profile session={session} onSignOut={signOut} onBack={() => setView('lobby')} />
@@ -205,7 +210,7 @@ export default function App() {
           onBack={() => setView(trackerReturnView)}
         />
       )}
-      {view !== 'lobby' && (
+      {view !== 'lobby' && view !== 'campaign-builder' && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2">
           <button
             onClick={() => setView('lobby')}
