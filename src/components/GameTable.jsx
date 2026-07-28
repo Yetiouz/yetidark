@@ -411,6 +411,25 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
     askAiGmRef.current = askAiGm
   })
 
+  // Single action for the AI-GM chat's input and its one button: post
+  // whatever's typed (if anything), then immediately ask the AI to take
+  // its turn instead of waiting out the debounce window. Cancels any
+  // pending debounce timer since we're triggering right now -- otherwise
+  // it could still fire a few seconds later and double up on ambiguous
+  // "should the AI go now" logic.
+  const sendAndAskAiGm = async () => {
+    if (autoTurnTimerRef.current) {
+      clearTimeout(autoTurnTimerRef.current)
+      autoTurnTimerRef.current = null
+    }
+    const text = message.trim()
+    if (text) {
+      setMessage('')
+      await postToLog({ type: 'chat', text })
+    }
+    askAiGm()
+  }
+
   const vote = async (optionKey) => {
     if (!campaignId || !user) return
     const option = VOTE_OPTIONS.find((o) => o.key === optionKey)
@@ -777,7 +796,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
                   onChange={(e) => setManualValue(e.target.value)}
                   placeholder="14"
                   className="w-14 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
-                />
+              />
                 <button onClick={logManualRoll} className="flex-1 text-xs border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800">
                   Log
                 </button>
@@ -802,20 +821,17 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
             <input
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+              onKeyDown={(e) => e.key === 'Enter' && sendAndAskAiGm()}
               placeholder="Say or do something"
               className="flex-1 min-w-0 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-white"
             />
-            <button onClick={sendMessage} className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800">
-              <Send size={15} />
-            </button>
             <button
-              onClick={askAiGm}
+              onClick={sendAndAskAiGm}
               disabled={aiTurnPending}
               className="text-sm border border-purple-500/40 bg-purple-500/10 rounded-md px-3.5 py-1.5 flex items-center gap-1.5 text-purple-200 hover:bg-purple-500/20 disabled:opacity-60 whitespace-nowrap"
             >
-              {aiTurnPending ? <Loader2 size={15} className="animate-spin" /> : <Bot size={15} />}
-              {aiTurnPending ? 'Thinking…' : 'Continue'}
+              {aiTurnPending ? <Loader2 size={15} className="animate-spin" /> : message.trim() ? <Send size={15} /> : <Bot size={15} />}
+              {aiTurnPending ? 'Thinking…' : message.trim() ? 'Send' : 'Continue'}
             </button>
           </div>
         </div>

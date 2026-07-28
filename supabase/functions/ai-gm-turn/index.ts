@@ -30,6 +30,7 @@ const GEMINI_MODEL = 'gemini-3.6-flash'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 const MAX_TOOL_ROUNDS = 14
 const TRANSCRIPT_LIMIT = 60
+const GEMINI_MAX_RETRIES = 1 // retries on 429 (rate limit) before giving up on this turn
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,7 +51,7 @@ const MODES_OF_PLAY = {
 const PERSONA = `You are the Game Master for a Shadowdark RPG campaign, running an async text game.
 
 CORE COMMITMENTS (non-negotiable):
-1. Real dice, always. Every GM-side check, attack, damage roll, and random-table lookup goes through the roll_dice tool -- never narrate or assert an outcome you didn't actually roll. A player's own rolls for their own character belong to them; only roll for NPCs, monsters, and the environment.
+1. Real dice, always. Every GM-side check, attack, damage roll, and random-table lookup goes through the roll_dice tool -- never narrate or assert an outcome you didn't actually roll. A player's own rolls for their own character belong to them; only roll for NPCs, monsters, and the environment. When you can already foresee needing several rolls for the same beat (an attack roll plus its damage roll, three monsters reacting at once, a loot table plus a specific-item lookup), call roll_dice for all of them in the same turn instead of one at a time across several turns -- this API has a tight per-minute rate limit and every extra round-trip spends part of it.
 2. Ground rulings in the campaign's actual house rules and context provided below, not invented rules.
 3. Consequences stick. No retroactive softening of a bad outcome, including PC death, to protect the story.
 4. If a table is aimless or stuck, actively nudge -- resurface a lead, frame explicit choices -- rather than leaving it fully open with no momentum (guided sandbox, not railroad).
@@ -229,7 +230,7 @@ ${transcriptText}
         {
           name: 'roll_dice',
           description:
-            "Roll real dice for any GM-side check, attack, damage, or random lookup. Never narrate a roll's outcome without calling this first.",
+            "Roll real dice for any GM-side check, attack, damage, or random lookup. Never narrate a roll's outcome without calling this first. If you already know you'll need more than one roll for this beat, call this multiple times in the same turn rather than one at a time.",
           parameters: {
             type: 'OBJECT',
             properties: {
@@ -247,25 +248,48 @@ ${transcriptText}
 
   const contents: Array<Record<string, unknown>> = [{ role: 'user', parts: [{ text: context }] }]
 
+  // Free-tier Gemini caps requests per minute, and a single busy turn
+  // (several tool-call rounds in a row) can burn through that budget on
+  // its own. Google's 429 body includes its own suggested wait (e.g.
+  // "Please retry in 48.5s") -- honor that instead of guessing, retry
+  // once, and only then give up with a message that tells the player
+  // what actually happened instead of a raw API error dump.
   const callGemini = async () => {
-    const resp = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: {
-        'x-goog-api-key': geminiKey,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: PERSONA }] },
-        contents,
-        tools,
-        generationConfig: { maxOutputTokens: 1500 },
-      }),
-    })
-    if (!resp.ok) {
+    let lastErrText = ''
+    for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES; attempt++) {
+      const resp = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: {
+          'x-goog-api-key': geminiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: PERSONA }] },
+          contents,
+          tools,
+          generationConfig: { maxOutputTokens: 1500 },
+        }),
+      })
+      if (resp.ok) return resp.json()
+
       const errText = await resp.text()
+      lastErrText = errText
+
+      if (resp.status === 429 && attempt < GEMINI_MAX_RETRIES) {
+        const match = /retry in (\d+(?:\.\d+)?)s/i.exec(errText)
+        const waitMs = match ? Math.ceil(parseFloat(match[1]) * 1000) + 500 : (attempt + 1) * 3000
+        await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 25000)))
+        continue
+      }
+
+      if (resp.status === 429) {
+        throw new Error(
+          "Gemini's free-tier rate limit is maxed out right now (busy turns with lots of rolls can do this). Wait about a minute, then hit Continue again."
+        )
+      }
       throw new Error(`Gemini API error (${resp.status}): ${errText.slice(0, 500)}`)
     }
-    return resp.json()
+    throw new Error(`Gemini API error: ${lastErrText.slice(0, 500)}`)
   }
 
   let finalText = ''
