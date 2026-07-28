@@ -185,7 +185,7 @@ export default function CampaignLobby({
   // the very first start.
   const blockReason = !canStart
     ? 'Only the GM can start the session.'
-    : campaign.session_active
+    : campaign?.session_active
       ? null
       : !hasMinPlayers
         ? `Waiting for ${minPlayers - members.length} more player${minPlayers - members.length === 1 ? '' : 's'}`
