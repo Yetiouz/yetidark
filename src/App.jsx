@@ -3,6 +3,7 @@ import { supabase } from './lib/supabaseClient.js'
 import SignIn from './components/SignIn.jsx'
 import Lobby from './components/Lobby.jsx'
 import CampaignBuilder from './components/CampaignBuilder.jsx'
+import CampaignLobby from './components/CampaignLobby.jsx'
 import CharacterPicker from './components/CharacterPicker.jsx'
 import CharacterBuilder from './components/CharacterBuilder.jsx'
 import CharacterSheet from './components/CharacterSheet.jsx'
@@ -19,7 +20,7 @@ import Profile from './components/Profile.jsx'
 // trackers. mockData.js is no longer used anywhere.
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
-  const [view, setView] = useState('lobby') // 'lobby' | 'campaign-builder' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log' | 'library' | 'tracker'
+  const [view, setView] = useState('lobby') // 'lobby' | 'campaign-builder' | 'campaign-lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log' | 'library' | 'tracker'
   const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
   const [activeCharacter, setActiveCharacter] = useState(null) // real character row from Supabase
   const [viewingCharacterId, setViewingCharacterId] = useState(null) // which character's full sheet is open
@@ -39,9 +40,13 @@ export default function App() {
 
   const signOut = () => supabase.auth.signOut()
 
+  // Jumping in from the dashboard (Lobby.jsx's campaign list) now lands on
+  // the per-campaign staging screen -- coordinate players and characters,
+  // then explicitly start the session -- rather than dropping straight
+  // into character selection like before.
   const enterCampaign = (campaign) => {
     setActiveCampaign(campaign)
-    setView('characters')
+    setView('campaign-lobby')
   }
 
   const chooseCharacter = async ({ mode, characterId } = {}) => {
@@ -53,17 +58,23 @@ export default function App() {
       const { data } = await supabase.from('characters').select('*').eq('id', characterId).maybeSingle()
       setActiveCharacter(data || null)
     }
-    setView('table')
+    setView('campaign-lobby')
   }
 
   const finishBuilding = (character) => {
     setActiveCharacter(character)
-    setView('table')
+    setView('campaign-lobby')
+  }
+
+  // Only reachable from the campaign lobby's "Start session" / "Rejoin
+  // session" button now, once the readiness checklist there allows it.
+  const startSession = (role) => {
+    setView(role === 'gm' ? 'gm' : 'table')
   }
 
   // Opens a character's full sheet from wherever the player or GM clicked
-  // it (a party card on the table or the GM dashboard) -- "Back" returns
-  // to whichever view triggered it.
+  // it (a party card on the table, the GM dashboard, or the campaign
+  // lobby's player list) -- "Back" returns to whichever view triggered it.
   const openCharacterSheet = (characterId, fromView) => {
     setViewingCharacterId(characterId)
     setSheetReturnView(fromView)
@@ -125,6 +136,17 @@ export default function App() {
       )}
       {view === 'campaign-builder' && (
         <CampaignBuilder session={session} onComplete={enterCampaign} onCancel={() => setView('lobby')} />
+      )}
+      {view === 'campaign-lobby' && (
+        <CampaignLobby
+          campaignId={activeCampaign?.id}
+          session={session}
+          onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'campaign-lobby')}
+          onCreateCharacter={() => setView('builder')}
+          onChooseCharacter={() => setView('characters')}
+          onStartSession={startSession}
+          onOpenSettings={() => openCampaignSettings('campaign-lobby')}
+        />
       )}
       {view === 'profile' && (
         <Profile session={session} onSignOut={signOut} onBack={() => setView('lobby')} />
