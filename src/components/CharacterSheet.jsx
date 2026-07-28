@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 
 const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
@@ -32,6 +32,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   const [gear, setGear] = useState([])
   const [talents, setTalents] = useState([])
   const [spells, setSpells] = useState([])
+  const [features, setFeatures] = useState([])
   const [canEdit, setCanEdit] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
   const [gearDraft, setGearDraft] = useState('')
@@ -64,15 +65,17 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         if (!cancelled) setCanEdit(membership?.role === 'gm')
       }
 
-      const [{ data: gearRows }, { data: talentRows }, { data: spellRows }] = await Promise.all([
+      const [{ data: gearRows }, { data: talentRows }, { data: spellRows }, { data: featureRows }] = await Promise.all([
         supabase.from('character_gear').select('*').eq('character_id', characterId).order('created_at', { ascending: true }),
         supabase.from('character_talents').select('*').eq('character_id', characterId).order('created_at', { ascending: true }),
         supabase.from('character_spells').select('*').eq('character_id', characterId).order('tier', { ascending: true }),
+        supabase.from('character_features').select('*').eq('character_id', characterId).order('created_at', { ascending: true }),
       ])
       if (!cancelled) {
         setGear(gearRows || [])
         setTalents(talentRows || [])
         setSpells(spellRows || [])
+        setFeatures(featureRows || [])
       }
       setLoading(false)
     }
@@ -108,6 +111,15 @@ export default function CharacterSheet({ characterId, session, onBack }) {
           else if (payload.eventType === 'DELETE') setSpells((s) => s.filter((i) => i.id !== payload.old.id))
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'character_features', filter: `character_id=eq.${characterId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') setFeatures((f) => [...f, payload.new])
+          else if (payload.eventType === 'UPDATE') setFeatures((f) => f.map((i) => (i.id === payload.new.id ? payload.new : i)))
+          else if (payload.eventType === 'DELETE') setFeatures((f) => f.filter((i) => i.id !== payload.old.id))
+        }
+      )
       .subscribe()
 
     return () => {
@@ -138,8 +150,19 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   }
 
   const toggleEquipped = async (item) => {
-    setGear((g) => g.map((i) => (i.id === item.id ? { ...i, equipped: !i.equipped } : i)))
+    const nextGear = gear.map((i) => (i.id === item.id ? { ...i, equipped: !i.equipped } : i))
+    setGear(nextGear)
     await supabase.from('character_gear').update({ equipped: !item.equipped }).eq('id', item.id)
+
+    const dexMod = modifier((character.stats || {}).dex ?? 10)
+    const equippedArmor = nextGear.find((g) => g.equipped && g.base_ac != null)
+    const equippedShield = nextGear.find((g) => g.equipped && g.is_shield)
+    const baseAc = equippedArmor ? equippedArmor.base_ac + (equippedArmor.dex_applies ? dexMod : 0) : 10 + dexMod
+    const nextAc = baseAc + (equippedShield ? 2 : 0)
+    if (nextAc !== character.ac) {
+      setCharacter((c) => ({ ...c, ac: nextAc }))
+      await supabase.from('characters').update({ ac: nextAc }).eq('id', characterId)
+    }
   }
 
   const removeGear = async (item) => {
@@ -152,6 +175,25 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     if (!name || !characterId) return
     await supabase.from('character_gear').insert({ character_id: characterId, name, slots: 1, quantity: 1, equipped: false })
     setGearDraft('')
+  }
+
+  const spendFeatureUse = async (feature) => {
+    const next = Math.max(0, (feature.uses_current ?? 0) - 1)
+    setFeatures((f) => f.map((i) => (i.id === feature.id ? { ...i, uses_current: next } : i)))
+    await supabase.from('character_features').update({ uses_current: next }).eq('id', feature.id)
+  }
+
+  // No rest-tracking feature yet (same situation as the Lost-spell toggle),
+  // so restoring a daily-use feature like Halfling's Stealthy is a manual
+  // "I rested" acknowledgement rather than something on a timer.
+  const resetFeatureUse = async (feature) => {
+    setFeatures((f) => f.map((i) => (i.id === feature.id ? { ...i, uses_current: feature.uses_max } : i)))
+    await supabase.from('character_features').update({ uses_current: feature.uses_max }).eq('id', feature.id)
+  }
+
+  const removeFeature = async (feature) => {
+    setFeatures((f) => f.filter((i) => i.id !== feature.id))
+    await supabase.from('character_features').delete().eq('id', feature.id)
   }
 
   const togglePrepared = async (spell) => {
@@ -232,261 +274,4 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     <div className="max-w-xl mx-auto p-6">
       {onBack && (
         <button onClick={onBack} className="text-xs text-neutral-400 hover:text-neutral-200 flex items-center gap-1 mb-3">
-          <ArrowLeft size={13} /> Back
-        </button>
-      )}
-
-      <div className="flex items-center gap-3 mb-4">
-        <input
-          ref={avatarInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => uploadAvatar(e.target.files?.[0])}
-        />
-        <button
-          onClick={() => isOwner && avatarInputRef.current?.click()}
-          disabled={!isOwner || avatarUploading}
-          className={`w-16 h-16 rounded-full overflow-hidden bg-neutral-900 border border-neutral-700 flex items-center justify-center shrink-0 ${
-            isOwner ? 'hover:border-neutral-500 cursor-pointer' : 'cursor-default'
-          }`}
-          title={isOwner ? (character.avatar_url ? 'Replace portrait' : 'Upload portrait') : undefined}
-        >
-          {character.avatar_url ? (
-            <img src={character.avatar_url} alt={character.name} className="w-full h-full object-cover" />
-          ) : (
-            <User size={22} className="text-neutral-600" />
-          )}
-        </button>
-        <div>
-          <h1 className="text-white text-lg font-medium">{character.name}</h1>
-          <p className="text-xs text-neutral-400">
-            {character.ancestry} {character.class} &middot; level {character.level} &middot; {character.alignment || 'Unaligned'}
-            {character.background ? ` · ${character.background}` : ''}
-          </p>
-          {isOwner && (
-            <button
-              onClick={() => avatarInputRef.current?.click()}
-              disabled={avatarUploading}
-              className="text-[11px] text-neutral-500 hover:text-neutral-300 flex items-center gap-1 mt-1"
-            >
-              <Upload size={11} /> {avatarUploading ? 'Uploading…' : character.avatar_url ? 'Replace portrait' : 'Upload portrait'}
-            </button>
-          )}
-        </div>
-      </div>
-      {avatarError && <p className="text-xs text-red-400 mb-3">{avatarError}</p>}
-
-      <div className="grid grid-cols-6 gap-1.5 mb-4">
-        {STAT_KEYS.map((k) => (
-          <div key={k} className="bg-neutral-900 rounded-md p-1.5 text-center">
-            <p className="text-[10px] text-neutral-400 mb-1">{STAT_LABELS[k]}</p>
-            <p className="text-sm text-white">{stats[k] ?? '-'}</p>
-            <p className="text-[10px] text-neutral-500 mt-1">
-              {stats[k] != null ? (modifier(stats[k]) >= 0 ? `+${modifier(stats[k])}` : modifier(stats[k])) : ''}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-3 gap-2.5 mb-4">
-        <div className="bg-neutral-900 rounded-lg p-3">
-          <p className="text-[11px] text-neutral-400 mb-1.5">HP</p>
-          <div className="flex items-center justify-between">
-            {canEdit && <button onClick={() => adjustHp(-1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">-</button>}
-            <span className="text-sm text-white">{character.hp} / {character.max_hp}</span>
-            {canEdit && <button onClick={() => adjustHp(1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">+</button>}
-          </div>
-          <p className="text-[11px] text-neutral-500 mt-1.5">ac {character.ac}</p>
-        </div>
-
-        <div className="bg-neutral-900 rounded-lg p-3">
-          <p className="text-[11px] text-neutral-400 mb-1.5">XP</p>
-          <div className="flex items-center justify-between">
-            {canEdit && <button onClick={() => adjustXp(-1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">-</button>}
-            <span className="text-sm text-white">{character.xp}</span>
-            {canEdit && <button onClick={() => adjustXp(1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">+</button>}
-          </div>
-        </div>
-
-        <div className="bg-neutral-900 rounded-lg p-3">
-          <p className="text-[11px] text-neutral-400 mb-1.5">Coin</p>
-          <div className="flex items-center justify-between">
-            {canEdit && <button onClick={() => adjustCoin(-1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">-</button>}
-            <span className="text-sm text-white">{character.coin} gp</span>
-            {canEdit && <button onClick={() => adjustCoin(1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">+</button>}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-neutral-900 rounded-lg p-4 mb-4">
-        <div className="flex items-center justify-between mb-2.5">
-          <p className="text-xs text-neutral-400">
-            Gear &middot; {usedSlots} / {maxSlots} slots
-          </p>
-          {canEdit && (
-            <div className="flex gap-1.5">
-              <input
-                value={gearDraft}
-                onChange={(e) => setGearDraft(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addGear()}
-                placeholder="Item name"
-                className="text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 w-32 text-white"
-              />
-              <button onClick={addGear} className="text-xs border border-neutral-700 rounded-md px-2 py-1 flex items-center gap-1 text-neutral-200 hover:bg-neutral-800">
-                <Plus size={13} /> Add
-              </button>
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          {gear.length === 0 && <p className="text-xs text-neutral-500">No gear yet.</p>}
-          {gear.map((item) => (
-            <div key={item.id} className="flex items-center justify-between text-xs p-2 bg-neutral-800/60 rounded-md border border-neutral-700">
-              <label className="flex items-center gap-2 flex-1">
-                {canEdit ? (
-                  <input type="checkbox" checked={item.equipped} onChange={() => toggleEquipped(item)} />
-                ) : (
-                  <span className={`w-2 h-2 rounded-full inline-block ${item.equipped ? 'bg-blue-400' : 'bg-neutral-600'}`} />
-                )}
-                <span className="text-white">{item.name}</span>
-                {item.quantity > 1 && <span className="text-neutral-500">&times;{item.quantity}</span>}
-                <span className="text-neutral-500">
-                  {item.slots} slot{Number(item.slots) === 1 ? '' : 's'}
-                  {item.equipped ? ' · equipped' : ''}
-                </span>
-              </label>
-              {canEdit && (
-                <button onClick={() => removeGear(item)} className="text-neutral-500 hover:text-red-400">
-                  <Trash2 size={13} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-neutral-900 rounded-lg p-4 mb-4">
-        <p className="text-xs text-neutral-400 mb-2">Talents</p>
-        {talents.length === 0 && <p className="text-xs text-neutral-500">None yet.</p>}
-        <ul>
-          {talents.map((t) => (
-            <li key={t.id} className="text-[11px] text-neutral-300 mb-1">
-              {t.description} <span className="text-neutral-600">({t.source})</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="bg-neutral-900 rounded-lg p-4">
-        <p className="text-xs text-neutral-400 mb-2.5 flex items-center gap-1.5">
-          <Sparkles size={12} /> Spells
-        </p>
-        <div className="flex flex-col gap-1.5 mb-3">
-          {spells.length === 0 && <p className="text-xs text-neutral-500">None known yet.</p>}
-          {spells.map((spell) => (
-            <div key={spell.id} className="text-xs p-2.5 bg-neutral-800/60 rounded-md border border-neutral-700">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-white font-medium ${spell.lost ? 'line-through text-neutral-500' : ''}`}>{spell.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/20">
-                    tier {spell.tier}
-                  </span>
-                  {(spell.range || spell.duration) && (
-                    <span className="text-neutral-500 text-[11px]">
-                      {[spell.range, spell.duration].filter(Boolean).join(' · ')}
-                    </span>
-                  )}
-                </div>
-                {canEdit && (
-                  <button onClick={() => removeSpell(spell)} className="text-neutral-500 hover:text-red-400 shrink-0">
-                    <Trash2 size={13} />
-                  </button>
-                )}
-              </div>
-              {spell.description && <p className="text-neutral-400 mt-1">{spell.description}</p>}
-              <div className="flex items-center gap-3 mt-2">
-                <label className="flex items-center gap-1.5 text-[11px] text-neutral-400">
-                  {canEdit ? (
-                    <input type="checkbox" checked={spell.prepared} onChange={() => togglePrepared(spell)} />
-                  ) : (
-                    <span className={`w-2 h-2 rounded-full inline-block ${spell.prepared ? 'bg-blue-400' : 'bg-neutral-600'}`} />
-                  )}
-                  prepared
-                </label>
-                {canEdit ? (
-                  <button
-                    onClick={() => toggleLost(spell)}
-                    className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border ${
-                      spell.lost
-                        ? 'text-red-300 border-red-500/30 bg-red-500/10'
-                        : 'text-neutral-500 border-neutral-700 hover:text-neutral-300'
-                    }`}
-                  >
-                    <Ban size={11} /> {spell.lost ? 'lost -- click to restore' : 'mark lost'}
-                  </button>
-                ) : (
-                  spell.lost && (
-                    <span className="flex items-center gap-1 text-[11px] text-red-300">
-                      <Ban size={11} /> lost
-                    </span>
-                  )
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {canEdit && (
-          <div className="pt-3 border-t border-neutral-800 flex flex-col gap-1.5">
-            <div className="flex gap-1.5">
-              <input
-                value={spellDraft.name}
-                onChange={(e) => setSpellDraft((d) => ({ ...d, name: e.target.value }))}
-                placeholder="Spell name"
-                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
-              />
-              <select
-                value={spellDraft.tier}
-                onChange={(e) => setSpellDraft((d) => ({ ...d, tier: e.target.value }))}
-                className="text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
-              >
-                {[1, 2, 3, 4, 5].map((t) => (
-                  <option key={t} value={t}>
-                    tier {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-1.5">
-              <input
-                value={spellDraft.range}
-                onChange={(e) => setSpellDraft((d) => ({ ...d, range: e.target.value }))}
-                placeholder="Range (e.g. Near)"
-                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
-              />
-              <input
-                value={spellDraft.duration}
-                onChange={(e) => setSpellDraft((d) => ({ ...d, duration: e.target.value }))}
-                placeholder="Duration (e.g. Focus)"
-                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
-              />
-            </div>
-            <div className="flex gap-1.5">
-              <input
-                value={spellDraft.description}
-                onChange={(e) => setSpellDraft((d) => ({ ...d, description: e.target.value }))}
-                onKeyDown={(e) => e.key === 'Enter' && addSpell()}
-                placeholder="Quick reminder of the effect (optional -- full text lives in the rules library)"
-                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
-              />
-              <button onClick={addSpell} className="text-xs border border-neutral-700 rounded-md px-2 py-1 flex items-center gap-1 text-neutral-200 hover:bg-neutral-800 shrink-0">
-                <Plus size={13} /> Add
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
+          <ArrowLeft size={13} /> Ba
