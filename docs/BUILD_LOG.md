@@ -82,13 +82,11 @@ history remains the detailed source of truth.
 - Added atomic full rests that consume a ration, restore HP and daily features,
   and reset spell-cycle state.
 
-## July 29, 2026 — Event ledger foundation
+## July 29, 2026 — Event ledger foundation released
 
-- Drafted PR #13 with an append-only campaign event table.
+- Added an append-only campaign event table in migration 025.
 - Added an authoritative command for HP, XP, and coin adjustments.
 - Recorded authenticated actors, before/after values, requested and applied
   deltas, reasons, and full rests.
 - Raised the database test suite to 104 passing checks.
-
-This final section is pending until PR #13 is merged and migration 025 is
-applied to production.
+- Applied and verified migration 025 in production.
