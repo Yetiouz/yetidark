@@ -3,17 +3,15 @@ import { Eye, Plus, Flag, Upload, RotateCcw, Dices, SkipForward, User, Settings,
 
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
-import { rollDiceNotation } from '../lib/dice.js'
 import { campaignMapPath, useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 
 // Everything here is real Supabase data, synced live: the encounter
 // tracker, GM notes, turn order, the scene log, and the map panel (upload,
 // grid size, party marker, reveal/re-fog).
 //
-// Initiative rolls go through src/lib/dice.js (same engine GameTable uses)
-// and are persisted to the `dice_rolls` audit table, not just summarized
-// in the scene log -- keeps every roll in the app on one consistent,
-// auditable dice path, matching the file-based GM system's dice.py.
+// Initiative rolls go through the same authoritative server command as
+// player app rolls and are persisted with their scene-log entries in one
+// transaction.
 //
 // Layout: fixed-viewport shell (header / scrollable content / pinned
 // composer), matching GameTable.jsx. The GM's one composer -- narrating to
@@ -214,38 +212,19 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     ]
     if (participants.length === 0) return
 
-    const rolled = participants
-      .map((p) => ({ ...p, result: rollDiceNotation('1d20', { mode: 'flat', reason: `${p.name} — initiative` }) }))
-      .sort((a, b) => b.result.total - a.result.total)
-
-    await Promise.all(
-      rolled.map(async (p) => {
-        const { data: diceRow } = await supabase
-          .from('dice_rolls')
-          .insert({
-            campaign_id: campaignId,
-            roller_name: p.name,
-            notation: p.result.notation,
-            mode: p.result.mode,
-            reason: p.result.reason,
-            breakdown: p.result.breakdown,
-            total: p.result.total,
-            raw_d20: p.result.rawD20,
-            is_crit: p.result.isCrit,
-            is_fumble: p.result.isFumble,
-          })
-          .select()
-          .single()
-        await supabase.from('scene_log').insert({
-          campaign_id: campaignId,
-          type: 'roll',
-          sender_name: p.name,
-          text: `rolled a ${p.result.total} (d20) for initiative${p.result.isCrit ? ' — crit!' : ''}`,
-          roll_source: 'app',
-          dice_roll_id: diceRow?.id,
+    const rolled = (await Promise.all(
+      participants.map(async (participant) => {
+        const { data, error } = await supabase.rpc('roll_campaign_dice', {
+          p_campaign_id: campaignId,
+          p_notation: '1d20',
+          p_mode: 'flat',
+          p_reason: `${participant.name} — initiative`,
+          p_roller_name: participant.name,
         })
+        if (error) return null
+        return { ...participant, result: data.roll }
       })
-    )
+    )).filter(Boolean).sort((a, b) => b.result.total - a.result.total)
 
     const orderList = rolled.map((p, i) => ({ id: p.id, name: p.name, status: i === 0 ? 'acting' : 'waiting' }))
     setTurnOrder(orderList)

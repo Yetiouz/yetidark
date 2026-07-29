@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(137);
+select plan(143);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -267,13 +267,71 @@ select throws_ok(
 );
 select lives_ok(
   $$insert into dice_rolls (id, campaign_id, roller_user_id, roller_name, notation, mode, breakdown, total)
-    values ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', 'Player', '1d20', 'flat', '[10]', 10)$$,
-  'player can create an attributed dice roll'
+    values ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', 'Player', '1d20', 'self', 'self-reported', 10)$$,
+  'player can report an attributed physical dice roll'
 );
 select lives_ok(
   $$insert into scene_log (campaign_id, type, sender_user_id, sender_name, text, roll_source, dice_roll_id)
-    values ('10000000-0000-0000-0000-000000000001', 'roll', '00000000-0000-0000-0000-000000000002', 'Player', 'rolled 10', 'app', '20000000-0000-0000-0000-000000000002')$$,
-  'player can post a roll linked to their attributed dice row'
+    values ('10000000-0000-0000-0000-000000000001', 'roll', '00000000-0000-0000-0000-000000000002', 'Player', 'rolled 10', 'self', '20000000-0000-0000-0000-000000000002')$$,
+  'player can post a self-reported roll linked to their dice row'
+);
+select ok(
+  (
+    select (result->'roll'->>'total')::int between 3 and 8
+    from (
+      select roll_campaign_dice(
+        '10000000-0000-0000-0000-000000000001',
+        '1d6+2', 'flat', 'Server test', null
+      ) result
+    ) rolled
+  ),
+  'campaign member can request a server-generated app roll'
+);
+select is(
+  (
+    select count(*)::integer
+    from scene_log s
+    join dice_rolls d on d.id = s.dice_roll_id
+    where d.reason = 'Server test'
+      and d.mode = 'flat'
+      and s.roll_source = 'app'
+  ),
+  1,
+  'server roll atomically creates its linked app scene entry'
+);
+select throws_ok(
+  $$insert into dice_rolls (
+      campaign_id, roller_user_id, roller_name, notation, mode, breakdown, total
+    ) values (
+      '10000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000002',
+      'Player', '1d20', 'flat', '1d20[10]', 10
+    )$$,
+  '42501', null, 'player cannot forge a direct app-generated roll'
+);
+select throws_ok(
+  $$select roll_campaign_dice(
+      '10000000-0000-0000-0000-000000000001',
+      'not-dice', 'flat', null, null
+    )$$,
+  'P0001', 'Bad dice notation.',
+  'server command rejects invalid dice notation'
+);
+select throws_ok(
+  $$select roll_campaign_dice(
+      '10000000-0000-0000-0000-000000000001',
+      '2d6', 'advantage', null, null
+    )$$,
+  'P0001', 'Advantage/disadvantage require one positive d20 plus modifiers.',
+  'server command restricts advantage to a lone d20'
+);
+select throws_ok(
+  $$select roll_campaign_dice(
+      '10000000-0000-0000-0000-000000000001',
+      '1d20', 'flat', null, 'Goblin'
+    )$$,
+  'P0001', 'Only the GM can roll for an unowned subject.',
+  'player cannot generate an unowned subject roll'
 );
 select throws_ok(
   $$insert into scene_log (campaign_id, type, sender_name, text)
@@ -804,14 +862,23 @@ select lives_ok(
   'GM can post an attributed GM message'
 );
 select lives_ok(
-  $$insert into dice_rolls (id, campaign_id, roller_name, notation, mode, breakdown, total)
-    values ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'Goblin', '1d20', 'flat', '[12]', 12)$$,
-  'GM can create an unowned initiative roll'
+  $$select roll_campaign_dice(
+      '10000000-0000-0000-0000-000000000001',
+      '1d20', 'flat', 'Goblin — initiative', 'Goblin'
+    )$$,
+  'GM can request an unowned initiative roll'
 );
-select lives_ok(
-  $$insert into scene_log (campaign_id, type, sender_name, text, roll_source, dice_roll_id)
-    values ('10000000-0000-0000-0000-000000000001', 'roll', 'Goblin', 'rolled 12', 'app', '20000000-0000-0000-0000-000000000001')$$,
-  'GM can post an unowned initiative roll'
+select is(
+  (
+    select count(*)::integer
+    from scene_log s
+    join dice_rolls d on d.id = s.dice_roll_id
+    where d.reason = 'Goblin — initiative'
+      and d.roller_user_id is null
+      and s.roll_source = 'app'
+  ),
+  1,
+  'GM initiative command creates one linked unowned scene roll'
 );
 select lives_ok(
   $$insert into rules_documents (owner_user_id, system, title, kind, external_url)
