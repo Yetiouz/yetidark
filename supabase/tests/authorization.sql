@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(65);
+select plan(79);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -48,6 +48,44 @@ insert into campaign_faction_secrets (faction_id, goal, notes)
 values ('30000000-0000-0000-0000-000000000002', 'Open the gate', 'Unknown patron');
 insert into campaign_treasure_secrets (treasure_id, notes)
 values ('30000000-0000-0000-0000-000000000003', 'Cursed when carried');
+
+insert into characters (
+  id, campaign_id, owner_user_id, name, ancestry, class, stats, hp, max_hp, ac
+) values
+  (
+    '40000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000002',
+    'Player Hero', 'Human', 'Fighter', '{}', 5, 5, 10
+  ),
+  (
+    '40000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    'GM Hero', 'Dwarf', 'Priest', '{}', 6, 6, 12
+  );
+insert into character_gear (id, character_id, name)
+values (
+  '50000000-0000-0000-0000-000000000001',
+  '40000000-0000-0000-0000-000000000001',
+  'Torch'
+);
+insert into votes (
+  id, campaign_id, poll_key, option_key, option_label, voter_user_id
+) values (
+  '60000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  'route', 'north', 'North',
+  '00000000-0000-0000-0000-000000000002'
+);
+insert into campaign_light_sources (
+  id, campaign_id, character_id, name, total_minutes, remaining_minutes
+) values (
+  '70000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  '40000000-0000-0000-0000-000000000001',
+  'Existing torch', 60, 60
+);
 
 select hasnt_column('public', 'campaign_npcs', 'notes', 'NPC secrets are absent from member-readable rows');
 select hasnt_column('public', 'campaign_factions', 'goal', 'faction goals are absent from member-readable rows');
@@ -178,6 +216,94 @@ select throws_ok(
   $$insert into storage.objects (bucket_id, name, owner_id)
     values ('rules', '00000000-0000-0000-0000-000000000002/fake.pdf', '00000000-0000-0000-0000-000000000002')$$,
   '42501', null, 'non-GM cannot upload a rules file'
+);
+select lives_ok(
+  $$update characters
+    set hp = 4
+    where id = '40000000-0000-0000-0000-000000000001'$$,
+  'character owner can update their character inside its campaign'
+);
+select throws_ok(
+  $$update characters
+    set campaign_id = '10000000-0000-0000-0000-000000000002'
+    where id = '40000000-0000-0000-0000-000000000001'$$,
+  '42501', null, 'character owner cannot move a character to another campaign'
+);
+select lives_ok(
+  $$update votes
+    set option_key = 'south', option_label = 'South'
+    where id = '60000000-0000-0000-0000-000000000001'$$,
+  'voter can update their vote inside its campaign'
+);
+select throws_ok(
+  $$update votes
+    set campaign_id = '10000000-0000-0000-0000-000000000002'
+    where id = '60000000-0000-0000-0000-000000000001'$$,
+  '42501', null, 'voter cannot move a vote to another campaign'
+);
+select lives_ok(
+  $$insert into campaign_light_sources (
+      campaign_id, character_id, name, total_minutes, remaining_minutes
+    ) values (
+      '10000000-0000-0000-0000-000000000001',
+      '40000000-0000-0000-0000-000000000001',
+      'Player torch', 60, 60
+    )$$,
+  'character owner can add a light source to the matching campaign'
+);
+select throws_ok(
+  $$insert into campaign_light_sources (
+      campaign_id, character_id, name, total_minutes, remaining_minutes
+    ) values (
+      '10000000-0000-0000-0000-000000000002',
+      '40000000-0000-0000-0000-000000000001',
+      'Cross-campaign torch', 60, 60
+    )$$,
+  '42501', null, 'character owner cannot add their light source to another campaign'
+);
+select throws_ok(
+  $$update campaign_light_sources
+    set campaign_id = '10000000-0000-0000-0000-000000000002'
+    where id = '70000000-0000-0000-0000-000000000001'$$,
+  '42501', null, 'character owner cannot move a light source to another campaign'
+);
+select throws_ok(
+  $$update character_gear
+    set character_id = '40000000-0000-0000-0000-000000000002'
+    where id = '50000000-0000-0000-0000-000000000001'$$,
+  '42501', null, 'character owner cannot reassign gear to another character'
+);
+select throws_ok(
+  $$insert into campaign_threads (campaign_id, title)
+    values ('10000000-0000-0000-0000-000000000001', 'Forged thread')$$,
+  '42501', null, 'player cannot create a campaign thread'
+);
+select throws_ok(
+  $$insert into campaign_clocks (campaign_id, name)
+    values ('10000000-0000-0000-0000-000000000001', 'Forged clock')$$,
+  '42501', null, 'player cannot create a campaign clock'
+);
+select throws_ok(
+  $$insert into campaign_timeline_entries (campaign_id, entry)
+    values ('10000000-0000-0000-0000-000000000001', 'Forged history')$$,
+  '42501', null, 'player cannot create a campaign timeline entry'
+);
+select lives_ok(
+  $$insert into storage.objects (bucket_id, name, owner_id)
+    values ('avatars', '40000000-0000-0000-0000-000000000001/avatar.png', '00000000-0000-0000-0000-000000000002')$$,
+  'character owner can upload their avatar'
+);
+select throws_ok(
+  $$insert into storage.objects (bucket_id, name, owner_id)
+    values ('avatars', '40000000-0000-0000-0000-000000000002/avatar.png', '00000000-0000-0000-0000-000000000002')$$,
+  '42501', null, 'player cannot upload another character avatar'
+);
+select throws_ok(
+  $$update storage.objects
+    set name = '40000000-0000-0000-0000-000000000002/stolen.png'
+    where bucket_id = 'avatars'
+      and name = '40000000-0000-0000-0000-000000000001/avatar.png'$$,
+  '42501', null, 'player cannot move their avatar into another character folder'
 );
 reset role;
 
