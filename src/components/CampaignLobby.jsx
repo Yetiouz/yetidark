@@ -197,7 +197,10 @@ export default function CampaignLobby({
     if (!canStart || starting) return
     setStarting(true)
     setStartError(null)
-    const { error: startErr } = await supabase.from('campaigns').update({ session_active: true }).eq('id', campaignId)
+    const { error: startErr } = await supabase.rpc('set_campaign_session_active', {
+      p_campaign_id: campaignId,
+      p_active: true,
+    })
     setStarting(false)
     if (startErr) {
       setStartError(startErr.message)

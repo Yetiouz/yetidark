@@ -164,19 +164,28 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
     const totalInput = window.prompt('How many segments?', '4')
     if (totalInput === null) return
     const segments_total = Math.max(1, parseInt(totalInput, 10) || 4)
-    await supabase.from('campaign_clocks').insert({ campaign_id: campaignId, name, segments_total })
-    setClockDraft('')
+    const { data, error } = await supabase.rpc('add_campaign_clock', {
+      p_campaign_id: campaignId,
+      p_name: name,
+      p_segments_total: segments_total,
+    })
+    if (!error) {
+      setClocks((all) => all.some((clock) => clock.id === data.id) ? all : [...all, data])
+      setClockDraft('')
+    }
   }
 
   const adjustClock = async (clock, delta) => {
-    const next = Math.max(0, Math.min(clock.segments_total, clock.segments_filled + delta))
-    setClocks((c) => c.map((x) => (x.id === clock.id ? { ...x, segments_filled: next } : x)))
-    await supabase.from('campaign_clocks').update({ segments_filled: next }).eq('id', clock.id)
+    const { data, error } = await supabase.rpc('adjust_campaign_clock', {
+      p_clock_id: clock.id,
+      p_delta: delta,
+    })
+    if (!error) setClocks((all) => all.map((item) => (item.id === clock.id ? data : item)))
   }
 
   const removeClock = async (clock) => {
-    setClocks((c) => c.filter((x) => x.id !== clock.id))
-    await supabase.from('campaign_clocks').delete().eq('id', clock.id)
+    const { error } = await supabase.rpc('remove_campaign_clock', { p_clock_id: clock.id })
+    if (!error) setClocks((all) => all.filter((item) => item.id !== clock.id))
   }
 
   const addEntry = async () => {
@@ -196,15 +205,17 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
     const minutesInput = window.prompt('Burn time in minutes?', '60')
     if (minutesInput === null) return
     const total_minutes = Math.max(1, parseInt(minutesInput, 10) || 60)
-    await supabase.from('campaign_light_sources').insert({
-      campaign_id: campaignId,
-      character_id: lightCharacterDraft || null,
-      name,
-      total_minutes,
-      remaining_minutes: total_minutes,
+    const { data, error } = await supabase.rpc('add_campaign_light_source', {
+      p_campaign_id: campaignId,
+      p_character_id: lightCharacterDraft || null,
+      p_name: name,
+      p_total_minutes: total_minutes,
     })
-    setLightNameDraft('')
-    setLightCharacterDraft('')
+    if (!error) {
+      setLightSources((all) => all.some((source) => source.id === data.id) ? all : [...all, data])
+      setLightNameDraft('')
+      setLightCharacterDraft('')
+    }
   }
 
   // Lighting only starts the burn clock (lit_at) if the session is
@@ -212,20 +223,16 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
   // lit without burning, and toggleSession's resume path will start the
   // clock once play picks back up. Snuffing always freezes remaining time.
   const toggleLit = async (source) => {
-    if (source.lit) {
-      const remaining = displayedMinutes(source, Date.now())
-      setLightSources((l) => l.map((x) => (x.id === source.id ? { ...x, lit: false, lit_at: null, remaining_minutes: remaining } : x)))
-      await supabase.from('campaign_light_sources').update({ lit: false, lit_at: null, remaining_minutes: remaining }).eq('id', source.id)
-    } else {
-      const lit_at = sessionActive ? new Date().toISOString() : null
-      setLightSources((l) => l.map((x) => (x.id === source.id ? { ...x, lit: true, lit_at } : x)))
-      await supabase.from('campaign_light_sources').update({ lit: true, lit_at }).eq('id', source.id)
-    }
+    const { data, error } = await supabase.rpc('set_campaign_light_lit', {
+      p_source_id: source.id,
+      p_lit: !source.lit,
+    })
+    if (!error) setLightSources((all) => all.map((item) => (item.id === source.id ? data : item)))
   }
 
   const removeLightSource = async (source) => {
-    setLightSources((l) => l.filter((x) => x.id !== source.id))
-    await supabase.from('campaign_light_sources').delete().eq('id', source.id)
+    const { error } = await supabase.rpc('remove_campaign_light_source', { p_source_id: source.id })
+    if (!error) setLightSources((all) => all.filter((item) => item.id !== source.id))
   }
 
   // Pausing freezes every currently-burning source's remaining time and
@@ -234,24 +241,18 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
   // makes tracking active-play-time-only instead of real wall-clock time.
   const toggleSession = async () => {
     const nextActive = !sessionActive
-    const now = Date.now()
-    if (!nextActive) {
-      const burning = lightSources.filter((s) => s.lit && s.lit_at)
-      await Promise.all(
-        burning.map((s) => {
-          const remaining = displayedMinutes(s, now)
-          return supabase.from('campaign_light_sources').update({ remaining_minutes: remaining, lit_at: null }).eq('id', s.id)
-        })
-      )
-    } else {
-      const paused = lightSources.filter((s) => s.lit && !s.lit_at)
-      const nowIso = new Date(now).toISOString()
-      await Promise.all(
-        paused.map((s) => supabase.from('campaign_light_sources').update({ lit_at: nowIso }).eq('id', s.id))
-      )
-    }
+    const { error } = await supabase.rpc('set_campaign_session_active', {
+      p_campaign_id: campaignId,
+      p_active: nextActive,
+    })
+    if (error) return
+    const { data } = await supabase
+      .from('campaign_light_sources')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .order('created_at', { ascending: true })
+    setLightSources(data || [])
     setSessionActive(nextActive)
-    await supabase.from('campaigns').update({ session_active: nextActive }).eq('id', campaignId)
   }
 
   if (loading) {
