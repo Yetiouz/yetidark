@@ -1,21 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import {
+  abilityModifier,
+  gearSlotCapacity,
+  occupiedGearSlots,
+} from '../game/rules/character.js'
 
 const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 const STAT_LABELS = { str: 'STR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'WIS', cha: 'CHA' }
 
-function modifier(score) {
-  if (score >= 18) return 4
-  if (score >= 16) return 3
-  if (score >= 14) return 2
-  if (score >= 12) return 1
-  if (score >= 10) return 0
-  if (score >= 8) return -1
-  if (score >= 6) return -2
-  if (score >= 4) return -3
-  return -4
-}
+const modifier = abilityModifier
 
 // Full character sheet -- stats, HP/AC, XP, coin, gear (with the STR-or-10
 // slot total), and talents. The compact card on GameTable only ever showed
@@ -267,8 +262,12 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   }
 
   const stats = character.stats || {}
-  const maxSlots = Math.max(stats.str || 10, 10)
-  const usedSlots = gear.reduce((sum, item) => sum + Number(item.slots) * (item.quantity || 1), 0)
+  const maxSlots = gearSlotCapacity({
+    strengthScore: stats.str,
+    constitutionScore: stats.con,
+    features,
+  })
+  const usedSlots = occupiedGearSlots(gear)
 
   return (
     <div className="max-w-xl mx-auto p-6">

@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { Dices, AlertCircle, User, Upload, Check, X as XIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import {
+  SHADOWDARK_RULESET,
+  abilityModifier,
+  gearSlotCapacity,
+  isValidAbilityScore,
+  isValidHitDieRoll,
+  startingHp,
+} from '../game/rules/character.js'
 
 const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 const STAT_LABELS = { str: 'STR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'WIS', cha: 'CHA' }
@@ -31,6 +39,7 @@ const ANCESTRIES = [
     traitName: 'Stout',
     trait: 'Start with +2 HP. Roll hit points per level with advantage.',
     hpBonus: 2,
+    hpRollAdvantage: true,
   },
   {
     name: 'Halfling',
@@ -498,24 +507,15 @@ const BACKGROUNDS = [
 ]
 
 function rollStat() {
-  return [0, 0, 0].reduce((sum) => sum + (Math.floor(Math.random() * 6) + 1), 0)
+  const dice = [0, 0, 0].map(() => Math.floor(Math.random() * 6) + 1)
+  return { dice, total: dice.reduce((sum, die) => sum + die, 0) }
 }
 
 function roll2d6() {
   return Math.floor(Math.random() * 6) + 1 + (Math.floor(Math.random() * 6) + 1)
 }
 
-function modifier(score) {
-  if (score >= 18) return 4
-  if (score >= 16) return 3
-  if (score >= 14) return 2
-  if (score >= 12) return 1
-  if (score >= 10) return 0
-  if (score >= 8) return -1
-  if (score >= 6) return -2
-  if (score >= 4) return -3
-  return -4
-}
+const modifier = abilityModifier
 
 function rollClassTalents(charClass, count) {
   const table = CLASSES.find((c) => c.name === charClass).talentTable
@@ -554,7 +554,7 @@ function classesBySource() {
   return groups
 }
 
-const emptyStats = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }
+const emptyStats = { str: null, dex: null, con: null, int: null, wis: null, cha: null }
 const STEPS = ['Method', 'Stats', 'Ancestry', 'Class', 'Background', 'Gear', 'Review']
 
 // Character creation, rebuilt as a step-by-step wizard (matches the rest
@@ -572,6 +572,10 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
   const [step, setStep] = useState(0)
   const [rollMethod, setRollMethod] = useState('digital') // 'digital' | 'physical' -- affects the Stats step only
   const [stats, setStats] = useState(emptyStats)
+  const [statRolls, setStatRolls] = useState({})
+  const [hpRoll, setHpRoll] = useState(null)
+  const [hpRollDice, setHpRollDice] = useState([])
+  const [hpRollSource, setHpRollSource] = useState(null)
   const [ancestry, setAncestry] = useState('Dwarf')
   const [charClass, setCharClass] = useState('Fighter')
   const [name, setName] = useState('')
@@ -616,6 +620,12 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
   }, [charClass])
 
   useEffect(() => {
+    setHpRoll(null)
+    setHpRollDice([])
+    setHpRollSource(null)
+  }, [charClass, ancestry])
+
+  useEffect(() => {
     return () => {
       if (portraitPreview) URL.revokeObjectURL(portraitPreview)
     }
@@ -628,15 +638,47 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
 
   const rollAll = () => {
     const next = {}
+    const provenance = {}
     STAT_KEYS.forEach((k) => {
-      next[k] = rollStat()
+      const result = rollStat()
+      next[k] = result.total
+      provenance[k] = { source: 'digital', dice: result.dice, total: result.total }
     })
     setStats(next)
+    setStatRolls(provenance)
   }
 
   const setStat = (key, value) => {
     const n = parseInt(value, 10)
-    setStats((s) => ({ ...s, [key]: Number.isNaN(n) ? 0 : n }))
+    const total = Number.isNaN(n) ? null : n
+    setStats((s) => ({ ...s, [key]: total }))
+    setStatRolls((rolls) => {
+      const next = { ...rolls }
+      if (isValidAbilityScore(total)) {
+        next[key] = { source: rollMethod === 'physical' ? 'physical' : 'manual', total }
+      } else {
+        delete next[key]
+      }
+      return next
+    })
+  }
+
+  const rollHitDie = () => {
+    const count = selectedAncestry?.hpRollAdvantage ? 2 : 1
+    const dice = Array.from(
+      { length: count },
+      () => Math.floor(Math.random() * selectedClass.hitDie) + 1
+    )
+    setHpRoll(Math.max(...dice))
+    setHpRollDice(dice)
+    setHpRollSource('digital')
+  }
+
+  const recordHitDie = (value) => {
+    const roll = parseInt(value, 10)
+    setHpRoll(Number.isNaN(roll) ? null : roll)
+    setHpRollDice(Number.isNaN(roll) ? [] : [roll])
+    setHpRollSource('physical')
   }
 
   const rollBackground = () => setBackground(BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)])
@@ -648,24 +690,46 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
     setPortraitPreview(URL.createObjectURL(file))
   }
 
-  const conMod = modifier(stats.con)
-  const dexMod = modifier(stats.dex)
+  const hasCompleteStatRolls = STAT_KEYS.every(
+    (key) => isValidAbilityScore(stats[key]) && statRolls[key]
+  )
+  const conMod = modifier(stats.con ?? 10)
+  const dexMod = modifier(stats.dex ?? 10)
   const hpBonus = selectedAncestry?.hpBonus || 0
-  // Simplified for the quick builder: take the max hit die roll rather than
-  // an actual roll, since Con modifier and ancestry bonuses already vary
-  // outcomes.
-  const computedHp = Math.max(1, selectedClass.hitDie + conMod + hpBonus)
+  const hasValidHpRoll = isValidHitDieRoll(hpRoll, selectedClass.hitDie)
+  const computedHp = hasValidHpRoll
+    ? startingHp({
+        hitDieRoll: hpRoll,
+        hitDie: selectedClass.hitDie,
+        constitutionScore: stats.con,
+        ancestryBonus: hpBonus,
+      })
+    : null
 
   const selectedArmor = ARMOR.find((a) => a.name === armorChoice)
   const armorAcValue = selectedArmor ? selectedArmor.baseAc + (selectedArmor.dexApplies ? dexMod : 0) : 10 + dexMod
   const computedAc = armorAcValue + (shieldChoice && selectedClass.shieldAllowed ? SHIELD.acBonus : 0)
-  const gearSlots = Math.max(stats.str || 10, 10) + (conMod > 0 ? conMod : 0)
+  const gearSlots = gearSlotCapacity({
+    strengthScore: stats.str,
+    constitutionScore: stats.con,
+    features: selectedClass.features,
+  })
 
   const goNext = () => setStep((s) => Math.min(STEPS.length - 1, s + 1))
   const goBack = () => setStep((s) => Math.max(0, s - 1))
 
   const start = async () => {
     const finalName = name.trim() || `${ancestry} ${charClass.toLowerCase()}`
+
+    if (!hasCompleteStatRolls) {
+      setError('Record all six 3d6 ability scores before creating the character.')
+      return
+    }
+
+    if (!hasValidHpRoll) {
+      setError(`Record a 1d${selectedClass.hitDie} starting HP roll before creating the character.`)
+      return
+    }
 
     if (!campaignId || !session?.user) {
       onComplete && onComplete({ name: finalName, ancestry, charClass, stats, hp: computedHp })
@@ -692,6 +756,21 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
         background: background.trim() || null,
         xp: 0,
         coin,
+        rules_version: SHADOWDARK_RULESET.version,
+        creation_rolls: {
+          ruleset: SHADOWDARK_RULESET,
+          stats: statRolls,
+          hp: {
+            source: hpRollSource,
+            die: `1d${selectedClass.hitDie}`,
+            advantage: Boolean(selectedAncestry?.hpRollAdvantage),
+            dice: hpRollDice,
+            roll: hpRoll,
+            constitution_modifier: conMod,
+            ancestry_bonus: hpBonus,
+            total: computedHp,
+          },
+        },
       })
       .select()
       .single()
@@ -858,7 +937,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
         </div>
         <div>
           <p className="text-[10px] text-neutral-500">HP</p>
-          <p className="text-sm text-white">{computedHp}</p>
+          <p className="text-sm text-white">{computedHp ?? '—'}</p>
         </div>
         <div>
           <p className="text-[10px] text-neutral-500">AC</p>
@@ -964,16 +1043,27 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                       <p className="text-[10px] text-neutral-400 mb-1">{STAT_LABELS[k]}</p>
                       <input
                         type="number"
-                        value={stats[k]}
+                        min="3"
+                        max="18"
+                        value={stats[k] ?? ''}
                         onChange={(e) => setStat(k, e.target.value)}
                         className="w-full bg-neutral-900 border border-neutral-700 rounded text-center text-sm text-white py-0.5"
                       />
                       <p className="text-[10px] text-neutral-500 mt-1">
-                        {modifier(stats[k]) >= 0 ? `+${modifier(stats[k])}` : modifier(stats[k])}
+                        {stats[k] == null
+                          ? '—'
+                          : modifier(stats[k]) >= 0
+                            ? `+${modifier(stats[k])}`
+                            : modifier(stats[k])}
                       </p>
                     </div>
                   ))}
                 </div>
+                {!hasCompleteStatRolls && (
+                  <p className="text-[11px] text-amber-400 mt-2">
+                    Record all six 3d6 results before continuing.
+                  </p>
+                )}
               </div>
             )}
 
@@ -1028,6 +1118,41 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                 <p className="text-[11px] text-neutral-400 mb-2 mt-2">
                   {charClass} &middot; 1d{selectedClass.hitDie} hit points per level. {selectedClass.blurb}
                 </p>
+                <div className="bg-neutral-950 rounded-md p-3 mb-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-neutral-300">Starting HP roll</p>
+                      <p className="text-[11px] text-neutral-500">
+                        Roll 1d{selectedClass.hitDie}
+                        {selectedAncestry?.hpRollAdvantage ? ' with advantage' : ''}; Constitution and ancestry modifiers are applied automatically.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min="1"
+                        max={selectedClass.hitDie}
+                        value={hpRoll ?? ''}
+                        onChange={(e) => recordHitDie(e.target.value)}
+                        placeholder={`1-${selectedClass.hitDie}`}
+                        className="w-16 bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1 text-sm text-white text-center"
+                      />
+                      <button
+                        onClick={rollHitDie}
+                        className="text-xs border border-neutral-700 rounded-md px-2.5 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
+                      >
+                        <Dices size={13} /> Roll{selectedAncestry?.hpRollAdvantage ? ' twice' : ''}
+                      </button>
+                    </div>
+                  </div>
+                  {hpRoll != null && (
+                    <p className={`text-[11px] mt-2 ${hasValidHpRoll ? 'text-neutral-400' : 'text-red-400'}`}>
+                      {hasValidHpRoll
+                        ? `${hpRollDice.length > 1 ? `${hpRollDice.join(' and ')} rolled; ${hpRoll} kept` : `${hpRoll} rolled`}${conMod ? ` ${conMod >= 0 ? '+' : ''}${conMod} CON` : ''}${hpBonus ? ` +${hpBonus} ancestry` : ''} = ${computedHp} HP`
+                        : `Enter a result from 1 to ${selectedClass.hitDie}.`}
+                    </p>
+                  )}
+                </div>
                 <ul className="mb-3">
                   {selectedClass.features.map((f) => (
                     <li key={f.name} className="text-[11px] text-neutral-400 bg-neutral-950 rounded-md px-2.5 py-1.5 mb-1">
@@ -1191,7 +1316,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                     {background ? ` · ${background.split(' -- ')[0]}` : ''}
                   </p>
                   <p className="text-[11px] text-neutral-400 mt-0.5">
-                    {computedHp} hp (1d{selectedClass.hitDie}{hpBonus ? ` + ${hpBonus} stout` : ''}
+                    {computedHp ?? 'unrolled'} hp (1d{selectedClass.hitDie}: {hpRoll ?? '—'}{hpBonus ? ` + ${hpBonus} stout` : ''}
                     {conMod ? ` ${conMod >= 0 ? '+' : ''}${conMod} con` : ''}) &middot; ac {computedAc} &middot; {coin} gp
                   </p>
                   <p className="text-[11px] text-neutral-500 mt-0.5">
@@ -1238,14 +1363,15 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
             {step < STEPS.length - 1 ? (
               <button
                 onClick={goNext}
-                className="text-sm bg-blue-500 hover:bg-blue-400 text-white rounded-md px-3.5 py-1.5 flex items-center gap-1.5"
+                disabled={(step === 1 && !hasCompleteStatRolls) || (step === 3 && !hasValidHpRoll)}
+                className="text-sm bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white rounded-md px-3.5 py-1.5 flex items-center gap-1.5"
               >
                 Continue <ChevronRight size={14} />
               </button>
             ) : (
               <button
                 onClick={start}
-                disabled={saving}
+                disabled={saving || !hasValidHpRoll}
                 className="text-sm bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white rounded-md px-3.5 py-1.5"
               >
                 {saving ? 'Saving...' : 'Start playing'}
