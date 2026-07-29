@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(34);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -87,6 +87,61 @@ select throws_ok(
     values ('maps', '10000000-0000-0000-0000-000000000001/player.png', '00000000-0000-0000-0000-000000000002')$$,
   '42501', null, 'player cannot upload a campaign map'
 );
+select throws_ok(
+  $$insert into scene_log (campaign_id, type, sender_user_id, sender_name, text)
+    values ('10000000-0000-0000-0000-000000000001', 'gm', '00000000-0000-0000-0000-000000000002', 'Player', 'Forged GM message')$$,
+  '42501', null, 'player cannot post a GM message'
+);
+select throws_ok(
+  $$insert into scene_log (campaign_id, type, sender_user_id, sender_name, text)
+    values ('10000000-0000-0000-0000-000000000001', 'chat', '00000000-0000-0000-0000-000000000001', 'GM', 'Forged sender')$$,
+  '42501', null, 'player cannot claim another sender id'
+);
+select throws_ok(
+  $$insert into scene_log (campaign_id, type, sender_user_id, sender_name, text)
+    values ('10000000-0000-0000-0000-000000000001', 'chat', '00000000-0000-0000-0000-000000000002', 'GM', 'Forged display name')$$,
+  '42501', null, 'player cannot claim another display name'
+);
+select lives_ok(
+  $$insert into scene_log (campaign_id, type, sender_user_id, sender_name, text)
+    values ('10000000-0000-0000-0000-000000000001', 'chat', '00000000-0000-0000-0000-000000000002', 'Player', 'Hello')$$,
+  'player can post attributed chat'
+);
+select throws_ok(
+  $$insert into dice_rolls (campaign_id, roller_name, notation, mode, breakdown, total)
+    values ('10000000-0000-0000-0000-000000000001', 'Goblin', '1d20', 'flat', '[10]', 10)$$,
+  '42501', null, 'player cannot create an unowned dice roll'
+);
+select throws_ok(
+  $$insert into dice_rolls (campaign_id, roller_user_id, roller_name, notation, mode, breakdown, total)
+    values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'GM', '1d20', 'flat', '[10]', 10)$$,
+  '42501', null, 'player cannot forge another roller identity'
+);
+select lives_ok(
+  $$insert into dice_rolls (id, campaign_id, roller_user_id, roller_name, notation, mode, breakdown, total)
+    values ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', 'Player', '1d20', 'flat', '[10]', 10)$$,
+  'player can create an attributed dice roll'
+);
+select lives_ok(
+  $$insert into scene_log (campaign_id, type, sender_user_id, sender_name, text, roll_source, dice_roll_id)
+    values ('10000000-0000-0000-0000-000000000001', 'roll', '00000000-0000-0000-0000-000000000002', 'Player', 'rolled 10', 'app', '20000000-0000-0000-0000-000000000002')$$,
+  'player can post a roll linked to their attributed dice row'
+);
+select throws_ok(
+  $$insert into scene_log (campaign_id, type, sender_name, text)
+    values ('10000000-0000-0000-0000-000000000001', 'ai_gm', 'Fake AI', 'Forged AI narration')$$,
+  '42501', null, 'player cannot post an AI-GM message'
+);
+select throws_ok(
+  $$insert into rules_documents (owner_user_id, system, title, kind, external_url)
+    values ('00000000-0000-0000-0000-000000000002', 'Shadowdark', 'Fake rules', 'link', 'https://example.test')$$,
+  '42501', null, 'non-GM cannot create a rules library entry'
+);
+select throws_ok(
+  $$insert into storage.objects (bucket_id, name, owner_id)
+    values ('rules', '00000000-0000-0000-0000-000000000002/fake.pdf', '00000000-0000-0000-0000-000000000002')$$,
+  '42501', null, 'non-GM cannot upload a rules file'
+);
 reset role;
 
 -- The campaign GM retains the intended capabilities.
@@ -113,6 +168,31 @@ select lives_ok(
   $$insert into campaigns (name, gm_type, gm_user_id, join_code)
     values ('Owned campaign', 'human', '00000000-0000-0000-0000-000000000001', 'OWNED001')$$,
   'campaign creator can create a correctly-owned campaign'
+);
+select lives_ok(
+  $$insert into scene_log (campaign_id, type, sender_user_id, sender_name, text)
+    values ('10000000-0000-0000-0000-000000000001', 'gm', '00000000-0000-0000-0000-000000000001', 'GM', 'Legitimate GM message')$$,
+  'GM can post an attributed GM message'
+);
+select lives_ok(
+  $$insert into dice_rolls (id, campaign_id, roller_name, notation, mode, breakdown, total)
+    values ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'Goblin', '1d20', 'flat', '[12]', 12)$$,
+  'GM can create an unowned initiative roll'
+);
+select lives_ok(
+  $$insert into scene_log (campaign_id, type, sender_name, text, roll_source, dice_roll_id)
+    values ('10000000-0000-0000-0000-000000000001', 'roll', 'Goblin', 'rolled 12', 'app', '20000000-0000-0000-0000-000000000001')$$,
+  'GM can post an unowned initiative roll'
+);
+select lives_ok(
+  $$insert into rules_documents (owner_user_id, system, title, kind, external_url)
+    values ('00000000-0000-0000-0000-000000000001', 'Shadowdark', 'GM rules', 'link', 'https://example.test')$$,
+  'GM can create their rules library entry'
+);
+select lives_ok(
+  $$insert into storage.objects (bucket_id, name, owner_id)
+    values ('rules', '00000000-0000-0000-0000-000000000001/rules.pdf', '00000000-0000-0000-0000-000000000001')$$,
+  'GM can upload their rules file'
 );
 reset role;
 
