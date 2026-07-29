@@ -1,15 +1,34 @@
 import { useState } from 'react'
-import { Swords, MailCheck, AlertCircle } from 'lucide-react'
+import { Swords, MailCheck, AlertCircle, Github } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 
-// Real Supabase magic-link auth. Once the user clicks the link in their
-// email, Supabase redirects back here with a session -- App.jsx picks that
-// up via supabase.auth.onAuthStateChange and moves on to the lobby.
+const friendlyAuthError = (message) => {
+  if (message?.toLowerCase().includes('rate limit')) {
+    return 'Email sign-in is temporarily limited. Continue with GitHub instead.'
+  }
+  return message || 'Sign-in failed. Please try again.'
+}
+
 export default function SignIn() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState(null)
   const [sending, setSending] = useState(false)
+  const [githubLoading, setGithubLoading] = useState(false)
+
+  const signInWithGitHub = async () => {
+    setGithubLoading(true)
+    setError(null)
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
+      provider: 'github',
+      options: { redirectTo: window.location.origin },
+    })
+
+    if (signInError) {
+      setGithubLoading(false)
+      setError(friendlyAuthError(signInError.message))
+    }
+  }
 
   const submit = async (e) => {
     e.preventDefault()
@@ -22,7 +41,7 @@ export default function SignIn() {
     })
     setSending(false)
     if (signInError) {
-      setError(signInError.message)
+      setError(friendlyAuthError(signInError.message))
       return
     }
     setSent(true)
@@ -40,23 +59,42 @@ export default function SignIn() {
         </div>
 
         {!sent ? (
-          <form onSubmit={submit}>
-            <label className="text-xs text-neutral-400 block mb-1.5">Email</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@email.com"
-              className="w-full bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white mb-3"
-            />
+          <>
             <button
-              type="submit"
-              disabled={sending}
-              className="w-full bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white text-sm rounded-md py-2"
+              type="button"
+              onClick={signInWithGitHub}
+              disabled={githubLoading || sending}
+              className="w-full bg-white hover:bg-neutral-200 disabled:opacity-50 text-neutral-950 text-sm font-medium rounded-md py-2 flex items-center justify-center gap-2"
             >
-              {sending ? 'Sending...' : 'Send sign-in link'}
+              <Github size={16} />
+              {githubLoading ? 'Connecting...' : 'Continue with GitHub'}
             </button>
+
+            <div className="flex items-center gap-3 my-5">
+              <div className="h-px flex-1 bg-neutral-800" />
+              <span className="text-[11px] uppercase tracking-wider text-neutral-500">or email</span>
+              <div className="h-px flex-1 bg-neutral-800" />
+            </div>
+
+            <form onSubmit={submit}>
+              <label className="text-xs text-neutral-400 block mb-1.5">Email</label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@email.com"
+                className="w-full bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white mb-3"
+              />
+              <button
+                type="submit"
+                disabled={sending || githubLoading}
+                className="w-full bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white text-sm rounded-md py-2"
+              >
+                {sending ? 'Sending...' : 'Send sign-in link'}
+              </button>
+            </form>
+
             {error && (
               <div className="mt-3 flex items-start gap-2 text-red-400">
                 <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
@@ -69,7 +107,7 @@ export default function SignIn() {
                 No password to remember — we'll email you a link that signs you in instantly.
               </p>
             </div>
-          </form>
+          </>
         ) : (
           <div className="text-center">
             <MailCheck size={28} className="text-green-500 mx-auto mb-3" />
