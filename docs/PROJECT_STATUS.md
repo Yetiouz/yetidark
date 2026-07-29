@@ -37,7 +37,28 @@ The current architecture remains appropriate:
 | Correct audited character rules | Complete for the audited set | Starting HP, roll provenance, gear slots, equipped gear, talent rolls, spell cycles, full rests, and atomic character creation are implemented. |
 | Campaign event ledger | Complete for the audited mutations | HP, XP, coin, full rests, gear, spells, clocks, light, dice, and character creation use authoritative commands and events. |
 | Authoritative app dice and identity | Complete for current app dice | App-generated dice and actor identity are derived by trusted database commands. |
-| URL routing and session restoration | In review | PR #18 is fully built and deployed; signed-in refresh and shared-link verification remain. |
+| URL routing and session restoration | In review | PR #18 adds URL-backed navigation, refresh restoration, route tests, and the Vercel SPA rewrite. Signed-in preview verification remains. |
+
+## Routing preview handoff
+
+PR #18 (`codex/url-session-routing`) passed the dependency audit, 11 rules
+tests, 5 routing tests, the production build, and direct preview checks for
+every application route. Direct route loads and browser back/forward navigation
+retain the requested URL.
+
+The final signed-in preview check was deferred because Supabase's built-in
+email provider exhausted its project-wide send quota. The routing change was
+accepted based on the automated suite, direct preview route loads, browser
+history verification, and green GitHub/Vercel checks. Re-run these checks on
+production after deployment:
+
+1. Open an existing campaign, refresh a campaign screen, and confirm the
+   campaign and screen are restored.
+2. Copy a campaign or character URL into a new tab and confirm the authorized
+   destination opens. Confirm a player cannot remain on the GM route.
+
+The temporary Supabase preview redirects used during testing must be removed
+after PR #18 is merged.
 
 ## Live production baseline
 

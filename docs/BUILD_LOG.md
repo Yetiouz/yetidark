@@ -115,3 +115,16 @@ history remains the detailed source of truth.
   authorization tests.
 - Applied migration 029 to production and verified that the local and remote
   migration ledgers match with no pending database changes.
+
+## July 29, 2026 — URL routing prepared for release
+
+- Added URL-backed navigation for the lobby, profile, campaign creation,
+  campaign screens, character creation, and character sheets.
+- Added session restoration from campaign and character URLs.
+- Added route parsing and formatting tests plus the Vercel SPA rewrite needed
+  for direct links and refreshes.
+- Verified all public and nested preview routes, direct route loads, and browser
+  back/forward navigation.
+- Documented the deferred signed-in campaign refresh, shared-link, and
+  player/GM authorization checks after the built-in email provider reached its
+  project-wide send limit.
