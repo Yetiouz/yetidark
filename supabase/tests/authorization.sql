@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(52);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -17,13 +17,16 @@ alter table campaigns disable trigger on_campaign_created;
 insert into campaigns (id, name, gm_type, gm_user_id, join_code, is_public, join_password_hash)
 values
   ('10000000-0000-0000-0000-000000000001', 'Private test', 'human', '00000000-0000-0000-0000-000000000001', 'PRIVATE1', false, crypt('secret', gen_salt('bf'))),
-  ('10000000-0000-0000-0000-000000000002', 'Public test', 'human', '00000000-0000-0000-0000-000000000001', 'PUBLIC01', true, null);
+  ('10000000-0000-0000-0000-000000000002', 'Public test', 'human', '00000000-0000-0000-0000-000000000001', 'PUBLIC01', true, null),
+  ('10000000-0000-0000-0000-000000000003', 'AI test', 'ai', '00000000-0000-0000-0000-000000000001', 'AITEST01', false, null);
 alter table campaigns enable trigger on_campaign_created;
 
 insert into campaign_members (campaign_id, user_id, role) values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'gm'),
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', 'player'),
-  ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'gm');
+  ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'gm'),
+  ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001', 'gm'),
+  ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000002', 'player');
 
 insert into encounter_monsters (campaign_id, name, ac, hp, max_hp, hidden) values
   ('10000000-0000-0000-0000-000000000001', 'Visible', 10, 1, 1, false),
@@ -64,6 +67,11 @@ select throws_ok(
 select lives_ok(
   $$select * from join_campaign_by_code('PRIVATE1', 'secret')$$,
   'private campaign accepts the correct password'
+);
+select throws_ok(
+  $$select claim_ai_gm_turn('10000000-0000-0000-0000-000000000003')$$,
+  'P0001', 'Campaign not found, or you are not a member.',
+  'outsider cannot claim an AI-GM turn'
 );
 reset role;
 
@@ -193,6 +201,124 @@ select lives_ok(
   $$insert into storage.objects (bucket_id, name, owner_id)
     values ('rules', '00000000-0000-0000-0000-000000000001/rules.pdf', '00000000-0000-0000-0000-000000000001')$$,
   'GM can upload their rules file'
+);
+reset role;
+
+-- AI-GM generation starts are serialized, bounded, and completed only by the
+-- service role. These checks exercise the public RPC boundary and its state.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
+select throws_ok(
+  $$select claim_ai_gm_turn('10000000-0000-0000-0000-000000000001')$$,
+  'P0001', 'This campaign does not use the AI GM.',
+  'member cannot claim a turn for a human-GM campaign'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.ai_gm_turn_state', 'select'),
+  'authenticated users cannot inspect AI-GM lease state'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.complete_ai_gm_turn(uuid,uuid,text,text)', 'execute'),
+  'authenticated users cannot complete an AI-GM turn'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.release_ai_gm_turn(uuid,uuid)', 'execute'),
+  'authenticated users cannot release an AI-GM turn'
+);
+select is(
+  claim_ai_gm_turn('10000000-0000-0000-0000-000000000003')->>'status',
+  'claimed',
+  'campaign member can atomically claim an available AI-GM turn'
+);
+select is(
+  claim_ai_gm_turn('10000000-0000-0000-0000-000000000003')->>'status',
+  'busy',
+  'a concurrent AI-GM turn is rejected while the lease is active'
+);
+reset role;
+
+select ok(
+  release_ai_gm_turn(
+    '10000000-0000-0000-0000-000000000003',
+    (select active_claim_token from ai_gm_turn_state where campaign_id = '10000000-0000-0000-0000-000000000003')
+  ),
+  'service role can release a failed AI-GM turn'
+);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
+select is(
+  claim_ai_gm_turn('10000000-0000-0000-0000-000000000003')->>'status',
+  'claimed',
+  'released AI-GM turn can be claimed again'
+);
+reset role;
+
+select ok(
+  complete_ai_gm_turn(
+    '10000000-0000-0000-0000-000000000003',
+    (select active_claim_token from ai_gm_turn_state where campaign_id = '10000000-0000-0000-0000-000000000003'),
+    'AI test — AI GM',
+    'The guarded turn completed.'
+  ),
+  'service role atomically completes the claimed AI-GM turn'
+);
+select is(
+  (select count(*)::integer from scene_log where campaign_id = '10000000-0000-0000-0000-000000000003' and type = 'ai_gm'),
+  1,
+  'completing a claim writes exactly one AI-GM narration'
+);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
+select is(
+  claim_ai_gm_turn('10000000-0000-0000-0000-000000000003')->>'status',
+  'skipped',
+  'completed input cannot generate duplicate narration'
+);
+select lives_ok(
+  $$insert into scene_log (campaign_id, type, sender_user_id, sender_name, text)
+    values ('10000000-0000-0000-0000-000000000003', 'chat', '00000000-0000-0000-0000-000000000002', 'Player', 'Continue onward')$$,
+  'new player input makes another AI-GM turn eligible'
+);
+select is(
+  claim_ai_gm_turn('10000000-0000-0000-0000-000000000003')->>'status',
+  'claimed',
+  'new player input can claim a third generation start'
+);
+reset role;
+
+select ok(
+  release_ai_gm_turn(
+    '10000000-0000-0000-0000-000000000003',
+    (select active_claim_token from ai_gm_turn_state where campaign_id = '10000000-0000-0000-0000-000000000003')
+  ),
+  'third generation lease can be released'
+);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
+select is(
+  claim_ai_gm_turn('10000000-0000-0000-0000-000000000003')->>'status',
+  'claimed',
+  'campaign can claim the fourth start inside the minute window'
+);
+reset role;
+
+select ok(
+  release_ai_gm_turn(
+    '10000000-0000-0000-0000-000000000003',
+    (select active_claim_token from ai_gm_turn_state where campaign_id = '10000000-0000-0000-0000-000000000003')
+  ),
+  'fourth generation lease can be released'
+);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
+select is(
+  claim_ai_gm_turn('10000000-0000-0000-0000-000000000003')->>'status',
+  'rate_limited',
+  'campaign cannot start more than four AI-GM generations per minute'
 );
 reset role;
 
