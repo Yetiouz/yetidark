@@ -55,3 +55,35 @@ export function occupiedGearSlots(items = []) {
     return total + slots * quantity
   }, 0)
 }
+
+export function resolveTalentRolls({ rolls, table }) {
+  return rolls.map((roll) => {
+    if (!Number.isInteger(roll) || roll < 2 || roll > 12) {
+      throw new RangeError('Talent rolls must be 2d6 totals from 2 to 12.')
+    }
+    const result = table.find((entry) => roll >= entry.min && roll <= entry.max)
+    if (!result) throw new RangeError(`Talent table has no result for ${roll}.`)
+    return { formula: '2d6', roll, description: result.text }
+  })
+}
+
+export function resolveSpellCheck({ naturalRoll, total, tier, succeededSinceRest = false }) {
+  if (!Number.isInteger(naturalRoll) || naturalRoll < 1 || naturalRoll > 20) {
+    throw new RangeError('Natural spell check roll must be from 1 to 20.')
+  }
+  if (!Number.isFinite(total)) throw new TypeError('Spell check total is required.')
+  if (!Number.isInteger(tier) || tier < 1) throw new RangeError('Spell tier must be a positive integer.')
+
+  const dc = 10 + tier
+  const mishap = naturalRoll === 1
+  const succeeded = !mishap && total >= dc
+  const locked = !succeeded && succeededSinceRest
+
+  return {
+    dc,
+    succeeded,
+    mishap,
+    locked,
+    succeededSinceRest: succeededSinceRest || succeeded,
+  }
+}

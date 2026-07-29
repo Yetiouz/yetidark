@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(86);
+select plan(95);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -70,6 +70,28 @@ values (
   '40000000-0000-0000-0000-000000000001',
   'Torch'
 );
+insert into character_gear (id, character_id, name, quantity)
+values (
+  '50000000-0000-0000-0000-000000000002',
+  '40000000-0000-0000-0000-000000000001',
+  'Rations',
+  2
+);
+insert into character_features (
+  id, character_id, source, name, description, uses_max, uses_current
+) values (
+  '50000000-0000-0000-0000-000000000003',
+  '40000000-0000-0000-0000-000000000001',
+  'ancestry', 'Stealthy', 'Become invisible.', 1, 0
+);
+insert into character_spells (
+  id, character_id, name, tier, lost, succeeded_since_rest,
+  last_check_natural, last_check_total, last_check_succeeded, last_check_at
+) values (
+  '50000000-0000-0000-0000-000000000004',
+  '40000000-0000-0000-0000-000000000001',
+  'Magic Missile', 1, true, true, 5, 8, false, now()
+);
 insert into votes (
   id, campaign_id, poll_key, option_key, option_label, voter_user_id
 ) values (
@@ -104,6 +126,9 @@ select hasnt_column('public', 'campaign_factions', 'goal', 'faction goals are ab
 select hasnt_column('public', 'campaign_treasure', 'notes', 'treasure secrets are absent from member-readable rows');
 select has_column('public', 'characters', 'rules_version', 'characters record the applied rules version');
 select has_column('public', 'characters', 'creation_rolls', 'characters retain creation roll provenance');
+select has_column('public', 'character_talents', 'roll_formula', 'talents record their roll formula');
+select has_column('public', 'character_talents', 'roll_total', 'talents record their rolled total');
+select has_column('public', 'character_talents', 'rules_version', 'talents record their rules version');
 select is(
   (select public from storage.buckets where id = 'maps'),
   false,
@@ -159,6 +184,11 @@ select throws_ok(
 select lives_ok(
   $$select * from join_campaign_by_code('PRIVATE1', 'secret')$$,
   'private campaign accepts the correct password'
+);
+select throws_ok(
+  $$select complete_character_rest('40000000-0000-0000-0000-000000000001')$$,
+  'P0001', 'Character not found, or you cannot rest this character.',
+  'campaign member cannot rest another user character'
 );
 select throws_ok(
   $$select claim_ai_gm_turn('10000000-0000-0000-0000-000000000003')$$,
@@ -345,6 +375,35 @@ select throws_ok(
     where bucket_id = 'avatars'
       and name = '40000000-0000-0000-0000-000000000001/avatar.png'$$,
   '42501', null, 'player cannot move their avatar into another character folder'
+);
+select lives_ok(
+  $$select complete_character_rest('40000000-0000-0000-0000-000000000001')$$,
+  'character owner can complete a full rest'
+);
+select is(
+  (select hp from characters where id = '40000000-0000-0000-0000-000000000001'),
+  5,
+  'full rest restores character HP'
+);
+select is(
+  (select quantity from character_gear where id = '50000000-0000-0000-0000-000000000002'),
+  1,
+  'full rest consumes exactly one ration'
+);
+select is(
+  (select uses_current from character_features where id = '50000000-0000-0000-0000-000000000003'),
+  1,
+  'full rest restores daily feature uses'
+);
+select ok(
+  (
+    select not lost
+      and not succeeded_since_rest
+      and last_check_natural is null
+    from character_spells
+    where id = '50000000-0000-0000-0000-000000000004'
+  ),
+  'full rest clears spell locks and cycle history'
 );
 reset role;
 

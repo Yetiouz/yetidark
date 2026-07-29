@@ -5,6 +5,7 @@ import {
   abilityModifier,
   gearSlotCapacity,
   occupiedGearSlots,
+  resolveSpellCheck,
 } from '../game/rules/character.js'
 
 const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
@@ -32,6 +33,9 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   const [isOwner, setIsOwner] = useState(false)
   const [gearDraft, setGearDraft] = useState('')
   const [spellDraft, setSpellDraft] = useState({ name: '', tier: 1, range: '', duration: '', description: '' })
+  const [spellCheckDrafts, setSpellCheckDrafts] = useState({})
+  const [resting, setResting] = useState(false)
+  const [restError, setRestError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState(null)
@@ -178,14 +182,6 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     await supabase.from('character_features').update({ uses_current: next }).eq('id', feature.id)
   }
 
-  // No rest-tracking feature yet (same situation as the Lost-spell toggle),
-  // so restoring a daily-use feature like Halfling's Stealthy is a manual
-  // "I rested" acknowledgement rather than something on a timer.
-  const resetFeatureUse = async (feature) => {
-    setFeatures((f) => f.map((i) => (i.id === feature.id ? { ...i, uses_current: feature.uses_max } : i)))
-    await supabase.from('character_features').update({ uses_current: feature.uses_max }).eq('id', feature.id)
-  }
-
   const removeFeature = async (feature) => {
     setFeatures((f) => f.filter((i) => i.id !== feature.id))
     await supabase.from('character_features').delete().eq('id', feature.id)
@@ -196,13 +192,78 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     await supabase.from('character_spells').update({ prepared: !spell.prepared }).eq('id', spell.id)
   }
 
-  // Toggling a spell back from Lost is the "benefited from a full rest"
-  // moment in Shadowdark's rules -- there's no separate rest-tracking
-  // feature yet, so this is a manual acknowledgement rather than
-  // something the app enforces on a timer.
-  const toggleLost = async (spell) => {
-    setSpells((s) => s.map((i) => (i.id === spell.id ? { ...i, lost: !i.lost } : i)))
-    await supabase.from('character_spells').update({ lost: !spell.lost }).eq('id', spell.id)
+  const updateSpellCheckDraft = (spellId, field, value) => {
+    setSpellCheckDrafts((drafts) => ({
+      ...drafts,
+      [spellId]: { ...(drafts[spellId] || {}), [field]: value },
+    }))
+  }
+
+  const recordSpellCheck = async (spell) => {
+    const draft = spellCheckDrafts[spell.id] || {}
+    const naturalRoll = Number.parseInt(draft.naturalRoll, 10)
+    const total = Number.parseInt(draft.total, 10)
+    let result
+    try {
+      result = resolveSpellCheck({
+        naturalRoll,
+        total,
+        tier: spell.tier,
+        succeededSinceRest: spell.succeeded_since_rest,
+      })
+    } catch {
+      return
+    }
+
+    const update = {
+      lost: result.locked,
+      succeeded_since_rest: result.succeededSinceRest,
+      last_check_natural: naturalRoll,
+      last_check_total: total,
+      last_check_succeeded: result.succeeded,
+      last_check_at: new Date().toISOString(),
+    }
+    setSpells((all) => all.map((item) => (item.id === spell.id ? { ...item, ...update } : item)))
+    await supabase.from('character_spells').update(update).eq('id', spell.id)
+    setSpellCheckDrafts((drafts) => ({ ...drafts, [spell.id]: {} }))
+  }
+
+  const completeFullRest = async () => {
+    if (!characterId || resting) return
+    setResting(true)
+    setRestError(null)
+    const { data, error } = await supabase.rpc('complete_character_rest', {
+      p_character_id: characterId,
+    })
+    setResting(false)
+    if (error) {
+      setRestError(error.message)
+      return
+    }
+
+    setCharacter((current) => ({ ...current, hp: current.max_hp }))
+    setFeatures((all) => all.map((feature) => (
+      feature.uses_max == null ? feature : { ...feature, uses_current: feature.uses_max }
+    )))
+    setSpells((all) => all.map((spell) => ({
+      ...spell,
+      lost: false,
+      succeeded_since_rest: false,
+      last_check_natural: null,
+      last_check_total: null,
+      last_check_succeeded: null,
+      last_check_at: null,
+    })))
+    setGear((all) => {
+      const rationIndex = all.findIndex(
+        (item) => ['ration', 'rations'].includes(item.name.toLowerCase()) && item.quantity > 0
+      )
+      if (rationIndex === -1) return all
+      if (data?.rations_remaining === 0) return all.filter((_, index) => index !== rationIndex)
+      return all.map((item, index) => (
+        index === rationIndex ? { ...item, quantity: data?.rations_remaining ?? item.quantity - 1 } : item
+      ))
+    })
   }
 
   const removeSpell = async (spell) => {
@@ -445,18 +506,13 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                     {f.uses_current ?? 0} / {f.uses_max} uses
                   </span>
                   {canEdit && (
-                    <>
-                      <button
-                        onClick={() => spendFeatureUse(f)}
-                        disabled={(f.uses_current ?? 0) <= 0}
-                        className="text-[11px] border border-neutral-700 rounded px-1.5 py-0.5 text-neutral-300 disabled:opacity-40"
-                      >
-                        Spend
-                      </button>
-                      <button onClick={() => resetFeatureUse(f)} className="text-[11px] text-neutral-500 hover:text-neutral-300">
-                        reset
-                      </button>
-                    </>
+                    <button
+                      onClick={() => spendFeatureUse(f)}
+                      disabled={(f.uses_current ?? 0) <= 0}
+                      className="text-[11px] border border-neutral-700 rounded px-1.5 py-0.5 text-neutral-300 disabled:opacity-40"
+                    >
+                      Spend
+                    </button>
                   )}
                 </div>
               )}
@@ -466,9 +522,21 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       </div>
 
       <div className="bg-neutral-900 rounded-lg p-4">
-        <p className="text-xs text-neutral-400 mb-2.5 flex items-center gap-1.5">
-          <Sparkles size={12} /> Spells
-        </p>
+        <div className="flex items-center justify-between gap-3 mb-2.5">
+          <p className="text-xs text-neutral-400 flex items-center gap-1.5">
+            <Sparkles size={12} /> Spells
+          </p>
+          {canEdit && (
+            <button
+              onClick={completeFullRest}
+              disabled={resting}
+              className="text-[11px] border border-neutral-700 rounded px-2 py-1 text-neutral-300 hover:bg-neutral-800 disabled:opacity-50"
+            >
+              {resting ? 'Resting…' : 'Complete full rest'}
+            </button>
+          )}
+        </div>
+        {restError && <p className="text-[11px] text-red-400 mb-2">{restError}</p>}
         <div className="flex flex-col gap-1.5 mb-3">
           {spells.length === 0 && <p className="text-xs text-neutral-500">None known yet.</p>}
           {spells.map((spell) => (
@@ -501,25 +569,47 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                   )}
                   prepared
                 </label>
-                {canEdit ? (
-                  <button
-                    onClick={() => toggleLost(spell)}
-                    className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border ${
-                      spell.lost
-                        ? 'text-red-300 border-red-500/30 bg-red-500/10'
-                        : 'text-neutral-500 border-neutral-700 hover:text-neutral-300'
-                    }`}
-                  >
-                    <Ban size={11} /> {spell.lost ? 'lost -- click to restore' : 'mark lost'}
-                  </button>
-                ) : (
-                  spell.lost && (
-                    <span className="flex items-center gap-1 text-[11px] text-red-300">
-                      <Ban size={11} /> lost
-                    </span>
-                  )
+                {spell.succeeded_since_rest && (
+                  <span className="text-[11px] text-green-300">succeeded this rest</span>
+                )}
+                {spell.lost && (
+                  <span className="flex items-center gap-1 text-[11px] text-red-300">
+                    <Ban size={11} /> locked until full rest
+                  </span>
                 )}
               </div>
+              {spell.last_check_natural != null && (
+                <p className={`text-[11px] mt-1.5 ${spell.last_check_succeeded ? 'text-green-300' : 'text-amber-300'}`}>
+                  Last check: natural {spell.last_check_natural}, total {spell.last_check_total}
+                  {spell.last_check_natural === 1 ? ' · mishap' : spell.last_check_succeeded ? ' · success' : ' · failure'}
+                </p>
+              )}
+              {canEdit && !spell.lost && (
+                <div className="flex items-center gap-1.5 mt-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={spellCheckDrafts[spell.id]?.naturalRoll ?? ''}
+                    onChange={(e) => updateSpellCheckDraft(spell.id, 'naturalRoll', e.target.value)}
+                    placeholder="natural d20"
+                    className="w-24 text-[11px] bg-neutral-950 border border-neutral-700 rounded px-1.5 py-1 text-white"
+                  />
+                  <input
+                    type="number"
+                    value={spellCheckDrafts[spell.id]?.total ?? ''}
+                    onChange={(e) => updateSpellCheckDraft(spell.id, 'total', e.target.value)}
+                    placeholder={`total vs DC ${10 + spell.tier}`}
+                    className="w-28 text-[11px] bg-neutral-950 border border-neutral-700 rounded px-1.5 py-1 text-white"
+                  />
+                  <button
+                    onClick={() => recordSpellCheck(spell)}
+                    className="text-[11px] border border-neutral-700 rounded px-2 py-1 text-neutral-300 hover:bg-neutral-800"
+                  >
+                    Resolve check
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
