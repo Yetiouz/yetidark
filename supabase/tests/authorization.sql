@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(120);
+select plan(137);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -314,7 +314,7 @@ select throws_ok(
     where id = '60000000-0000-0000-0000-000000000001'$$,
   '42501', null, 'voter cannot move a vote to another campaign'
 );
-select lives_ok(
+select throws_ok(
   $$insert into campaign_light_sources (
       campaign_id, character_id, name, total_minutes, remaining_minutes
     ) values (
@@ -322,7 +322,8 @@ select lives_ok(
       '40000000-0000-0000-0000-000000000001',
       'Player torch', 60, 60
     )$$,
-  'character owner can add a light source to the matching campaign'
+  '42501', null,
+  'character owner cannot bypass the light command with a direct insert'
 );
 select throws_ok(
   $$insert into campaign_light_sources (
@@ -334,11 +335,16 @@ select throws_ok(
     )$$,
   '42501', null, 'character owner cannot add their light source to another campaign'
 );
-select throws_ok(
-  $$update campaign_light_sources
-    set campaign_id = '10000000-0000-0000-0000-000000000002'
-    where id = '70000000-0000-0000-0000-000000000001'$$,
-  '42501', null, 'character owner cannot move a light source to another campaign'
+update campaign_light_sources
+set campaign_id = '10000000-0000-0000-0000-000000000002'
+where id = '70000000-0000-0000-0000-000000000001';
+select is(
+  (
+    select campaign_id from campaign_light_sources
+    where id = '70000000-0000-0000-0000-000000000001'
+  ),
+  '10000000-0000-0000-0000-000000000001'::uuid,
+  'character owner cannot move a light source to another campaign'
 );
 update character_gear
 set character_id = '40000000-0000-0000-0000-000000000002'
@@ -594,6 +600,42 @@ select throws_ok(
   'P0001', 'Natural spell check roll must be from 1 to 20.',
   'spell command rejects an invalid natural roll'
 );
+select lives_ok(
+  $$select set_campaign_light_lit(
+      '70000000-0000-0000-0000-000000000001', true
+    )$$,
+  'character owner can light their assigned source through the command'
+);
+select is(
+  (
+    select count(*)::integer from campaign_events
+    where event_type = 'campaign.light_changed'
+      and entity_id = '70000000-0000-0000-0000-000000000001'
+  ),
+  1,
+  'lighting an assigned source records one event'
+);
+select throws_ok(
+  $$select remove_campaign_light_source(
+      '70000000-0000-0000-0000-000000000001'
+    )$$,
+  'P0001', 'Light source not found, or you are not its GM.',
+  'player cannot remove a light source'
+);
+select throws_ok(
+  $$select set_campaign_session_active(
+      '10000000-0000-0000-0000-000000000001', true
+    )$$,
+  'P0001', 'Campaign not found, or you are not its GM.',
+  'player cannot start the campaign session'
+);
+select is(
+  (set_campaign_session_active(
+    '10000000-0000-0000-0000-000000000003', true
+  )->>'session_active')::boolean,
+  true,
+  'campaign member can start an AI-GM session'
+);
 update character_gear
 set equipped = true
 where id = '50000000-0000-0000-0000-000000000001';
@@ -638,6 +680,108 @@ select lives_ok(
   $$insert into map_cells (campaign_id, row, col, state)
     values ('10000000-0000-0000-0000-000000000001', 1, 1, 'explored')$$,
   'GM can reveal map cells'
+);
+select lives_ok(
+  $$select add_campaign_clock(
+      '10000000-0000-0000-0000-000000000001', 'Ritual', 4
+    )$$,
+  'GM can add a campaign clock through the command'
+);
+select is(
+  (
+    select (adjust_campaign_clock(id, 1)->>'segments_filled')::int
+    from campaign_clocks
+    where campaign_id = '10000000-0000-0000-0000-000000000001'
+      and name = 'Ritual'
+  ),
+  1,
+  'GM can advance a campaign clock through the command'
+);
+select lives_ok(
+  $$select remove_campaign_clock(
+      (select id from campaign_clocks
+       where campaign_id = '10000000-0000-0000-0000-000000000001'
+         and name = 'Ritual')
+    )$$,
+  'GM can remove a campaign clock through the command'
+);
+select is(
+  (
+    select count(*)::integer from campaign_events
+    where event_type in (
+      'campaign.clock_added', 'campaign.clock_adjusted', 'campaign.clock_removed'
+    )
+      and payload::text like '%Ritual%'
+  ),
+  3,
+  'clock lifecycle records every mutation'
+);
+select lives_ok(
+  $$select add_campaign_light_source(
+      '10000000-0000-0000-0000-000000000001',
+      null, 'Party Lantern', 60
+    )$$,
+  'GM can add a party light source through the command'
+);
+select lives_ok(
+  $$select set_campaign_light_lit(
+      (select id from campaign_light_sources
+       where campaign_id = '10000000-0000-0000-0000-000000000001'
+         and name = 'Party Lantern'),
+      true
+    )$$,
+  'GM can light a party source while the session is paused'
+);
+select is(
+  (set_campaign_session_active(
+    '10000000-0000-0000-0000-000000000001', true
+  )->>'session_active')::boolean,
+  true,
+  'GM can start the session atomically'
+);
+select ok(
+  (
+    select lit_at is not null from campaign_light_sources
+    where campaign_id = '10000000-0000-0000-0000-000000000001'
+      and name = 'Party Lantern'
+  ),
+  'starting the session begins burning lit sources'
+);
+select is(
+  (set_campaign_session_active(
+    '10000000-0000-0000-0000-000000000001', false
+  )->>'session_active')::boolean,
+  false,
+  'GM can pause the session atomically'
+);
+select is(
+  (
+    select lit_at from campaign_light_sources
+    where campaign_id = '10000000-0000-0000-0000-000000000001'
+      and name = 'Party Lantern'
+  ),
+  null::timestamptz,
+  'pausing the session freezes lit sources'
+);
+select lives_ok(
+  $$select remove_campaign_light_source(
+      (select id from campaign_light_sources
+       where campaign_id = '10000000-0000-0000-0000-000000000001'
+         and name = 'Party Lantern')
+    )$$,
+  'GM can remove a light source through the command'
+);
+select is(
+  (
+    select count(*)::integer from campaign_events
+    where event_type in (
+      'campaign.light_added', 'campaign.light_changed',
+      'campaign.session_activity_changed', 'campaign.light_removed'
+    )
+      and campaign_id = '10000000-0000-0000-0000-000000000001'
+  ),
+  6,
+  'light and session actions are recorded in the campaign ledger'
 );
 select lives_ok(
   $$insert into storage.objects (bucket_id, name, owner_id)
