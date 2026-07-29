@@ -4,6 +4,7 @@ import { Eye, Plus, Flag, Upload, RotateCcw, Dices, SkipForward, User, Settings,
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { rollDiceNotation } from '../lib/dice.js'
+import { campaignMapPath, useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 
 // Everything here is real Supabase data, synced live: the encounter
 // tracker, GM notes, turn order, the scene log, and the map panel (upload,
@@ -49,6 +50,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
   const fileInputRef = useRef(null)
+  const { url: mapUrl, error: mapAccessError } = useCampaignMapUrl(mapInfo)
 
   useEffect(() => {
     if (!campaignId) return
@@ -84,7 +86,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('campaigns')
-      .select('map_url, map_cols, map_rows, party_row, party_col')
+      .select('map_path, map_url, map_cols, map_rows, party_row, party_col')
       .eq('id', campaignId)
       .maybeSingle()
       .then(({ data }) => { if (!cancelled) setMapInfo(data) })
@@ -285,14 +287,16 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       setUploading(false)
       return
     }
-    const { data: pub } = supabase.storage.from('maps').getPublicUrl(path)
-    const { error: updateError } = await supabase.from('campaigns').update({ map_url: pub.publicUrl }).eq('id', campaignId)
+    const { error: updateError } = await supabase
+      .from('campaigns')
+      .update({ map_path: path, map_url: null })
+      .eq('id', campaignId)
     setUploading(false)
     if (updateError) {
       setUploadError(updateError.message)
       return
     }
-    setMapInfo((m) => ({ ...(m || {}), map_url: pub.publicUrl }))
+    setMapInfo((m) => ({ ...(m || {}), map_path: path, map_url: null }))
   }
 
   const updateGridSize = async (field, value) => {
@@ -611,7 +615,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   disabled={uploading}
                   className="text-xs border border-neutral-700 rounded-md px-2 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
                 >
-                  <Upload size={13} /> {uploading ? 'Uploading...' : mapInfo?.map_url ? 'Replace map image' : 'Upload map image'}
+                  <Upload size={13} /> {uploading ? 'Uploading...' : campaignMapPath(mapInfo) ? 'Replace map image' : 'Upload map image'}
                 </button>
                 <div className="flex items-center gap-1 text-xs text-neutral-400">
                   <span>cols</span>
@@ -645,9 +649,11 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 </button>
               </div>
             </div>
-            {uploadError && <p className="text-xs text-red-400 mb-2">{uploadError}</p>}
+            {(uploadError || mapAccessError) && (
+              <p className="text-xs text-red-400 mb-2">{uploadError || mapAccessError}</p>
+            )}
             <MapGrid
-              mapUrl={mapInfo?.map_url}
+              mapUrl={mapUrl}
               cols={mapInfo?.map_cols || 10}
               rows={mapInfo?.map_rows || 6}
               cellState={cellState}
