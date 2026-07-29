@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ArrowLeft, Plus, Trash2, Flame, Play, Pause } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import { appendUniqueById } from '../app/realtimeCollections.js'
 
 const THREAD_STATUSES = ['open', 'resolved', 'abandoned']
 const STATUS_COLOR = {
@@ -114,7 +115,7 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
         'postgres_changes',
         { event: '*', schema: 'public', table: 'campaign_clocks', filter: `campaign_id=eq.${campaignId}` },
         (payload) => {
-          if (payload.eventType === 'INSERT') setClocks((c) => [...c, payload.new])
+          if (payload.eventType === 'INSERT') setClocks((c) => appendUniqueById(c, payload.new))
           else if (payload.eventType === 'UPDATE') setClocks((c) => c.map((x) => (x.id === payload.new.id ? payload.new : x)))
           else if (payload.eventType === 'DELETE') setClocks((c) => c.filter((x) => x.id !== payload.old.id))
         }
@@ -128,7 +129,7 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
         'postgres_changes',
         { event: '*', schema: 'public', table: 'campaign_light_sources', filter: `campaign_id=eq.${campaignId}` },
         (payload) => {
-          if (payload.eventType === 'INSERT') setLightSources((l) => [...l, payload.new])
+          if (payload.eventType === 'INSERT') setLightSources((l) => appendUniqueById(l, payload.new))
           else if (payload.eventType === 'UPDATE') setLightSources((l) => l.map((x) => (x.id === payload.new.id ? payload.new : x)))
           else if (payload.eventType === 'DELETE') setLightSources((l) => l.filter((x) => x.id !== payload.old.id))
         }
