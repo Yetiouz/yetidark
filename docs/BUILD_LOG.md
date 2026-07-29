@@ -90,3 +90,14 @@ history remains the detailed source of truth.
   deltas, reasons, and full rests.
 - Raised the database test suite to 104 passing checks.
 - Applied and verified migration 025 in production.
+
+## July 29, 2026 — Frontend lint gate prepared
+
+- Added React-aware ESLint checks for application code, hooks, tests, and
+  configuration files.
+- Added linting to the same verification command used locally and by GitHub
+  Actions.
+- Removed unused character-selection state, an unused tracker import, and an
+  unused character-builder setter identified by the first lint pass.
+- Kept React compiler migration rules out of the initial gate so existing
+  loading effects and map interactions can be modernized in focused changes.
