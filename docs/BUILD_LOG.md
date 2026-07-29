@@ -128,3 +128,6 @@ history remains the detailed source of truth.
 - Documented the deferred signed-in campaign refresh, shared-link, and
   player/GM authorization checks after the built-in email provider reached its
   project-wide send limit.
+- Split authenticated screens into route-level chunks, reducing the initial
+  production JavaScript bundle from about 577 kB to 375 kB and clearing the
+  previous large-chunk build warning.

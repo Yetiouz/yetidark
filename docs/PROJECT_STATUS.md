@@ -37,14 +37,18 @@ The current architecture remains appropriate:
 | Correct audited character rules | Complete for the audited set | Starting HP, roll provenance, gear slots, equipped gear, talent rolls, spell cycles, full rests, and atomic character creation are implemented. |
 | Campaign event ledger | Complete for the audited mutations | HP, XP, coin, full rests, gear, spells, clocks, light, dice, and character creation use authoritative commands and events. |
 | Authoritative app dice and identity | Complete for current app dice | App-generated dice and actor identity are derived by trusted database commands. |
-| URL routing and session restoration | In review | PR #18 adds URL-backed navigation, refresh restoration, route tests, and the Vercel SPA rewrite. Signed-in preview verification remains. |
+| URL routing and session restoration | Complete | PR #18 is merged with URL-backed navigation, refresh restoration, route tests, and the Vercel SPA rewrite. |
 
-## Routing preview handoff
+## Routing release handoff
 
-PR #18 (`codex/url-session-routing`) passed the dependency audit, 11 rules
+PR #18 passed the dependency audit, 11 rules
 tests, 5 routing tests, the production build, and direct preview checks for
 every application route. Direct route loads and browser back/forward navigation
 retain the requested URL.
+
+The stacked route-level code-splitting follow-up reduces the initial production
+JavaScript bundle from about 577 kB to 375 kB and removes the prior large-chunk
+build warning.
 
 The final signed-in preview check was deferred because Supabase's built-in
 email provider exhausted its project-wide send quota. The routing change was
@@ -57,8 +61,8 @@ production after deployment:
 2. Copy a campaign or character URL into a new tab and confirm the authorized
    destination opens. Confirm a player cannot remain on the GM route.
 
-The temporary Supabase preview redirects used during testing must be removed
-after PR #18 is merged.
+The temporary Supabase preview redirects used during testing were removed after
+PR #18 merged.
 
 ## Live production baseline
 
@@ -79,8 +83,8 @@ Production currently includes database migrations through **029**:
 
 ## Recommended next sequence
 
-1. Complete signed-in verification and merge URL routing.
-2. Merge the route-level code-splitting follow-up.
+1. Merge the route-level code-splitting follow-up.
+2. Replace the built-in authentication email sender with reliable delivery.
 3. Run a structured multiplayer playtest before beginning a larger AI-GM
    milestone.
 
