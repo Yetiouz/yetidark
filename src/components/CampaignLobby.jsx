@@ -14,6 +14,7 @@ import {
   Rocket,
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import { getCampaignEntryBlockReason } from '../app/campaignEntry.js'
 
 // Paraphrased labels for the Modes of Play chips -- same keys as
 // CampaignSettings.jsx's MODES_OF_PLAY, just the short label without the
@@ -180,21 +181,22 @@ export default function CampaignLobby({
   // off once the group is ready.
   const isHumanGm = campaign?.gm_type === 'human'
   const canStart = !isHumanGm || myRole === 'gm'
-  // Once a session is already live, rejoining shouldn't be blocked by a
-  // late joiner's missing character -- those readiness checks only gate
-  // the very first start.
-  const blockReason = !canStart
-    ? 'Only the GM can start the session.'
-    : campaign?.session_active
-      ? null
-      : !hasMinPlayers
-        ? `Waiting for ${minPlayers - members.length} more player${minPlayers - members.length === 1 ? '' : 's'}`
-        : missingCharacters.length > 0
-          ? `Waiting for ${missingCharacters.map((m) => m.displayName).join(', ')}`
-          : null
+  const blockReason = getCampaignEntryBlockReason({
+    sessionActive: campaign?.session_active,
+    hasCharacter: Boolean(me?.character),
+    canStart,
+    hasMinPlayers,
+    minPlayers,
+    memberCount: members.length,
+    missingCharacterNames: missingCharacters.map((m) => m.displayName),
+  })
 
   const startSession = async () => {
-    if (!canStart || starting) return
+    if (blockReason || starting) return
+    if (campaign?.session_active) {
+      onStartSession && onStartSession(myRole)
+      return
+    }
     setStarting(true)
     setStartError(null)
     const { error: startErr } = await supabase.rpc('set_campaign_session_active', {
@@ -247,7 +249,7 @@ export default function CampaignLobby({
           <div className="relative group">
             <button
               onClick={startSession}
-              disabled={!canStart || starting || !!blockReason}
+              disabled={starting || !!blockReason}
               className="text-sm bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-800 disabled:text-neutral-500 rounded-md px-4 py-1.5 flex items-center gap-1.5 text-white font-medium"
             >
               <Rocket size={14} />
