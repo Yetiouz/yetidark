@@ -4,10 +4,9 @@ import { supabase } from '../lib/supabaseClient.js'
 
 // NPCs / Factions / Treasure, ported from tracker.xlsx. "PC Roster" and
 // "Session Index" from that workbook aren't here -- they duplicate the
-// existing Character Sheet and Campaign Log > Timeline features. Secrets
-// (the sheet's "Secret/Motivation" and hidden faction "Goal" columns)
-// aren't stored per-entity either -- the private GM Notes box on the GM
-// Dashboard already covers that need generally.
+// existing Character Sheet and Campaign Log > Timeline features. Private
+// notes and faction goals live in separate GM-only tables so player reads
+// and realtime payloads never contain them (020_gm_tracker_secrets.sql).
 //
 // Same instant-write pattern as CampaignLog.jsx (threads/clocks/timeline):
 // every add/edit/delete writes straight through, no local draft state to
@@ -31,6 +30,9 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
   const [npcs, setNpcs] = useState([])
   const [factions, setFactions] = useState([])
   const [treasure, setTreasure] = useState([])
+  const [npcSecrets, setNpcSecrets] = useState({})
+  const [factionSecrets, setFactionSecrets] = useState({})
+  const [treasureSecrets, setTreasureSecrets] = useState({})
 
   const [showAdd, setShowAdd] = useState(false)
   const [npcDraft, setNpcDraft] = useState(emptyNpc)
@@ -56,11 +58,17 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
       supabase.from('campaign_npcs').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: true }),
       supabase.from('campaign_factions').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: true }),
       supabase.from('campaign_treasure').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: true }),
-    ]).then(([n, f, t]) => {
+      supabase.from('campaign_npc_secrets').select('npc_id, notes'),
+      supabase.from('campaign_faction_secrets').select('faction_id, goal, notes'),
+      supabase.from('campaign_treasure_secrets').select('treasure_id, notes'),
+    ]).then(([n, f, t, ns, fs, ts]) => {
       if (cancelled) return
       setNpcs(n.data || [])
       setFactions(f.data || [])
       setTreasure(t.data || [])
+      setNpcSecrets(Object.fromEntries((ns.data || []).map((row) => [row.npc_id, row])))
+      setFactionSecrets(Object.fromEntries((fs.data || []).map((row) => [row.faction_id, row])))
+      setTreasureSecrets(Object.fromEntries((ts.data || []).map((row) => [row.treasure_id, row])))
       setLoading(false)
     })
 
@@ -97,7 +105,17 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
   const addNpc = async () => {
     if (!npcDraft.name.trim() || !campaignId) return
     setSaving(true)
-    await supabase.from('campaign_npcs').insert({ campaign_id: campaignId, ...npcDraft, name: npcDraft.name.trim() })
+    const { notes, ...publicNpc } = npcDraft
+    const { data: npc, error } = await supabase
+      .from('campaign_npcs')
+      .insert({ campaign_id: campaignId, ...publicNpc, name: npcDraft.name.trim() })
+      .select('id')
+      .single()
+    if (!error && npc && notes.trim()) {
+      const { error: secretError } = await supabase.from('campaign_npc_secrets').insert({ npc_id: npc.id, notes: notes.trim() })
+      if (secretError) await supabase.from('campaign_npcs').delete().eq('id', npc.id)
+      else setNpcSecrets((current) => ({ ...current, [npc.id]: { npc_id: npc.id, notes: notes.trim() } }))
+    }
     setSaving(false)
     setNpcDraft(emptyNpc)
     setShowAdd(false)
@@ -106,7 +124,21 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
   const addFaction = async () => {
     if (!factionDraft.name.trim() || !campaignId) return
     setSaving(true)
-    await supabase.from('campaign_factions').insert({ campaign_id: campaignId, ...factionDraft, name: factionDraft.name.trim() })
+    const { goal, notes, ...publicFaction } = factionDraft
+    const { data: faction, error } = await supabase
+      .from('campaign_factions')
+      .insert({ campaign_id: campaignId, ...publicFaction, name: factionDraft.name.trim() })
+      .select('id')
+      .single()
+    if (!error && faction && (goal.trim() || notes.trim())) {
+      const { error: secretError } = await supabase.from('campaign_faction_secrets').insert({
+        faction_id: faction.id,
+        goal: goal.trim() || null,
+        notes: notes.trim() || null,
+      })
+      if (secretError) await supabase.from('campaign_factions').delete().eq('id', faction.id)
+      else setFactionSecrets((current) => ({ ...current, [faction.id]: { faction_id: faction.id, goal: goal.trim(), notes: notes.trim() } }))
+    }
     setSaving(false)
     setFactionDraft(emptyFaction)
     setShowAdd(false)
@@ -115,13 +147,19 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
   const addTreasure = async () => {
     if (!treasureDraft.item.trim() || !campaignId) return
     setSaving(true)
-    await supabase.from('campaign_treasure').insert({
+    const { notes, ...publicTreasure } = treasureDraft
+    const { data: item, error } = await supabase.from('campaign_treasure').insert({
       campaign_id: campaignId,
-      ...treasureDraft,
+      ...publicTreasure,
       item: treasureDraft.item.trim(),
       session_number: treasureDraft.session_number ? parseInt(treasureDraft.session_number, 10) : null,
       identified: treasureDraft.identified === '' ? null : treasureDraft.identified === 'yes',
-    })
+    }).select('id').single()
+    if (!error && item && notes.trim()) {
+      const { error: secretError } = await supabase.from('campaign_treasure_secrets').insert({ treasure_id: item.id, notes: notes.trim() })
+      if (secretError) await supabase.from('campaign_treasure').delete().eq('id', item.id)
+      else setTreasureSecrets((current) => ({ ...current, [item.id]: { treasure_id: item.id, notes: notes.trim() } }))
+    }
     setSaving(false)
     setTreasureDraft(emptyTreasure)
     setShowAdd(false)
@@ -255,7 +293,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                 {[n.role, n.location, n.alignment].filter(Boolean).join(' · ')}
               </p>
               {n.attitude && <p className="text-xs text-neutral-500 mt-0.5">Attitude: {n.attitude}</p>}
-              {n.notes && <p className="text-xs text-neutral-500 mt-1">{n.notes}</p>}
+              {isGm && npcSecrets[n.id]?.notes && <p className="text-xs text-neutral-500 mt-1">{npcSecrets[n.id].notes}</p>}
             </div>
           ))}
         </div>
@@ -283,9 +321,9 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
               <p className="text-xs text-neutral-400">
                 {[f.leader && `Led by ${f.leader}`, f.territory].filter(Boolean).join(' · ')}
               </p>
-              {f.goal && <p className="text-xs text-neutral-500 mt-0.5">Goal: {f.goal}</p>}
+              {isGm && factionSecrets[f.id]?.goal && <p className="text-xs text-neutral-500 mt-0.5">Goal: {factionSecrets[f.id].goal}</p>}
               {f.status_clock && <p className="text-xs text-neutral-500 mt-0.5">Status: {f.status_clock}</p>}
-              {f.notes && <p className="text-xs text-neutral-500 mt-1">{f.notes}</p>}
+              {isGm && factionSecrets[f.id]?.notes && <p className="text-xs text-neutral-500 mt-1">{factionSecrets[f.id].notes}</p>}
             </div>
           ))}
         </div>
@@ -315,7 +353,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
               <p className="text-xs text-neutral-400">
                 {[t.type, t.found_at && `Found at ${t.found_at}`, t.held_by && `Held by ${t.held_by}`].filter(Boolean).join(' · ')}
               </p>
-              {t.notes && <p className="text-xs text-neutral-500 mt-1">{t.notes}</p>}
+              {isGm && treasureSecrets[t.id]?.notes && <p className="text-xs text-neutral-500 mt-1">{treasureSecrets[t.id].notes}</p>}
             </div>
           ))}
         </div>

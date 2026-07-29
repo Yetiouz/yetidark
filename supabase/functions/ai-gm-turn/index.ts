@@ -241,8 +241,8 @@ Deno.serve(async (req) => {
 
   const [{ data: party }, { data: npcs }, { data: factions }, { data: log }] = await Promise.all([
     supabase.from('characters').select('name, ancestry, class, level, hp, max_hp, ac').eq('campaign_id', campaignId),
-    supabase.from('campaign_npcs').select('name, ancestry, role, location, attitude, status, notes').eq('campaign_id', campaignId),
-    supabase.from('campaign_factions').select('name, type, leader, territory, disposition, status_clock, notes').eq('campaign_id', campaignId),
+    supabase.from('campaign_npcs').select('id, name, ancestry, role, location, attitude, status').eq('campaign_id', campaignId),
+    supabase.from('campaign_factions').select('id, name, type, leader, territory, disposition, status_clock').eq('campaign_id', campaignId),
     supabase
       .from('scene_log')
       .select('id, type, sender_name, text, created_at')
@@ -253,6 +253,16 @@ Deno.serve(async (req) => {
   ])
 
   const transcript = (log || []).slice().reverse()
+  const [{ data: npcSecrets }, { data: factionSecrets }] = await Promise.all([
+    (npcs || []).length
+      ? writer.from('campaign_npc_secrets').select('npc_id, notes').in('npc_id', (npcs || []).map((npc) => npc.id))
+      : Promise.resolve({ data: [] }),
+    (factions || []).length
+      ? writer.from('campaign_faction_secrets').select('faction_id, goal, notes').in('faction_id', (factions || []).map((faction) => faction.id))
+      : Promise.resolve({ data: [] }),
+  ])
+  const npcSecretById = new Map((npcSecrets || []).map((secret) => [secret.npc_id, secret]))
+  const factionSecretById = new Map((factionSecrets || []).map((secret) => [secret.faction_id, secret]))
 
   const lastAiIndex = [...transcript].map((e) => e.type).lastIndexOf('ai_gm')
 
@@ -291,10 +301,16 @@ PARTY:
 ${(party || []).map((c) => `- ${c.name}, ${c.ancestry} ${c.class} (lvl ${c.level}), ${c.hp}/${c.max_hp} hp, ac ${c.ac}`).join('\n') || '(no characters yet)'}
 
 KNOWN NPCs:
-${(npcs || []).map((n) => `- ${n.name} (${n.ancestry || '?'}, ${n.role || '?'}, ${n.location || '?'}) -- ${n.status}, attitude: ${n.attitude || 'unknown'}${n.notes ? `. ${n.notes}` : ''}`).join('\n') || '(none logged yet)'}
+${(npcs || []).map((n) => {
+  const secret = npcSecretById.get(n.id)
+  return `- ${n.name} (${n.ancestry || '?'}, ${n.role || '?'}, ${n.location || '?'}) -- ${n.status}, attitude: ${n.attitude || 'unknown'}${secret?.notes ? `. GM notes: ${secret.notes}` : ''}`
+}).join('\n') || '(none logged yet)'}
 
 KNOWN FACTIONS:
-${(factions || []).map((f) => `- ${f.name} (${f.type || '?'}), led by ${f.leader || 'unknown'}, based at ${f.territory || 'unknown'} -- disposition: ${f.disposition || 'unknown'}${f.status_clock ? `, status: ${f.status_clock}` : ''}${f.notes ? `. ${f.notes}` : ''}`).join('\n') || '(none logged yet)'}
+${(factions || []).map((f) => {
+  const secret = factionSecretById.get(f.id)
+  return `- ${f.name} (${f.type || '?'}), led by ${f.leader || 'unknown'}, based at ${f.territory || 'unknown'} -- disposition: ${f.disposition || 'unknown'}${f.status_clock ? `, status: ${f.status_clock}` : ''}${secret?.goal ? `. Secret goal: ${secret.goal}` : ''}${secret?.notes ? `. GM notes: ${secret.notes}` : ''}`
+}).join('\n') || '(none logged yet)'}
 
 TRANSCRIPT:
 ${transcriptText}
