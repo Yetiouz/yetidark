@@ -90,3 +90,15 @@ history remains the detailed source of truth.
   deltas, reasons, and full rests.
 - Raised the database test suite to 104 passing checks.
 - Applied and verified migration 025 in production.
+
+## July 29, 2026 — Atomic character creation prepared
+
+- Replaced separate character, gear, talent, and feature writes with one
+  authoritative database transaction.
+- Derived character ownership from the authenticated user and required campaign
+  membership inside the command.
+- Added a `character.created` campaign event with starting-record counts.
+- Proved that invalid child records roll back the entire character and that
+  direct character inserts cannot bypass the command.
+- Rebuilt the local database through migration 029 and passed all 152 database
+  authorization tests.

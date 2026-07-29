@@ -737,65 +737,50 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
     setSaving(true)
     setError(null)
 
-    const { data: character, error: insertError } = await supabase
-      .from('characters')
-      .insert({
-        campaign_id: campaignId,
-        owner_user_id: session.user.id,
-        name: finalName,
-        ancestry,
-        class: charClass,
-        level: 1,
-        stats,
-        hp: computedHp,
-        max_hp: computedHp,
-        ac: computedAc,
-        alignment,
-        background: background.trim() || null,
-        xp: 0,
-        coin,
-        rules_version: SHADOWDARK_RULESET.version,
-        creation_rolls: {
-          ruleset: SHADOWDARK_RULESET,
-          stats: statRolls,
-          hp: {
-            source: hpRollSource,
-            die: `1d${selectedClass.hitDie}`,
-            advantage: Boolean(selectedAncestry?.hpRollAdvantage),
-            dice: hpRollDice,
-            roll: hpRoll,
-            constitution_modifier: conMod,
-            ancestry_bonus: hpBonus,
-            total: computedHp,
-          },
-          talents,
+    const characterData = {
+      name: finalName,
+      ancestry,
+      class: charClass,
+      stats,
+      hp: computedHp,
+      max_hp: computedHp,
+      ac: computedAc,
+      alignment,
+      background: background.trim() || null,
+      xp: 0,
+      coin,
+      rules_version: SHADOWDARK_RULESET.version,
+      creation_rolls: {
+        ruleset: SHADOWDARK_RULESET,
+        stats: statRolls,
+        hp: {
+          source: hpRollSource,
+          die: `1d${selectedClass.hitDie}`,
+          advantage: Boolean(selectedAncestry?.hpRollAdvantage),
+          dice: hpRollDice,
+          roll: hpRoll,
+          constitution_modifier: conMod,
+          ancestry_bonus: hpBonus,
+          total: computedHp,
         },
-      })
-      .select()
-      .single()
-
-    if (insertError) {
-      setSaving(false)
-      setError(insertError.message)
-      return
+        talents,
+      },
     }
 
     const weaponData = WEAPONS.find((w) => w.name === weaponChoice)
     const gearRows = [
       ...STARTING_KIT.map((item) => ({
-        character_id: character.id,
         name: item.name,
         slots: item.slots,
         quantity: item.quantity || 1,
         equipped: false,
       })),
       ...(weaponData
-        ? [{ character_id: character.id, name: weaponData.name, slots: weaponData.slots, quantity: 1, equipped: true }]
+        ? [{ name: weaponData.name, slots: weaponData.slots, quantity: 1, equipped: true }]
         : []),
       ...(selectedArmor
         ? [
             {
-              character_id: character.id,
               name: selectedArmor.name,
               slots: selectedArmor.slots,
               quantity: 1,
@@ -806,12 +791,11 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
           ]
         : []),
       ...(shieldChoice && selectedClass.shieldAllowed
-        ? [{ character_id: character.id, name: SHIELD.name, slots: SHIELD.slots, quantity: 1, equipped: true, is_shield: true }]
+        ? [{ name: SHIELD.name, slots: SHIELD.slots, quantity: 1, equipped: true, is_shield: true }]
         : []),
     ]
 
     const talentRows = talents.map((talent) => ({
-      character_id: character.id,
       source: 'class talent (2d6)',
       description: talent.description,
       roll_formula: talent.formula,
@@ -821,7 +805,6 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
 
     const featureRows = [
       {
-        character_id: character.id,
         source: 'ancestry',
         name: selectedAncestry.traitName,
         description: selectedAncestry.trait,
@@ -834,7 +817,6 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
         if (f.needsStatChoice) description = description.replace('Choose Strength or Dexterity.', `Chosen stat: ${gritStat}.`)
         if (f.needsDeityChoice && deity.trim()) description = `${description} Serves ${deity.trim()}.`
         return {
-          character_id: character.id,
           source: 'class',
           name: f.name,
           description,
@@ -844,15 +826,17 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
       }),
     ]
 
-    const [{ error: gearError }, { error: talentError }, { error: featureError }] = await Promise.all([
-      supabase.from('character_gear').insert(gearRows),
-      talentRows.length ? supabase.from('character_talents').insert(talentRows) : Promise.resolve({ error: null }),
-      supabase.from('character_features').insert(featureRows),
-    ])
+    const { data: character, error: insertError } = await supabase.rpc('create_character', {
+      p_campaign_id: campaignId,
+      p_character: characterData,
+      p_gear: gearRows,
+      p_talents: talentRows,
+      p_features: featureRows,
+    })
 
-    if (gearError || talentError || featureError) {
+    if (insertError) {
       setSaving(false)
-      setError((gearError || talentError || featureError).message)
+      setError(insertError.message)
       return
     }
 
