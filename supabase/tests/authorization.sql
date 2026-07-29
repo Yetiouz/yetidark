@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(79);
+select plan(84);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -86,21 +86,50 @@ insert into campaign_light_sources (
   '40000000-0000-0000-0000-000000000001',
   'Existing torch', 60, 60
 );
+insert into storage.objects (bucket_id, name, owner_id)
+values
+  (
+    'maps',
+    '10000000-0000-0000-0000-000000000001/private-map.png',
+    '00000000-0000-0000-0000-000000000001'
+  ),
+  (
+    'maps',
+    '10000000-0000-0000-0000-000000000002/public-campaign-map.png',
+    '00000000-0000-0000-0000-000000000001'
+  );
 
 select hasnt_column('public', 'campaign_npcs', 'notes', 'NPC secrets are absent from member-readable rows');
 select hasnt_column('public', 'campaign_factions', 'goal', 'faction goals are absent from member-readable rows');
 select hasnt_column('public', 'campaign_treasure', 'notes', 'treasure secrets are absent from member-readable rows');
+select is(
+  (select public from storage.buckets where id = 'maps'),
+  false,
+  'campaign maps are stored in a private bucket'
+);
 
 -- Anonymous users cannot browse the campaign directory.
 select ok(
   not has_table_privilege('anon', 'public.campaigns', 'select'),
   'anonymous cannot list public campaigns'
 );
+set local role anon;
+select throws_ok(
+  $$select count(*) from storage.objects where bucket_id = 'maps'$$,
+  '42501', null,
+  'anonymous users cannot read campaign map objects'
+);
+reset role;
 
 -- An outsider can browse public campaigns, but not private ones.
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000003","role":"authenticated"}';
 select is((select count(*)::integer from campaigns), 1, 'outsider sees only public campaigns');
+select is(
+  (select count(*)::integer from storage.objects where bucket_id = 'maps'),
+  0,
+  'outsider cannot read maps before joining a campaign'
+);
 select throws_ok(
   $$insert into campaign_members (campaign_id, user_id, role)
     values ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000003', 'gm')$$,
@@ -110,6 +139,11 @@ select lives_ok(
   $$insert into campaign_members (campaign_id, user_id, role)
     values ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000003', 'player')$$,
   'outsider can join a public campaign as player'
+);
+select is(
+  (select count(*)::integer from storage.objects where bucket_id = 'maps'),
+  1,
+  'new member can read the joined campaign map'
 );
 select throws_ok(
   $$insert into storage.objects (bucket_id, name, owner_id)
@@ -142,6 +176,11 @@ select is((select count(*)::integer from campaign_treasure), 1, 'player can read
 select is((select count(*)::integer from campaign_npc_secrets), 0, 'player cannot read NPC secrets');
 select is((select count(*)::integer from campaign_faction_secrets), 0, 'player cannot read faction secrets');
 select is((select count(*)::integer from campaign_treasure_secrets), 0, 'player cannot read treasure secrets');
+select is(
+  (select count(*)::integer from storage.objects where bucket_id = 'maps'),
+  1,
+  'player reads only maps for their campaigns'
+);
 select throws_ok(
   $$insert into campaign_npc_secrets (npc_id, notes)
     values ('30000000-0000-0000-0000-000000000001', 'Forged secret')$$,

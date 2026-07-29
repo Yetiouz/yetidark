@@ -3,6 +3,7 @@ import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, 
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { rollDiceNotation, flatDieNotation, DiceNotationError } from '../lib/dice.js'
+import { useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 
 const dice = [20, 12, 10, 8, 6, 4]
 const VOTE_POLL_KEY = 'where-next'
@@ -81,6 +82,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const [gmType, setGmType] = useState(null) // 'human' | 'ai'
   const [aiTurnPending, setAiTurnPending] = useState(false)
   const [aiTurnError, setAiTurnError] = useState(null)
+  const { url: mapUrl, error: mapAccessError } = useCampaignMapUrl(mapInfo)
 
   useEffect(() => {
     gmTypeRef.current = gmType
@@ -130,7 +132,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
 
     supabase
       .from('campaigns')
-      .select('map_url, map_cols, map_rows, party_row, party_col, gm_type')
+      .select('map_path, map_url, map_cols, map_rows, party_row, party_col, gm_type')
       .eq('id', campaignId)
       .maybeSingle()
       .then(({ data }) => {
@@ -633,8 +635,9 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
           <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3 mb-3">
             <div className="bg-neutral-900 rounded-lg p-4">
               <p className="text-xs text-neutral-400 mb-2">Map</p>
+              {mapAccessError && <p className="text-xs text-red-400 mb-2">{mapAccessError}</p>}
               <MapGrid
-                mapUrl={mapInfo?.map_url}
+                mapUrl={mapUrl}
                 cols={mapInfo?.map_cols || 10}
                 rows={mapInfo?.map_rows || 6}
                 cellState={cellState}
