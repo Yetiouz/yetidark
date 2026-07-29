@@ -6,6 +6,12 @@ for authentication, Postgres, storage, realtime updates, and Edge Functions.
 
 Production: https://yetidark.vercel.app/
 
+## Project handoff
+
+- [Current milestone status](docs/PROJECT_STATUS.md)
+- [Chronological build log](docs/BUILD_LOG.md)
+- [Detailed session context](CLAUDE_CONTEXT.md)
+
 ## Local development
 
 Requirements:

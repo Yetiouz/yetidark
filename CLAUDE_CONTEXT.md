@@ -1,4 +1,9 @@
-Delve — project context for a new Claude/Cowork session
+# Delve — project context
+
+> This document began as the original cross-session handoff. For the current
+> milestone checklist and chronological history, start with
+> [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) and
+> [`docs/BUILD_LOG.md`](docs/BUILD_LOG.md).
 
 Purpose of this file: paste this (or point Claude at its GitHub URL) at the start of a fresh Cowork/Claude conversation on any computer, so it can pick up this project without the previous chat history.
 
@@ -8,14 +13,15 @@ A multiplayer web app for running Shadowdark RPG campaigns, with either a human 
 
 ## Where everything lives
 
-- Code: GitHub repo `Yetiouz/yetidark`, branch `main`. All changes are committed directly to `main` (no PR workflow in use).
+- Code: GitHub repo `Yetiouz/yetidark`, branch `main`. Meaningful changes now use preview branches and pull requests.
 - Live app: https://yetidark.vercel.app — Vercel auto-deploys on every push to `main` (usually live within ~1 minute; hard-refresh if a change doesn't appear immediately).
-- Backend: Supabase (Postgres + Auth + Storage + Realtime). Schema and RLS policies are kept in `supabase/schema.sql` in the repo and mirrored on the live Supabase project — that file should always match the live DB.
-- Stack: React 18 + Vite + Tailwind CSS (utility classes only, no compiler access), `lucide-react` icons. No test suite; changes are verified by reading the diff and (for JS) a Python bracket-balance check before pushing, since there's no local build step available.
+- Backend: Supabase (Postgres + Auth + Storage + Realtime). The numbered files in `supabase/migrations/` are the reproducible source of truth for database changes.
+- Stack: React 18 + Vite + Tailwind CSS and `lucide-react`. The repository has a pinned pnpm install, rules tests, database authorization tests, a production build command, and GitHub Actions verification.
 
-## Current status (as of this file's last update)
+## Current status
 
-Phases 1–4 are complete: real Supabase auth, campaign lobby (create/join by code), character creation/picker, a full profile page, and the live game table are all wired to real data — nothing in the app reads from mock data anymore.
+The original phases 1–4 are complete. The active effort is the M0.5
+stabilization milestone described in `docs/PROJECT_STATUS.md`.
 
 Game table features, all real-time and backed by Supabase:
 - Map: GM uploads one image; a flat-top hex grid overlays it; fog is fully opaque until the GM reveals a cell (players cannot unfog — GM-only both in the UI and in RLS policy). The grid auto-sizes to the image's real aspect ratio so nothing crops.
@@ -42,8 +48,11 @@ Game table features, all real-time and backed by Supabase:
 
 ## Open items / not yet done
 
-- Phase 5 (playtest with real friends) and Phase 6 (AI GM) haven't been started — everything so far has been a human-GM app.
-- Nothing else is known-broken as of this writing; the last few sessions were bug fixes reported live by the user (invisible dice/chat feedback, map cropping, fog opacity, hex vs square grid, GM-only unfog, missing GM-side scene log) and all were fixed and pushed.
+- Finish the campaign event ledger across gear, spells, clocks, and light.
+- Move app-generated dice behind a trusted server command.
+- Add URL routing and restore campaign/character context after refresh.
+- Run a structured multiplayer playtest.
+- Begin the larger AI-GM milestone only after stabilization and playtesting.
 
 ## How to pick this back up on a new device
 
