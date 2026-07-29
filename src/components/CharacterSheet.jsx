@@ -36,6 +36,9 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   const [spellCheckDrafts, setSpellCheckDrafts] = useState({})
   const [resting, setResting] = useState(false)
   const [restError, setRestError] = useState(null)
+  const [changeReason, setChangeReason] = useState('')
+  const [resourceChanging, setResourceChanging] = useState(false)
+  const [resourceError, setResourceError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState(null)
@@ -127,37 +130,24 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     }
   }, [characterId, user])
 
-  const adjustHp = async (delta) => {
-    if (!character) return
+  const adjustResource = async (resource, delta) => {
+    const reason = changeReason.trim()
+    if (!character || !reason || resourceChanging) return
+    setResourceChanging(true)
+    setResourceError(null)
     const { data, error } = await supabase.rpc('adjust_character_resource', {
       p_character_id: characterId,
-      p_resource: 'hp',
+      p_resource: resource,
       p_delta: delta,
-      p_reason: null,
+      p_reason: reason,
     })
-    if (!error) setCharacter((c) => ({ ...c, hp: Number(data.after) }))
-  }
-
-  const adjustXp = async (delta) => {
-    if (!character) return
-    const { data, error } = await supabase.rpc('adjust_character_resource', {
-      p_character_id: characterId,
-      p_resource: 'xp',
-      p_delta: delta,
-      p_reason: null,
-    })
-    if (!error) setCharacter((c) => ({ ...c, xp: Number(data.after) }))
-  }
-
-  const adjustCoin = async (delta) => {
-    if (!character) return
-    const { data, error } = await supabase.rpc('adjust_character_resource', {
-      p_character_id: characterId,
-      p_resource: 'coin',
-      p_delta: delta,
-      p_reason: null,
-    })
-    if (!error) setCharacter((c) => ({ ...c, coin: Number(data.after) }))
+    setResourceChanging(false)
+    if (error) {
+      setResourceError(error.message)
+      return
+    }
+    setCharacter((current) => ({ ...current, [resource]: Number(data.after) }))
+    setChangeReason('')
   }
 
   const toggleEquipped = async (item) => {
@@ -411,9 +401,9 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         <div className="bg-neutral-900 rounded-lg p-3">
           <p className="text-[11px] text-neutral-400 mb-1.5">HP</p>
           <div className="flex items-center justify-between">
-            {canEdit && <button onClick={() => adjustHp(-1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">-</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('hp', -1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">-</button>}
             <span className="text-sm text-white">{character.hp} / {character.max_hp}</span>
-            {canEdit && <button onClick={() => adjustHp(1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">+</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('hp', 1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">+</button>}
           </div>
           <p className="text-[11px] text-neutral-500 mt-1.5">ac {character.ac}</p>
         </div>
@@ -421,21 +411,39 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         <div className="bg-neutral-900 rounded-lg p-3">
           <p className="text-[11px] text-neutral-400 mb-1.5">XP</p>
           <div className="flex items-center justify-between">
-            {canEdit && <button onClick={() => adjustXp(-1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">-</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('xp', -1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">-</button>}
             <span className="text-sm text-white">{character.xp}</span>
-            {canEdit && <button onClick={() => adjustXp(1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">+</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('xp', 1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">+</button>}
           </div>
         </div>
 
         <div className="bg-neutral-900 rounded-lg p-3">
           <p className="text-[11px] text-neutral-400 mb-1.5">Coin</p>
           <div className="flex items-center justify-between">
-            {canEdit && <button onClick={() => adjustCoin(-1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">-</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('coin', -1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">-</button>}
             <span className="text-sm text-white">{character.coin} gp</span>
-            {canEdit && <button onClick={() => adjustCoin(1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">+</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('coin', 1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">+</button>}
           </div>
         </div>
       </div>
+      {canEdit && (
+        <div className="mb-4">
+          <label className="text-[11px] text-neutral-400 block mb-1.5">
+            Reason for next HP, XP, or coin change
+          </label>
+          <input
+            value={changeReason}
+            onChange={(event) => setChangeReason(event.target.value)}
+            maxLength={500}
+            placeholder="Damage, healing, reward, purchase…"
+            className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-white"
+          />
+          <p className="text-[11px] text-neutral-500 mt-1">
+            Required so the campaign history explains the change.
+          </p>
+          {resourceError && <p className="text-[11px] text-red-400 mt-1">{resourceError}</p>}
+        </div>
+      )}
 
       <div className="bg-neutral-900 rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between mb-2.5">
