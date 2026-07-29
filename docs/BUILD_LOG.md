@@ -90,3 +90,15 @@ history remains the detailed source of truth.
   deltas, reasons, and full rests.
 - Raised the database test suite to 104 passing checks.
 - Applied and verified migration 025 in production.
+
+## July 29, 2026 — URL routing prepared for release
+
+- Added URL-backed navigation for the lobby, profile, campaign creation,
+  campaign screens, character creation, and character sheets.
+- Added session restoration from campaign and character URLs.
+- Added route parsing and formatting tests plus the Vercel SPA rewrite needed
+  for direct links and refreshes.
+- Verified all public and nested preview routes, direct route loads, and browser
+  back/forward navigation.
+- Left signed-in campaign refresh, shared-link, and player/GM authorization
+  checks for final preview verification before merging PR #18.

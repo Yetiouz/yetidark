@@ -37,7 +37,25 @@ The current architecture remains appropriate:
 | Correct audited character rules | Complete for the audited set | Starting HP, roll provenance, gear slots, equipped gear, talent rolls, spell cycles, and full rests are implemented. |
 | Campaign event ledger | In progress | The ledger records HP, XP, coin, and full rests in production. Gear, spell, clock, and light commands remain. |
 | Authoritative app dice and identity | Not complete | Identity protections exist, but app-generated dice still originate in the browser. |
-| URL routing and session restoration | Not started | Navigation still relies on React state and is lost on refresh or shared links. |
+| URL routing and session restoration | In review | PR #18 adds URL-backed navigation, refresh restoration, route tests, and the Vercel SPA rewrite. Signed-in preview verification remains. |
+
+## Routing preview handoff
+
+PR #18 (`codex/url-session-routing`) passed the dependency audit, 11 rules
+tests, 5 routing tests, the production build, and direct preview checks for
+every application route. Direct route loads and browser back/forward navigation
+retain the requested URL.
+
+Complete these signed-in checks before merging:
+
+1. Open an existing campaign, refresh a campaign screen, and confirm the
+   campaign and screen are restored.
+2. Copy a campaign or character URL into a new tab and confirm the authorized
+   destination opens. Confirm a player cannot remain on the GM route.
+
+Supabase temporarily allows the exact PR preview origin
+`https://yetidark-2ox82i8mh-yeti5.vercel.app` for magic-link testing. Remove
+that redirect after PR #18 is merged or the preview is retired.
 
 ## Live production baseline
 
@@ -59,7 +77,7 @@ Production currently includes database migrations through **025**:
 1. Extend authoritative ledger commands to gear and spell mutations.
 2. Extend commands to campaign clocks and light sources.
 3. Move browser-generated dice behind a trusted server command.
-4. Add URL routing and restore campaign/character context after refresh.
+4. Complete signed-in preview verification and merge URL routing.
 5. Run a structured multiplayer playtest before beginning a larger AI-GM
    milestone.
 
