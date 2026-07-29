@@ -1,33 +1,52 @@
-# Delve — GM app prototype
+# Delve
 
-A click-through prototype of the screens we've designed: sign-in, campaign
-lobby, character picker, live game table (dice, hex fog-of-war map, group
-voting), and GM dashboard. Everything runs on mock data in `src/mockData.js`
-— no real accounts, no server, no database yet.
+Delve is a multiplayer web app for running Shadowdark RPG campaigns with a
+human or AI game master. It uses React and Vite for the frontend and Supabase
+for authentication, Postgres, storage, realtime updates, and Edge Functions.
 
-Live at: https://yetidark.vercel.app/
+Production: https://yetidark.vercel.app/
 
-## Try it on your own machine (optional)
+## Local development
 
+Requirements:
+
+- Node.js 22
+- pnpm 11.9.0
+- Docker, when running the local Supabase stack
+
+Create your local browser configuration:
+
+```sh
+cp .env.example .env.local
 ```
-npm install
-npm run dev
+
+Fill in the public Supabase project URL and anon key, then install and start the
+app:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-Opens at `http://localhost:5173`.
+## Verification
 
-## Deploying
+Run the same dependency audit and production build used by continuous
+integration:
 
-Already connected to Vercel — every push to `main` redeploys automatically.
+```sh
+pnpm verify
+```
 
-## What's next
+To rebuild and test the database locally:
 
-This prototype has no real accounts or shared state yet. Next steps:
+```sh
+pnpm exec supabase db reset
+pnpm exec supabase test db
+pnpm exec supabase db lint --level error
+```
 
-- **Supabase** for real email magic-link auth, a Postgres database, and
-  realtime sync so everyone in a session sees updates live (HP changes,
-  dice rolls, hex reveals) without refreshing.
-- Swapping `src/mockData.js` for real Supabase queries.
-- A real Shadowdark character builder (roll stats, pick ancestry/class)
-  behind the "Start rolling" button in the character picker.
-- An AI GM mode.
+## Delivery
+
+Pull requests and pushes to `main` run the verification workflow. Vercel builds
+the frontend from `main`; `vercel.json` applies the production browser security
+headers.
