@@ -143,3 +143,19 @@ history remains the detailed source of truth.
   in a new tab.
 - Added the structured two-account multiplayer playtest that closes
   stabilization and gates the Milestone 1 gameplay loop.
+
+## July 29, 2026 — Stabilization milestone completed
+
+- Completed the structured production playtest with separate GM and player
+  accounts.
+- Verified role-aware routing, realtime chat, authoritative dice, reasoned
+  character changes, shared clocks, scene synchronization, and durable resume.
+- Fixed player entry into already-live human-GM sessions.
+- Required reasons for HP, XP, and coin changes and verified the resulting
+  event record in production through a read-only query.
+- Prevented command responses and realtime inserts from rendering duplicate
+  clocks or light sources.
+- Confirmed the reported duplicate clock was one database row and required no
+  production-data cleanup.
+- Closed M0.5 and carried shared-state discoverability into Milestone 1 UI
+  planning.

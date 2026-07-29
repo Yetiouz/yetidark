@@ -24,6 +24,10 @@ The current architecture remains appropriate:
 
 ## Stabilization milestone status
 
+**M0.5 is complete.** The two-account production playtest passed on July 29,
+2026 after resolving the player-entry, resource-reason, and realtime
+duplicate-display defects found during the test.
+
 | M0.5 item | Status | Notes |
 |---|---|---|
 | Reconcile live Supabase schema | Complete | Migration chain now represents the live application schema. |
@@ -59,8 +63,8 @@ The signed-in production routing checks now confirm:
 - GM campaign settings survive a direct refresh
 - a copied character URL opens correctly in a new signed-in tab
 
-The remaining two-account check is to confirm that a player cannot remain on a
-GM-only route. It is included in `MULTIPLAYER_PLAYTEST.md`.
+The two-account production check confirmed that a player cannot remain on a
+GM-only route and is redirected to the player table.
 
 The temporary Supabase preview redirects used during testing were removed after
 PR #18 merged.
@@ -84,10 +88,12 @@ Production currently includes database migrations through **029**:
 
 ## Recommended next sequence
 
-1. Run `MULTIPLAYER_PLAYTEST.md` with one GM and one player.
-2. Record defects and resolve any release-blocking multiplayer or authorization
-   failures.
-3. Begin the Milestone 1 vertical gameplay loop only after the playtest passes.
+1. Define the player-table information hierarchy for scene, objective, clocks,
+   light, and recent authoritative events.
+2. Turn the proven manual flow into the first Milestone 1 vertical gameplay
+   slice.
+3. Add critical-flow automation around that slice before expanding the AI-GM
+   workflow.
 
 ## Milestone 1 UI observation
 
