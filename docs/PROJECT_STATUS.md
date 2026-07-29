@@ -46,6 +46,10 @@ tests, 5 routing tests, the production build, and direct preview checks for
 every application route. Direct route loads and browser back/forward navigation
 retain the requested URL.
 
+The stacked route-level code-splitting follow-up reduces the initial production
+JavaScript bundle from about 577 kB to 375 kB and removes the prior large-chunk
+build warning.
+
 Complete these signed-in checks before merging:
 
 1. Open an existing campaign, refresh a campaign screen, and confirm the

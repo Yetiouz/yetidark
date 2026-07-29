@@ -1,20 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './lib/supabaseClient.js'
 import { parseAppPath, pathForView, routeNeedsCampaign } from './app/routes.js'
 import SignIn from './components/SignIn.jsx'
-import Lobby from './components/Lobby.jsx'
-import CampaignBuilder from './components/CampaignBuilder.jsx'
-import CampaignLobby from './components/CampaignLobby.jsx'
-import CharacterPicker from './components/CharacterPicker.jsx'
-import CharacterBuilder from './components/CharacterBuilder.jsx'
-import CharacterSheet from './components/CharacterSheet.jsx'
-import CampaignSettings from './components/CampaignSettings.jsx'
-import CampaignLog from './components/CampaignLog.jsx'
-import RulesLibrary from './components/RulesLibrary.jsx'
-import CampaignTracker from './components/CampaignTracker.jsx'
-import GameTable from './components/GameTable.jsx'
-import GmDashboard from './components/GmDashboard.jsx'
-import Profile from './components/Profile.jsx'
+
+const Lobby = lazy(() => import('./components/Lobby.jsx'))
+const CampaignBuilder = lazy(() => import('./components/CampaignBuilder.jsx'))
+const CampaignLobby = lazy(() => import('./components/CampaignLobby.jsx'))
+const CharacterPicker = lazy(() => import('./components/CharacterPicker.jsx'))
+const CharacterBuilder = lazy(() => import('./components/CharacterBuilder.jsx'))
+const CharacterSheet = lazy(() => import('./components/CharacterSheet.jsx'))
+const CampaignSettings = lazy(() => import('./components/CampaignSettings.jsx'))
+const CampaignLog = lazy(() => import('./components/CampaignLog.jsx'))
+const RulesLibrary = lazy(() => import('./components/RulesLibrary.jsx'))
+const CampaignTracker = lazy(() => import('./components/CampaignTracker.jsx'))
+const GameTable = lazy(() => import('./components/GameTable.jsx'))
+const GmDashboard = lazy(() => import('./components/GmDashboard.jsx'))
+const Profile = lazy(() => import('./components/Profile.jsx'))
 
 const initialRoute = parseAppPath(window.location.pathname)
 
@@ -238,127 +239,129 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950">
-      {view === 'lobby' && (
-        <Lobby
-          session={session}
-          onEnterCampaign={enterCampaign}
-          onCreateCampaign={() => navigateTo('campaign-builder')}
-          onSignOut={signOut}
-          onOpenProfile={() => navigateTo('profile')}
-        />
-      )}
-      {view === 'campaign-builder' && (
-        <CampaignBuilder
-          session={session}
-          onComplete={enterCampaign}
-          onCancel={() => navigateTo('lobby')}
-        />
-      )}
-      {view === 'campaign-lobby' && (
-        <CampaignLobby
-          campaignId={activeCampaign?.id}
-          session={session}
-          onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'campaign-lobby')}
-          onCreateCharacter={() => navigateTo('builder')}
-          onChooseCharacter={() => navigateTo('characters')}
-          onStartSession={startSession}
-          onOpenSettings={() => openCampaignSettings('campaign-lobby')}
-        />
-      )}
-      {view === 'profile' && (
-        <Profile session={session} onSignOut={signOut} onBack={() => navigateBack('lobby')} />
-      )}
-      {view === 'characters' && (
-        <CharacterPicker
-          campaignId={activeCampaign?.id}
-          session={session}
-          campaignName={campaignName}
-          onChooseCharacter={chooseCharacter}
-        />
-      )}
-      {view === 'builder' && (
-        <CharacterBuilder
-          campaignId={activeCampaign?.id}
-          session={session}
-          campaignName={campaignName}
-          onComplete={finishBuilding}
-        />
-      )}
-      {view === 'table' && (
-        <GameTable
-          campaignId={activeCampaign?.id}
-          session={session}
-          campaignName={campaignName}
-          onOpenGmView={() => navigateTo('gm')}
-          onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'table')}
-          onOpenSettings={() => openCampaignSettings('table')}
-          onOpenLog={() => openCampaignLog('table')}
-          onOpenLibrary={() => openRulesLibrary('table')}
-          onOpenTracker={() => openTracker('table')}
-        />
-      )}
-      {view === 'gm' && (
-        <GmDashboard
-          campaignId={activeCampaign?.id}
-          session={session}
-          campaignName={campaignName}
-          onSwitchToPlayerView={() => navigateTo('table')}
-          onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'gm')}
-          onOpenSettings={() => openCampaignSettings('gm')}
-          onOpenLog={() => openCampaignLog('gm')}
-          onOpenLibrary={() => openRulesLibrary('gm')}
-          onOpenTracker={() => openTracker('gm')}
-        />
-      )}
-      {view === 'sheet' && (
-        <CharacterSheet
-          characterId={viewingCharacterId}
-          session={session}
-          onBack={() => navigateBack(sheetReturnView)}
-        />
-      )}
-      {view === 'settings' && (
-        <CampaignSettings
-          campaignId={activeCampaign?.id}
-          session={session}
-          campaignName={campaignName}
-          onBack={() => navigateBack(settingsReturnView)}
-        />
-      )}
-      {view === 'log' && (
-        <CampaignLog
-          campaignId={activeCampaign?.id}
-          session={session}
-          campaignName={campaignName}
-          onBack={() => navigateBack(logReturnView)}
-        />
-      )}
-      {view === 'library' && (
-        <RulesLibrary
-          campaignId={activeCampaign?.id}
-          session={session}
-          campaignName={campaignName}
-          onBack={() => navigateBack(libraryReturnView)}
-        />
-      )}
-      {view === 'tracker' && (
-        <CampaignTracker
-          campaignId={activeCampaign?.id}
-          session={session}
-          campaignName={campaignName}
-          onBack={() => navigateBack(trackerReturnView)}
-        />
-      )}
-      {view !== 'lobby' && view !== 'campaign-builder' && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2">
-          <button
-            onClick={() => navigateTo('lobby')}
-            className="text-xs bg-neutral-900 border border-neutral-700 rounded-full px-3 py-1.5 text-neutral-300 hover:bg-neutral-800"
-          >
-            Back to lobby
-          </button>
-        </div>
-      )}
+      <Suspense fallback={<div className="min-h-screen bg-neutral-950" aria-label="Loading screen" />}>
+        {view === 'lobby' && (
+          <Lobby
+            session={session}
+            onEnterCampaign={enterCampaign}
+            onCreateCampaign={() => navigateTo('campaign-builder')}
+            onSignOut={signOut}
+            onOpenProfile={() => navigateTo('profile')}
+          />
+        )}
+        {view === 'campaign-builder' && (
+          <CampaignBuilder
+            session={session}
+            onComplete={enterCampaign}
+            onCancel={() => navigateTo('lobby')}
+          />
+        )}
+        {view === 'campaign-lobby' && (
+          <CampaignLobby
+            campaignId={activeCampaign?.id}
+            session={session}
+            onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'campaign-lobby')}
+            onCreateCharacter={() => navigateTo('builder')}
+            onChooseCharacter={() => navigateTo('characters')}
+            onStartSession={startSession}
+            onOpenSettings={() => openCampaignSettings('campaign-lobby')}
+          />
+        )}
+        {view === 'profile' && (
+          <Profile session={session} onSignOut={signOut} onBack={() => navigateBack('lobby')} />
+        )}
+        {view === 'characters' && (
+          <CharacterPicker
+            campaignId={activeCampaign?.id}
+            session={session}
+            campaignName={campaignName}
+            onChooseCharacter={chooseCharacter}
+          />
+        )}
+        {view === 'builder' && (
+          <CharacterBuilder
+            campaignId={activeCampaign?.id}
+            session={session}
+            campaignName={campaignName}
+            onComplete={finishBuilding}
+          />
+        )}
+        {view === 'table' && (
+          <GameTable
+            campaignId={activeCampaign?.id}
+            session={session}
+            campaignName={campaignName}
+            onOpenGmView={() => navigateTo('gm')}
+            onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'table')}
+            onOpenSettings={() => openCampaignSettings('table')}
+            onOpenLog={() => openCampaignLog('table')}
+            onOpenLibrary={() => openRulesLibrary('table')}
+            onOpenTracker={() => openTracker('table')}
+          />
+        )}
+        {view === 'gm' && (
+          <GmDashboard
+            campaignId={activeCampaign?.id}
+            session={session}
+            campaignName={campaignName}
+            onSwitchToPlayerView={() => navigateTo('table')}
+            onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'gm')}
+            onOpenSettings={() => openCampaignSettings('gm')}
+            onOpenLog={() => openCampaignLog('gm')}
+            onOpenLibrary={() => openRulesLibrary('gm')}
+            onOpenTracker={() => openTracker('gm')}
+          />
+        )}
+        {view === 'sheet' && (
+          <CharacterSheet
+            characterId={viewingCharacterId}
+            session={session}
+            onBack={() => navigateBack(sheetReturnView)}
+          />
+        )}
+        {view === 'settings' && (
+          <CampaignSettings
+            campaignId={activeCampaign?.id}
+            session={session}
+            campaignName={campaignName}
+            onBack={() => navigateBack(settingsReturnView)}
+          />
+        )}
+        {view === 'log' && (
+          <CampaignLog
+            campaignId={activeCampaign?.id}
+            session={session}
+            campaignName={campaignName}
+            onBack={() => navigateBack(logReturnView)}
+          />
+        )}
+        {view === 'library' && (
+          <RulesLibrary
+            campaignId={activeCampaign?.id}
+            session={session}
+            campaignName={campaignName}
+            onBack={() => navigateBack(libraryReturnView)}
+          />
+        )}
+        {view === 'tracker' && (
+          <CampaignTracker
+            campaignId={activeCampaign?.id}
+            session={session}
+            campaignName={campaignName}
+            onBack={() => navigateBack(trackerReturnView)}
+          />
+        )}
+        {view !== 'lobby' && view !== 'campaign-builder' && (
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2">
+            <button
+              onClick={() => navigateTo('lobby')}
+              className="text-xs bg-neutral-900 border border-neutral-700 rounded-full px-3 py-1.5 text-neutral-300 hover:bg-neutral-800"
+            >
+              Back to lobby
+            </button>
+          </div>
+        )}
+      </Suspense>
     </div>
   )
 }

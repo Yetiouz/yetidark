@@ -102,3 +102,6 @@ history remains the detailed source of truth.
   back/forward navigation.
 - Left signed-in campaign refresh, shared-link, and player/GM authorization
   checks for final preview verification before merging PR #18.
+- Split authenticated screens into route-level chunks, reducing the initial
+  production JavaScript bundle from about 577 kB to 375 kB and clearing the
+  previous large-chunk build warning.
