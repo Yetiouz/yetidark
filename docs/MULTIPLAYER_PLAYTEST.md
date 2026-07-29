@@ -25,8 +25,8 @@ crossing role boundaries.
 - [ ] Player signs in with GitHub and joins through the intended invite flow.
 - [ ] Both users refresh the campaign URL and return to the same campaign.
 - [ ] Each user opens their character URL in a new tab.
-- [ ] Player attempts the campaign's `/settings` URL and is redirected to an
-      allowed screen.
+- [ ] Player can open the campaign's settings view but cannot edit or save
+      GM-controlled settings.
 - [ ] Player cannot see the join password, GM notes, secret tracker fields, or
       unpublished map information.
 - [ ] GM can still open campaign settings and GM-only information.
