@@ -8,13 +8,11 @@
 // roster, and posts the response back into the same scene log everyone
 // already reads (as a new 'ai_gm' entry -- see 011_ai_gm.sql).
 //
-// Runs entirely under the calling user's own JWT (passed through from the
-// client's Authorization header), so every read/write here goes through
-// the exact same RLS policies as the rest of the app -- no service-role
-// key needed. The only secret this function needs is GEMINI_API_KEY,
-// added as a Supabase Edge Function secret (never handled by the app or
-// sent through chat). Get one free, no card required, at
-// aistudio.google.com -> "Get API key".
+// Reads run under the caller's JWT and RLS. After membership and AI-campaign
+// checks pass, only AI-authored dice/log writes use Supabase's built-in
+// service-role secret so public clients cannot forge those entries. The
+// project-specific secret this function needs is GEMINI_API_KEY, added as an
+// Edge Function secret (never handled by the app or sent through chat).
 //
 // Ported from the file-based GM system's Core GM Commitment #1: "real
 // dice, always -- every GM-side check, attack, damage roll, and random-
