@@ -39,27 +39,28 @@ The current architecture remains appropriate:
 | Authoritative app dice and identity | Complete for current app dice | App-generated dice and actor identity are derived by trusted database commands. |
 | URL routing and session restoration | Complete | PR #18 is merged with URL-backed navigation, refresh restoration, route tests, and the Vercel SPA rewrite. |
 
-## Routing release handoff
+## Authentication and routing release handoff
 
-PR #18 passed the dependency audit, 11 rules
-tests, 5 routing tests, the production build, and direct preview checks for
-every application route. Direct route loads and browser back/forward navigation
-retain the requested URL.
+PR #18 passed the dependency audit, 11 rules tests, 5 routing tests, the
+production build, and direct preview checks for every application route. Direct
+route loads and browser back/forward navigation retain the requested URL.
 
 The stacked route-level code-splitting follow-up reduces the initial production
 JavaScript bundle from about 577 kB to 375 kB and removes the prior large-chunk
 build warning.
 
-The final signed-in preview check was deferred because Supabase's built-in
-email provider exhausted its project-wide send quota. The routing change was
-accepted based on the automated suite, direct preview route loads, browser
-history verification, and green GitHub/Vercel checks. Re-run these checks on
-production after deployment:
+GitHub OAuth is now the primary sign-in path, with email magic links retained as
+a fallback. This avoids blocking access when Supabase's built-in email sender
+reaches its project-wide quota.
 
-1. Open an existing campaign, refresh a campaign screen, and confirm the
-   campaign and screen are restored.
-2. Copy a campaign or character URL into a new tab and confirm the authorized
-   destination opens. Confirm a player cannot remain on the GM route.
+The signed-in production routing checks now confirm:
+
+- an existing campaign survives a direct refresh
+- GM campaign settings survive a direct refresh
+- a copied character URL opens correctly in a new signed-in tab
+
+The remaining two-account check is to confirm that a player cannot remain on a
+GM-only route. It is included in `MULTIPLAYER_PLAYTEST.md`.
 
 The temporary Supabase preview redirects used during testing were removed after
 PR #18 merged.
@@ -83,10 +84,10 @@ Production currently includes database migrations through **029**:
 
 ## Recommended next sequence
 
-1. Merge the route-level code-splitting follow-up.
-2. Replace the built-in authentication email sender with reliable delivery.
-3. Run a structured multiplayer playtest before beginning a larger AI-GM
-   milestone.
+1. Run `MULTIPLAYER_PLAYTEST.md` with one GM and one player.
+2. Record defects and resolve any release-blocking multiplayer or authorization
+   failures.
+3. Begin the Milestone 1 vertical gameplay loop only after the playtest passes.
 
 ## Working rules
 

@@ -131,3 +131,15 @@ history remains the detailed source of truth.
 - Split authenticated screens into route-level chunks, reducing the initial
   production JavaScript bundle from about 577 kB to 375 kB and clearing the
   previous large-chunk build warning.
+
+## July 29, 2026 — Reliable sign-in and playtest handoff
+
+- Added GitHub OAuth as the primary sign-in path while retaining email magic
+  links as a fallback.
+- Confirmed GitHub sign-in through Supabase on production.
+- Completed signed-in production refresh checks for campaign and GM settings
+  routes.
+- Confirmed a copied character URL restores the correct signed-in destination
+  in a new tab.
+- Added the structured two-account multiplayer playtest that closes
+  stabilization and gates the Milestone 1 gameplay loop.
