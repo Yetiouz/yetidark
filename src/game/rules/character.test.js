@@ -9,6 +9,8 @@ import {
   isValidAbilityScore,
   isValidHitDieRoll,
   occupiedGearSlots,
+  resolveSpellCheck,
+  resolveTalentRolls,
   startingHp,
 } from './character.js'
 
@@ -69,5 +71,41 @@ test('equipped items do not consume gear slots under the active house rule', () 
       { slots: 1, quantity: 3, equipped: false },
     ]),
     5
+  )
+})
+
+test('talent totals resolve deterministically against their table', () => {
+  const table = [
+    { min: 2, max: 6, text: 'First result' },
+    { min: 7, max: 12, text: 'Second result' },
+  ]
+  assert.deepEqual(resolveTalentRolls({ rolls: [5, 9], table }), [
+    { formula: '2d6', roll: 5, description: 'First result' },
+    { formula: '2d6', roll: 9, description: 'Second result' },
+  ])
+})
+
+test('a failed spell check locks only after that spell succeeded in the current rest cycle', () => {
+  assert.deepEqual(
+    resolveSpellCheck({ naturalRoll: 5, total: 9, tier: 1, succeededSinceRest: false }),
+    { dc: 11, succeeded: false, mishap: false, locked: false, succeededSinceRest: false }
+  )
+  assert.deepEqual(
+    resolveSpellCheck({ naturalRoll: 5, total: 9, tier: 1, succeededSinceRest: true }),
+    { dc: 11, succeeded: false, mishap: false, locked: true, succeededSinceRest: true }
+  )
+})
+
+test('a successful spell check starts the spell rest cycle', () => {
+  assert.deepEqual(
+    resolveSpellCheck({ naturalRoll: 12, total: 13, tier: 2, succeededSinceRest: false }),
+    { dc: 12, succeeded: true, mishap: false, locked: false, succeededSinceRest: true }
+  )
+})
+
+test('a natural one triggers a mishap even before the first success without locking the spell', () => {
+  assert.deepEqual(
+    resolveSpellCheck({ naturalRoll: 1, total: 6, tier: 1, succeededSinceRest: false }),
+    { dc: 11, succeeded: false, mishap: true, locked: false, succeededSinceRest: false }
   )
 })

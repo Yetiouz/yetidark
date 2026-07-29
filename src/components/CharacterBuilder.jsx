@@ -7,6 +7,7 @@ import {
   gearSlotCapacity,
   isValidAbilityScore,
   isValidHitDieRoll,
+  resolveTalentRolls,
   startingHp,
 } from '../game/rules/character.js'
 
@@ -519,11 +520,8 @@ const modifier = abilityModifier
 
 function rollClassTalents(charClass, count) {
   const table = CLASSES.find((c) => c.name === charClass).talentTable
-  return Array.from({ length: count }, () => {
-    const roll = roll2d6()
-    const entry = table.find((e) => roll >= e.min && roll <= e.max)
-    return `(2d6: ${roll}) ${entry.text}`
-  })
+  const rolls = Array.from({ length: count }, () => roll2d6())
+  return resolveTalentRolls({ rolls, table })
 }
 
 // 2d6 x 5 gp starting purse (Starting Gear, pg. 33). Not run through the
@@ -581,7 +579,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
   const [name, setName] = useState('')
   const [alignment, setAlignment] = useState('Neutral')
   const [background, setBackground] = useState('')
-  const [talents, setTalents] = useState([])
+  const [talentRollsByChoice, setTalentRollsByChoice] = useState({})
   const [coin, setCoin] = useState(() => rollStartingGold())
   const [weaponChoice, setWeaponChoice] = useState('Longsword')
   const [armorChoice, setArmorChoice] = useState('Chainmail')
@@ -599,13 +597,18 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
   const selectedClass = CLASSES.find((c) => c.name === charClass)
   const classWeapons = selectedClass.weaponsAllowed === 'ALL' ? WEAPONS.map((w) => w.name) : selectedClass.weaponsAllowed
   const classArmors = selectedClass.armorAllowed
+  const talentChoiceKey = `${ancestry}:${charClass}`
+  const talents = talentRollsByChoice[talentChoiceKey] || []
 
-  // Re-roll talents whenever ancestry or class changes -- ancestry can
-  // grant an extra roll (Human's Ambitious), and each class has its own
-  // 2d6 talent table.
+  // Roll each ancestry/class combination once. Switching choices and then
+  // returning restores the original result instead of quietly rerolling it.
   useEffect(() => {
     const count = 1 + (selectedAncestry?.talentBonus || 0)
-    setTalents(rollClassTalents(charClass, count))
+    setTalentRollsByChoice((allRolls) => {
+      const key = `${ancestry}:${charClass}`
+      if (allRolls[key]) return allRolls
+      return { ...allRolls, [key]: rollClassTalents(charClass, count) }
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ancestry, charClass])
 
@@ -630,11 +633,6 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
       if (portraitPreview) URL.revokeObjectURL(portraitPreview)
     }
   }, [portraitPreview])
-
-  const rerollTalents = () => {
-    const count = 1 + (selectedAncestry?.talentBonus || 0)
-    setTalents(rollClassTalents(charClass, count))
-  }
 
   const rollAll = () => {
     const next = {}
@@ -770,6 +768,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
             ancestry_bonus: hpBonus,
             total: computedHp,
           },
+          talents,
         },
       })
       .select()
@@ -811,10 +810,13 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
         : []),
     ]
 
-    const talentRows = talents.map((description) => ({
+    const talentRows = talents.map((talent) => ({
       character_id: character.id,
       source: 'class talent (2d6)',
-      description,
+      description: talent.description,
+      roll_formula: talent.formula,
+      roll_total: talent.roll,
+      rules_version: SHADOWDARK_RULESET.version,
     }))
 
     const featureRows = [
@@ -1237,17 +1239,12 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
 
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-neutral-400">Talents ({charClass} table, 2d6)</p>
-                  <button
-                    onClick={rerollTalents}
-                    className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
-                  >
-                    <Dices size={13} /> Reroll
-                  </button>
+                  <span className="text-[10px] text-neutral-600">Rolled once · result stands</span>
                 </div>
                 <ul>
                   {talents.map((t, i) => (
                     <li key={i} className="text-[11px] text-neutral-300 bg-neutral-950 rounded-md px-2.5 py-1.5 mb-1">
-                      {t}
+                      ({t.formula}: {t.roll}) {t.description}
                     </li>
                   ))}
                 </ul>
@@ -1329,7 +1326,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                 <ul className="mb-3">
                   {talents.map((t, i) => (
                     <li key={i} className="text-[11px] text-neutral-300 bg-neutral-950 rounded-md px-2.5 py-1.5 mb-1">
-                      {t}
+                      ({t.formula}: {t.roll}) {t.description}
                     </li>
                   ))}
                 </ul>
