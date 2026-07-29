@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2 } from 'lucide-react'
 import MapGrid from './MapGrid.jsx'
 import { supabase } from '../lib/supabaseClient.js'
-import { rollDiceNotation, flatDieNotation, DiceNotationError } from '../lib/dice.js'
+import { flatDieNotation } from '../lib/dice.js'
 import { useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 
 const dice = [20, 12, 10, 8, 6, 4]
@@ -31,9 +31,9 @@ function hpBarColor(hp, maxHp) {
 // per the honor-system design), the map, turn order, the "where to next?"
 // vote, and the party's HP/AC cards.
 //
-// Dice rolling goes through src/lib/dice.js, a client-side port of the
-// file-based GM system's dice.py -- real notation (1d8+3), advantage/
-// disadvantage on a lone d20 check, and automatic crit/fumble flagging.
+// App dice rolling goes through the authoritative roll_campaign_dice
+// database command -- real notation (1d8+3), advantage/disadvantage on a
+// lone d20 check, and automatic crit/fumble flagging.
 // Every roll (app-rolled or self-reported) is persisted to the `dice_rolls`
 // audit table, not just summarized in the scene log.
 //
@@ -55,6 +55,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   const [rollState, setRollState] = useState(null) // { label, value, isRolling, isCrit, isFumble } -- drives the animated die
   const [rollNonce, setRollNonce] = useState(0) // bumped every roll so the CSS animation replays even on repeat values
   const rollTimerRef = useRef(null)
+  const rollRequestPendingRef = useRef(false)
   const sceneLogRef = useRef(null)
   const chatLogRef = useRef(null)
   const autoTurnTimerRef = useRef(null) // pending debounce timer for the auto-respond trigger
@@ -288,7 +289,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
   // human-readable summary to the scene log linked back to it -- so the
   // log stays readable but the full breakdown/reason/crit flag is never
   // lost, matching dice.py's terminal-output-plus-permanent-log behavior.
-  const logDiceRoll = async (result) => {
+  const logManualDiceRoll = async (result) => {
     if (!campaignId) return null
     const { data, error } = await supabase
       .from('dice_rolls')
@@ -308,14 +309,13 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
       .select()
       .single()
     if (error) return null
-    await postToLog({ type: 'roll', text: rollSummaryText(result), roll_source: 'app', dice_roll_id: data.id })
+    await postToLog({ type: 'roll', text: rollSummaryText(result), roll_source: 'self', dice_roll_id: data.id })
     return data
   }
 
-  // Spins the number in the die box a handful of times before landing on
-  // the real result, then logs it -- purely cosmetic, the actual roll
-  // (`result`, computed up front via rollDiceNotation) never changes.
-  const animateAndLog = (result) => {
+  // Spins the number in the die box after the server has generated and
+  // permanently recorded the real result. The animation is cosmetic.
+  const animateRoll = (result) => {
     if (rollState?.isRolling) return
     if (rollTimerRef.current) clearInterval(rollTimerRef.current)
     setRollNonce((n) => n + 1)
@@ -334,31 +334,53 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
           isCrit: result.isCrit,
           isFumble: result.isFumble,
         })
-        logDiceRoll(result)
       } else {
         setRollState({ label: result.notation, value: flicker(), isRolling: true })
       }
     }, 60)
   }
 
-  const rollQuickDie = (sides) => {
+  const requestAppRoll = async (notation, mode = 'flat', reason = null) => {
+    if (rollRequestPendingRef.current || rollState?.isRolling) return
+    rollRequestPendingRef.current = true
     setRollError(null)
-    try {
-      const result = rollDiceNotation(flatDieNotation(sides), { mode: 'flat' })
-      animateAndLog(result)
-    } catch (e) {
-      setRollError(e instanceof DiceNotationError ? e.message : 'Could not roll that.')
+    const { data, error } = await supabase.rpc('roll_campaign_dice', {
+      p_campaign_id: campaignId,
+      p_notation: notation,
+      p_mode: mode,
+      p_reason: reason,
+      p_roller_name: null,
+    })
+    rollRequestPendingRef.current = false
+    if (error) {
+      setRollError(error.message || 'Could not roll that.')
+      return
     }
+    const row = data.roll
+    const result = {
+      notation: row.notation,
+      mode: row.mode,
+      reason: row.reason,
+      total: row.total,
+      breakdown: row.breakdown,
+      rawD20: row.raw_d20,
+      isCrit: row.is_crit,
+      isFumble: row.is_fumble,
+    }
+    if (data.scene_entry) {
+      setLog((all) => all.some((entry) => entry.id === data.scene_entry.id)
+        ? all
+        : [...all, data.scene_entry])
+    }
+    animateRoll(result)
+  }
+
+  const rollQuickDie = (sides) => {
+    requestAppRoll(flatDieNotation(sides))
   }
 
   const rollCustom = () => {
-    setRollError(null)
-    try {
-      const result = rollDiceNotation(notationInput, { mode: rollMode, reason: reasonInput.trim() || null })
-      animateAndLog(result)
-    } catch (e) {
-      setRollError(e instanceof DiceNotationError ? e.message : 'Could not roll that.')
-    }
+    requestAppRoll(notationInput, rollMode, reasonInput.trim() || null)
   }
 
   const logManualRoll = async () => {
@@ -366,15 +388,15 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
     const notation = `1d${manualDie}`
     setRollNonce((n) => n + 1)
     setRollState({ label: notation, value: manualValue, isRolling: false })
-    await logDiceRoll({
+    await logManualDiceRoll({
       notation,
       mode: 'self',
       reason: null,
       total: parseInt(manualValue, 10) || 0,
       breakdown: 'self-reported',
-      rawD20: null,
-      isCrit: false,
-      isFumble: false,
+      rawD20: manualDie === 20 ? (parseInt(manualValue, 10) || 0) : null,
+      isCrit: manualDie === 20 && parseInt(manualValue, 10) === 20,
+      isFumble: manualDie === 20 && parseInt(manualValue, 10) === 1,
     })
     setManualValue('')
   }
