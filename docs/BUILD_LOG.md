@@ -125,5 +125,6 @@ history remains the detailed source of truth.
   for direct links and refreshes.
 - Verified all public and nested preview routes, direct route loads, and browser
   back/forward navigation.
-- Left signed-in campaign refresh, shared-link, and player/GM authorization
-  checks for final preview verification before merging PR #18.
+- Documented the deferred signed-in campaign refresh, shared-link, and
+  player/GM authorization checks after the built-in email provider reached its
+  project-wide send limit.

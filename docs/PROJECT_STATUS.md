@@ -46,16 +46,19 @@ tests, 5 routing tests, the production build, and direct preview checks for
 every application route. Direct route loads and browser back/forward navigation
 retain the requested URL.
 
-Complete these signed-in checks before merging:
+The final signed-in preview check was deferred because Supabase's built-in
+email provider exhausted its project-wide send quota. The routing change was
+accepted based on the automated suite, direct preview route loads, browser
+history verification, and green GitHub/Vercel checks. Re-run these checks on
+production after deployment:
 
 1. Open an existing campaign, refresh a campaign screen, and confirm the
    campaign and screen are restored.
 2. Copy a campaign or character URL into a new tab and confirm the authorized
    destination opens. Confirm a player cannot remain on the GM route.
 
-Supabase temporarily allows the exact PR preview origin
-`https://yetidark-2ox82i8mh-yeti5.vercel.app` for magic-link testing. Remove
-that redirect after PR #18 is merged or the preview is retired.
+The temporary Supabase preview redirects used during testing must be removed
+after PR #18 is merged.
 
 ## Live production baseline
 
