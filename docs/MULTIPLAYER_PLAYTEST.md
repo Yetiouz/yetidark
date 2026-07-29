@@ -1,8 +1,8 @@
 # Delve multiplayer playtest
 
-Use this checklist to close stabilization and establish the baseline for
-Milestone 1. Run it with two different accounts in separate browser sessions:
-one campaign GM and one player.
+This checklist closed stabilization and established the baseline for Milestone
+1. It was completed on July 29, 2026 with two different accounts in separate
+browser sessions: one campaign GM and one player.
 
 ## Goal
 
@@ -61,7 +61,44 @@ crossing role boundaries.
       activity remain intact.
 - [ ] Confirm GM and player return to role-appropriate screens.
 
-## Results
+## Results — passed
+
+- Separate GM and player accounts entered the same production campaign through
+  GitHub sign-in.
+- Campaign, character, player-table, and GM routes restored from durable URLs.
+- A player attempting the GM route was redirected to the player table.
+- Realtime chat appeared once with the correct player identity.
+- An app-generated roll appeared once with the same result and identity on both
+  screens.
+- A reasoned HP change synchronized, survived refresh, and produced an
+  authoritative event with the correct before value, after value, and reason.
+- A clock was stored once and was readable by the player through Campaign Log.
+- A GM map/party-state change appeared on the player table without refresh.
+- Campaign, character, clock, map, chat, and roll state survived leaving and
+  reopening the session.
+
+The existing database authorization suite remains the proof for GM-secret,
+cross-campaign, storage, and direct-write boundaries that are not safely tested
+by attempting hostile production writes.
+
+## Defects found and resolved
+
+- Players could not enter an already-live human-GM session because re-entry was
+  incorrectly gated by the GM-only first-start rule. Fixed in PR #25.
+- HP, XP, and coin changes did not collect the reason already supported by the
+  event ledger. Fixed in PR #26.
+- Clock and light command responses could be rendered a second time when their
+  realtime inserts arrived. The database contained only one row. Fixed in PR
+  #27.
+
+## UI follow-up
+
+Shared clocks and other campaign state are available through Campaign Log, but
+the icon-only entry point is too difficult to discover during play. Milestone 1
+will decide which clocks, light state, objectives, and recent authoritative
+events belong directly on the player table.
+
+## Future playtests
 
 Record each failure with:
 
@@ -72,6 +109,5 @@ Record each failure with:
 - whether a refresh changes the result
 - screenshot or console error when useful
 
-The stabilization milestone passes when every access-control check passes and
-the shared scene, roll, state change, event history, and resume flow complete
-without a release-blocking defect.
+The stabilization milestone passed after the release-blocking defects above
+were fixed and verified.
