@@ -22,7 +22,6 @@ export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
   const [view, setView] = useState('lobby') // 'lobby' | 'campaign-builder' | 'campaign-lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log' | 'library' | 'tracker'
   const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
-  const [activeCharacter, setActiveCharacter] = useState(null) // real character row from Supabase
   const [viewingCharacterId, setViewingCharacterId] = useState(null) // which character's full sheet is open
   const [sheetReturnView, setSheetReturnView] = useState('table') // where "Back" on the sheet should go
   const [settingsReturnView, setSettingsReturnView] = useState('table') // where "Back" on campaign settings should go
@@ -49,20 +48,15 @@ export default function App() {
     setView('campaign-lobby')
   }
 
-  const chooseCharacter = async ({ mode, characterId } = {}) => {
+  const chooseCharacter = ({ mode } = {}) => {
     if (mode === 'create') {
       setView('builder')
       return
     }
-    if (characterId) {
-      const { data } = await supabase.from('characters').select('*').eq('id', characterId).maybeSingle()
-      setActiveCharacter(data || null)
-    }
     setView('campaign-lobby')
   }
 
-  const finishBuilding = (character) => {
-    setActiveCharacter(character)
+  const finishBuilding = () => {
     setView('campaign-lobby')
   }
 
