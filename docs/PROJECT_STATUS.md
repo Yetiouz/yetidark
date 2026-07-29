@@ -1,7 +1,7 @@
 # Delve project status
 
-**Updated:** July 29, 2026  
-**Production:** https://yetidark.vercel.app  
+**Updated:** July 29, 2026
+**Production:** https://yetidark.vercel.app
 **Repository:** `Yetiouz/yetidark`
 
 This is the short operational handoff for Delve. `BUILD_LOG.md` contains the
