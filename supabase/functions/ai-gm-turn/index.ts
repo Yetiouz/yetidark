@@ -99,10 +99,10 @@ CONTENT: No pre-set hard lines -- mature themes, cursing, dark content are fair 
 
 FORMAT: Write your response as the GM's narration for this turn -- what happens as a result of what the party just did, in-scene, addressed to the table. Keep it tight: a few tight paragraphs, not a wall of text, unless a dramatic beat genuinely earns more room. If nothing has happened yet (this is the very first turn), open the scene with a strong hook and 2-3 plausible directions rather than waiting to be prompted.`
 
-function corsResponse(body: unknown, status = 200) {
+function corsResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extraHeaders },
   })
 }
 
@@ -204,6 +204,41 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
+  const { data: claim, error: claimError } = await supabase.rpc('claim_ai_gm_turn', {
+    p_campaign_id: campaignId,
+  })
+  if (claimError) return corsResponse({ error: claimError.message }, 400)
+
+  if (claim?.status === 'skipped') {
+    return corsResponse({ success: true, skipped: true })
+  }
+  if (claim?.status === 'busy') {
+    return corsResponse(
+      { success: true, skipped: true, busy: true },
+      202,
+      { 'Retry-After': String(claim.retry_after_seconds || 1) }
+    )
+  }
+  if (claim?.status === 'rate_limited') {
+    const retryAfter = claim.retry_after_seconds || 60
+    return corsResponse(
+      { error: `The AI GM is receiving too many turn requests. Try again in ${retryAfter} seconds.` },
+      429,
+      { 'Retry-After': String(retryAfter) }
+    )
+  }
+  if (claim?.status !== 'claimed' || !claim.claim_token) {
+    return corsResponse({ error: 'Could not reserve the AI GM turn.' }, 500)
+  }
+
+  const claimToken = claim.claim_token as string
+  const releaseClaim = async () => {
+    await writer.rpc('release_ai_gm_turn', {
+      p_campaign_id: campaignId,
+      p_claim_token: claimToken,
+    })
+  }
+
   const [{ data: party }, { data: npcs }, { data: factions }, { data: log }] = await Promise.all([
     supabase.from('characters').select('name, ancestry, class, level, hp, max_hp, ac').eq('campaign_id', campaignId),
     supabase.from('campaign_npcs').select('name, ancestry, role, location, attitude, status, notes').eq('campaign_id', campaignId),
@@ -212,21 +247,12 @@ Deno.serve(async (req) => {
       .from('scene_log')
       .select('id, type, sender_name, text, created_at')
       .eq('campaign_id', campaignId)
+      .lte('created_at', claim.claimed_at)
       .order('created_at', { ascending: false })
       .limit(TRANSCRIPT_LIMIT),
   ])
 
   const transcript = (log || []).slice().reverse()
-
-  // Idempotency guard: the client auto-triggers a turn after a debounce
-  // window of silence, and every connected client independently starts
-  // its own timer -- so near-simultaneous auto-triggers (or a stray
-  // double-click on Continue) are expected, not a bug. If the AI has
-  // already answered everything currently in the transcript, no-op
-  // instead of spending a second Gemini call and posting a duplicate turn.
-  if (transcript.length && transcript[transcript.length - 1].type === 'ai_gm') {
-    return corsResponse({ success: true, skipped: true })
-  }
 
   const lastAiIndex = [...transcript].map((e) => e.type).lastIndexOf('ai_gm')
 
@@ -423,20 +449,25 @@ ${transcriptText}
       contents.push({ role: 'function', parts: functionResponseParts })
     }
   } catch (e) {
+    await releaseClaim()
     return corsResponse({ error: e instanceof Error ? e.message : 'AI GM call failed.' }, 500)
   }
 
   if (!finalText) {
+    await releaseClaim()
     return corsResponse({ error: 'The GM used too many tool calls without wrapping up. Try Continue again.' }, 500)
   }
 
-  const { error: insertError } = await writer.from('scene_log').insert({
-    campaign_id: campaignId,
-    type: 'ai_gm',
-    sender_name: `${campaign.name} — AI GM`,
-    text: finalText,
+  const { data: completed, error: completeError } = await writer.rpc('complete_ai_gm_turn', {
+    p_campaign_id: campaignId,
+    p_claim_token: claimToken,
+    p_sender_name: `${campaign.name} — AI GM`,
+    p_text: finalText,
   })
-  if (insertError) return corsResponse({ error: insertError.message }, 500)
+  if (completeError || !completed) {
+    await releaseClaim()
+    return corsResponse({ error: completeError?.message || 'The AI GM turn lease expired before completion.' }, 500)
+  }
 
   return corsResponse({ success: true })
 })
