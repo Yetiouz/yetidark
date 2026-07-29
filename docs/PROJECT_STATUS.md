@@ -29,7 +29,7 @@ The current architecture remains appropriate:
 | Reconcile live Supabase schema | Complete | Migration chain now represents the live application schema. |
 | Rebuild a clean database | Complete | Local rebuild applies migrations 001–025 successfully. |
 | Lockfile and environment example | Complete | pnpm lockfile, pinned package manager, and `.env.example` are checked in. |
-| Build verification and CI | Substantially complete | Dependency audit, rules tests, production build, and GitHub Actions are present. Dedicated formatting, linting, and type-checking remain optional follow-up work. |
+| Build verification and CI | Complete for the current JavaScript app | Dependency audit, linting, rules tests, production build, and GitHub Actions run through one verification command. Formatting and static typing remain optional follow-up work. |
 | RLS and storage tests | Substantially complete | The 104-test database suite is on `main`. Continue adding tests with each command or policy. |
 | Protect discovery data and maps | Complete | Public discovery uses safe data boundaries; maps are private and served with authorized signed URLs. |
 | Separate GM secrets | Complete for current trackers | NPC, faction, and treasure secrets are stored separately with GM-only access. |

@@ -580,7 +580,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
   const [alignment, setAlignment] = useState('Neutral')
   const [background, setBackground] = useState('')
   const [talentRollsByChoice, setTalentRollsByChoice] = useState({})
-  const [coin, setCoin] = useState(() => rollStartingGold())
+  const [coin] = useState(() => rollStartingGold())
   const [weaponChoice, setWeaponChoice] = useState('Longsword')
   const [armorChoice, setArmorChoice] = useState('Chainmail')
   const [shieldChoice, setShieldChoice] = useState(true)
