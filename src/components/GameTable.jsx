@@ -637,7 +637,7 @@ export default function GameTable({ campaignId, session, campaignName = 'The sun
               <Settings size={14} />
             </button>
           )}
-          {gmType !== 'ai' && onOpenGmView && (
+          {isGm && gmType !== 'ai' && onOpenGmView && (
             <button onClick={onOpenGmView} className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-300 hover:bg-neutral-800">
               GM view
             </button>

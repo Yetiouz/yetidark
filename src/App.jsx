@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './lib/supabaseClient.js'
+import { parseAppPath, pathForView, routeNeedsCampaign } from './app/routes.js'
 import SignIn from './components/SignIn.jsx'
 import Lobby from './components/Lobby.jsx'
 import CampaignBuilder from './components/CampaignBuilder.jsx'
@@ -15,20 +16,84 @@ import GameTable from './components/GameTable.jsx'
 import GmDashboard from './components/GmDashboard.jsx'
 import Profile from './components/Profile.jsx'
 
-// Everything is real Supabase now: auth, lobby, characters, profile, the
-// map, scene log, dice, turn order, votes, and the GM's encounter/notes
-// trackers. mockData.js is no longer used anywhere.
+const initialRoute = parseAppPath(window.location.pathname)
+
+// Everything is real Supabase data. Navigation is also reflected in the URL,
+// so campaign and character context survives refreshes and browser history.
 export default function App() {
-  const [session, setSession] = useState(undefined) // undefined = loading, null = signed out
-  const [view, setView] = useState('lobby') // 'lobby' | 'campaign-builder' | 'campaign-lobby' | 'characters' | 'builder' | 'table' | 'gm' | 'profile' | 'sheet' | 'settings' | 'log' | 'library' | 'tracker'
-  const [activeCampaign, setActiveCampaign] = useState(null) // real campaign row from Supabase
-  const [activeCharacter, setActiveCharacter] = useState(null) // real character row from Supabase
-  const [viewingCharacterId, setViewingCharacterId] = useState(null) // which character's full sheet is open
-  const [sheetReturnView, setSheetReturnView] = useState('table') // where "Back" on the sheet should go
-  const [settingsReturnView, setSettingsReturnView] = useState('table') // where "Back" on campaign settings should go
-  const [logReturnView, setLogReturnView] = useState('table') // where "Back" on the campaign log should go
-  const [libraryReturnView, setLibraryReturnView] = useState('table') // where "Back" on the rules library should go
-  const [trackerReturnView, setTrackerReturnView] = useState('table') // where "Back" on the NPC/faction/treasure tracker should go
+  const [session, setSession] = useState(undefined)
+  const [view, setView] = useState(initialRoute.view)
+  const [routeCampaignId, setRouteCampaignId] = useState(initialRoute.campaignId)
+  const [activeCampaign, setActiveCampaign] = useState(null)
+  const [activeCharacter, setActiveCharacter] = useState(null)
+  const [viewingCharacterId, setViewingCharacterId] = useState(initialRoute.characterId)
+  const [routeLoading, setRouteLoading] = useState(routeNeedsCampaign(initialRoute.view))
+  const [sheetReturnView, setSheetReturnView] = useState('campaign-lobby')
+  const [settingsReturnView, setSettingsReturnView] = useState('campaign-lobby')
+  const [logReturnView, setLogReturnView] = useState('table')
+  const [libraryReturnView, setLibraryReturnView] = useState('table')
+  const [trackerReturnView, setTrackerReturnView] = useState('table')
+  const historyIndexRef = useRef(0)
+
+  const applyRoute = useCallback((route) => {
+    setView(route.view)
+    setRouteCampaignId(route.campaignId)
+    setViewingCharacterId(route.characterId)
+    setRouteLoading(routeNeedsCampaign(route.view))
+    if (!route.campaignId) {
+      setActiveCampaign(null)
+      setActiveCharacter(null)
+    }
+  }, [])
+
+  const navigateTo = useCallback((nextView, {
+    campaignId,
+    characterId,
+    replace = false,
+  } = {}) => {
+    const nextCampaignId = campaignId ?? activeCampaign?.id ?? routeCampaignId
+    const nextCharacterId = characterId ?? (nextView === 'sheet' ? viewingCharacterId : null)
+    const route = {
+      view: nextView,
+      campaignId: routeNeedsCampaign(nextView) ? nextCampaignId : null,
+      characterId: nextView === 'sheet' ? nextCharacterId : null,
+    }
+    const path = pathForView(nextView, route)
+    const currentIndex = historyIndexRef.current
+    if (replace) {
+      window.history.replaceState({ delveIndex: currentIndex }, '', path)
+    } else {
+      historyIndexRef.current = currentIndex + 1
+      window.history.pushState({ delveIndex: historyIndexRef.current }, '', path)
+    }
+    applyRoute(route)
+  }, [activeCampaign?.id, routeCampaignId, viewingCharacterId, applyRoute])
+
+  const navigateBack = useCallback((fallbackView) => {
+    if (historyIndexRef.current > 0) {
+      window.history.back()
+    } else {
+      navigateTo(fallbackView, { replace: true })
+    }
+  }, [navigateTo])
+
+  useEffect(() => {
+    const storedIndex = Number(window.history.state?.delveIndex)
+    historyIndexRef.current = Number.isInteger(storedIndex) ? storedIndex : 0
+    window.history.replaceState(
+      { ...(window.history.state || {}), delveIndex: historyIndexRef.current },
+      '',
+      pathForView(initialRoute.view, initialRoute)
+    )
+
+    const onPopState = (event) => {
+      const index = Number(event.state?.delveIndex)
+      historyIndexRef.current = Number.isInteger(index) ? index : 0
+      applyRoute(parseAppPath(window.location.pathname))
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [applyRoute])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -38,80 +103,128 @@ export default function App() {
     return () => listener.subscription.unsubscribe()
   }, [])
 
+  // Restore the campaign and character rows named by a deep link. Every read
+  // goes through RLS; an inaccessible or stale URL safely returns to the lobby.
+  useEffect(() => {
+    if (session === undefined) return
+    if (!session || !routeNeedsCampaign(view)) {
+      setRouteLoading(false)
+      return
+    }
+    if (!routeCampaignId) {
+      navigateTo('lobby', { replace: true })
+      setRouteLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setRouteLoading(true)
+    const hydrate = async () => {
+      const { data: campaign } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', routeCampaignId)
+        .maybeSingle()
+      if (cancelled) return
+      if (!campaign) {
+        setRouteLoading(false)
+        navigateTo('lobby', { replace: true })
+        return
+      }
+      setActiveCampaign(campaign)
+
+      if (view === 'gm') {
+        const { data: membership } = await supabase
+          .from('campaign_members')
+          .select('role')
+          .eq('campaign_id', routeCampaignId)
+          .eq('user_id', session.user.id)
+          .maybeSingle()
+        if (cancelled) return
+        if (membership?.role !== 'gm') {
+          setRouteLoading(false)
+          navigateTo('table', { campaignId: routeCampaignId, replace: true })
+          return
+        }
+      }
+
+      if (view === 'sheet') {
+        const { data: character } = await supabase
+          .from('characters')
+          .select('*')
+          .eq('id', viewingCharacterId)
+          .eq('campaign_id', routeCampaignId)
+          .maybeSingle()
+        if (cancelled) return
+        if (!character) {
+          setRouteLoading(false)
+          navigateTo('campaign-lobby', { campaignId: routeCampaignId, replace: true })
+          return
+        }
+        setActiveCharacter(character)
+      }
+      setRouteLoading(false)
+    }
+    hydrate()
+    return () => { cancelled = true }
+  }, [session, view, routeCampaignId, viewingCharacterId, navigateTo])
+
   const signOut = () => supabase.auth.signOut()
 
-  // Jumping in from the dashboard (Lobby.jsx's campaign list) now lands on
-  // the per-campaign staging screen -- coordinate players and characters,
-  // then explicitly start the session -- rather than dropping straight
-  // into character selection like before.
   const enterCampaign = (campaign) => {
     setActiveCampaign(campaign)
-    setView('campaign-lobby')
+    navigateTo('campaign-lobby', { campaignId: campaign.id })
   }
 
   const chooseCharacter = async ({ mode, characterId } = {}) => {
     if (mode === 'create') {
-      setView('builder')
+      navigateTo('builder')
       return
     }
     if (characterId) {
       const { data } = await supabase.from('characters').select('*').eq('id', characterId).maybeSingle()
       setActiveCharacter(data || null)
     }
-    setView('campaign-lobby')
+    navigateTo('campaign-lobby')
   }
 
   const finishBuilding = (character) => {
     setActiveCharacter(character)
-    setView('campaign-lobby')
+    navigateTo('campaign-lobby')
   }
 
-  // Only reachable from the campaign lobby's "Start session" / "Rejoin
-  // session" button now, once the readiness checklist there allows it.
   const startSession = (role) => {
-    setView(role === 'gm' ? 'gm' : 'table')
+    navigateTo(role === 'gm' ? 'gm' : 'table')
   }
 
-  // Opens a character's full sheet from wherever the player or GM clicked
-  // it (a party card on the table, the GM dashboard, or the campaign
-  // lobby's player list) -- "Back" returns to whichever view triggered it.
   const openCharacterSheet = (characterId, fromView) => {
-    setViewingCharacterId(characterId)
     setSheetReturnView(fromView)
-    setView('sheet')
+    navigateTo('sheet', { characterId })
   }
 
-  // Same "remember where you came from" pattern as the character sheet --
-  // the gear icon lives on both GameTable and GmDashboard, so "Back" needs
-  // to return to whichever one opened it.
   const openCampaignSettings = (fromView) => {
     setSettingsReturnView(fromView)
-    setView('settings')
+    navigateTo('settings')
   }
 
-  // Same pattern again for the campaign log (threads/clocks/timeline).
   const openCampaignLog = (fromView) => {
     setLogReturnView(fromView)
-    setView('log')
+    navigateTo('log')
   }
 
-  // Same pattern again for the rules library.
   const openRulesLibrary = (fromView) => {
     setLibraryReturnView(fromView)
-    setView('library')
+    navigateTo('library')
   }
 
-  // Same pattern again for the NPC/faction/treasure tracker.
   const openTracker = (fromView) => {
     setTrackerReturnView(fromView)
-    setView('tracker')
+    navigateTo('tracker')
   }
 
   const campaignName = activeCampaign?.name || ''
 
-  // Still resolving whether a session exists -- avoid flashing the sign-in
-  // screen for a returning, already-authenticated user.
-  if (session === undefined) {
+  if (session === undefined || (session && routeLoading)) {
     return <div className="min-h-screen bg-neutral-950" />
   }
 
@@ -129,27 +242,31 @@ export default function App() {
         <Lobby
           session={session}
           onEnterCampaign={enterCampaign}
-          onCreateCampaign={() => setView('campaign-builder')}
+          onCreateCampaign={() => navigateTo('campaign-builder')}
           onSignOut={signOut}
-          onOpenProfile={() => setView('profile')}
+          onOpenProfile={() => navigateTo('profile')}
         />
       )}
       {view === 'campaign-builder' && (
-        <CampaignBuilder session={session} onComplete={enterCampaign} onCancel={() => setView('lobby')} />
+        <CampaignBuilder
+          session={session}
+          onComplete={enterCampaign}
+          onCancel={() => navigateTo('lobby')}
+        />
       )}
       {view === 'campaign-lobby' && (
         <CampaignLobby
           campaignId={activeCampaign?.id}
           session={session}
           onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'campaign-lobby')}
-          onCreateCharacter={() => setView('builder')}
-          onChooseCharacter={() => setView('characters')}
+          onCreateCharacter={() => navigateTo('builder')}
+          onChooseCharacter={() => navigateTo('characters')}
           onStartSession={startSession}
           onOpenSettings={() => openCampaignSettings('campaign-lobby')}
         />
       )}
       {view === 'profile' && (
-        <Profile session={session} onSignOut={signOut} onBack={() => setView('lobby')} />
+        <Profile session={session} onSignOut={signOut} onBack={() => navigateBack('lobby')} />
       )}
       {view === 'characters' && (
         <CharacterPicker
@@ -172,7 +289,7 @@ export default function App() {
           campaignId={activeCampaign?.id}
           session={session}
           campaignName={campaignName}
-          onOpenGmView={() => setView('gm')}
+          onOpenGmView={() => navigateTo('gm')}
           onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'table')}
           onOpenSettings={() => openCampaignSettings('table')}
           onOpenLog={() => openCampaignLog('table')}
@@ -185,7 +302,7 @@ export default function App() {
           campaignId={activeCampaign?.id}
           session={session}
           campaignName={campaignName}
-          onSwitchToPlayerView={() => setView('table')}
+          onSwitchToPlayerView={() => navigateTo('table')}
           onOpenCharacterSheet={(characterId) => openCharacterSheet(characterId, 'gm')}
           onOpenSettings={() => openCampaignSettings('gm')}
           onOpenLog={() => openCampaignLog('gm')}
@@ -197,7 +314,7 @@ export default function App() {
         <CharacterSheet
           characterId={viewingCharacterId}
           session={session}
-          onBack={() => setView(sheetReturnView)}
+          onBack={() => navigateBack(sheetReturnView)}
         />
       )}
       {view === 'settings' && (
@@ -205,7 +322,7 @@ export default function App() {
           campaignId={activeCampaign?.id}
           session={session}
           campaignName={campaignName}
-          onBack={() => setView(settingsReturnView)}
+          onBack={() => navigateBack(settingsReturnView)}
         />
       )}
       {view === 'log' && (
@@ -213,7 +330,7 @@ export default function App() {
           campaignId={activeCampaign?.id}
           session={session}
           campaignName={campaignName}
-          onBack={() => setView(logReturnView)}
+          onBack={() => navigateBack(logReturnView)}
         />
       )}
       {view === 'library' && (
@@ -221,7 +338,7 @@ export default function App() {
           campaignId={activeCampaign?.id}
           session={session}
           campaignName={campaignName}
-          onBack={() => setView(libraryReturnView)}
+          onBack={() => navigateBack(libraryReturnView)}
         />
       )}
       {view === 'tracker' && (
@@ -229,13 +346,13 @@ export default function App() {
           campaignId={activeCampaign?.id}
           session={session}
           campaignName={campaignName}
-          onBack={() => setView(trackerReturnView)}
+          onBack={() => navigateBack(trackerReturnView)}
         />
       )}
       {view !== 'lobby' && view !== 'campaign-builder' && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2">
           <button
-            onClick={() => setView('lobby')}
+            onClick={() => navigateTo('lobby')}
             className="text-xs bg-neutral-900 border border-neutral-700 rounded-full px-3 py-1.5 text-neutral-300 hover:bg-neutral-800"
           >
             Back to lobby
