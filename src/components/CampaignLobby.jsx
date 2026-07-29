@@ -253,7 +253,7 @@ export default function CampaignLobby({
               className="text-sm bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-800 disabled:text-neutral-500 rounded-md px-4 py-1.5 flex items-center gap-1.5 text-white font-medium"
             >
               <Rocket size={14} />
-              {starting ? 'Starting...' : campaign.session_active ? 'Rejoin session' : 'Start session'}
+              {starting ? 'Starting...' : campaign.session_active ? 'Enter session' : 'Start session'}
             </button>
             {blockReason && (
               <div className="absolute right-0 top-full mt-1.5 whitespace-nowrap text-xs bg-neutral-800 border border-neutral-700 rounded-md px-2.5 py-1.5 text-neutral-300 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
