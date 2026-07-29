@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(52);
+select plan(65);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -34,6 +34,24 @@ insert into encounter_monsters (campaign_id, name, ac, hp, max_hp, hidden) value
 insert into gm_notes (campaign_id, text, revealed) values
   ('10000000-0000-0000-0000-000000000001', 'Shared', true),
   ('10000000-0000-0000-0000-000000000001', 'Secret', false);
+
+insert into campaign_npcs (id, campaign_id, name, status)
+values ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'The Warden', 'Alive');
+insert into campaign_factions (id, campaign_id, name)
+values ('30000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'The Ashen Hand');
+insert into campaign_treasure (id, campaign_id, item)
+values ('30000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'Black Key');
+
+insert into campaign_npc_secrets (npc_id, notes)
+values ('30000000-0000-0000-0000-000000000001', 'Secret allegiance');
+insert into campaign_faction_secrets (faction_id, goal, notes)
+values ('30000000-0000-0000-0000-000000000002', 'Open the gate', 'Unknown patron');
+insert into campaign_treasure_secrets (treasure_id, notes)
+values ('30000000-0000-0000-0000-000000000003', 'Cursed when carried');
+
+select hasnt_column('public', 'campaign_npcs', 'notes', 'NPC secrets are absent from member-readable rows');
+select hasnt_column('public', 'campaign_factions', 'goal', 'faction goals are absent from member-readable rows');
+select hasnt_column('public', 'campaign_treasure', 'notes', 'treasure secrets are absent from member-readable rows');
 
 -- Anonymous users cannot browse the campaign directory.
 select ok(
@@ -80,6 +98,17 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
 select is((select count(*)::integer from encounter_monsters), 1, 'player sees only revealed monsters');
 select is((select count(*)::integer from gm_notes), 1, 'player sees only revealed notes');
+select is((select count(*)::integer from campaign_npcs), 1, 'player can read public NPC details');
+select is((select count(*)::integer from campaign_factions), 1, 'player can read public faction details');
+select is((select count(*)::integer from campaign_treasure), 1, 'player can read public treasure details');
+select is((select count(*)::integer from campaign_npc_secrets), 0, 'player cannot read NPC secrets');
+select is((select count(*)::integer from campaign_faction_secrets), 0, 'player cannot read faction secrets');
+select is((select count(*)::integer from campaign_treasure_secrets), 0, 'player cannot read treasure secrets');
+select throws_ok(
+  $$insert into campaign_npc_secrets (npc_id, notes)
+    values ('30000000-0000-0000-0000-000000000001', 'Forged secret')$$,
+  '42501', null, 'player cannot write NPC secrets'
+);
 select throws_ok(
   $$insert into encounter_monsters (campaign_id, name, ac, hp, max_hp)
     values ('10000000-0000-0000-0000-000000000001', 'Forbidden', 10, 1, 1)$$,
@@ -157,6 +186,9 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select is((select count(*)::integer from encounter_monsters), 2, 'GM sees hidden monsters');
 select is((select count(*)::integer from gm_notes), 2, 'GM sees secret notes');
+select is((select count(*)::integer from campaign_npc_secrets), 1, 'GM sees NPC secrets');
+select is((select count(*)::integer from campaign_faction_secrets), 1, 'GM sees faction secrets');
+select is((select count(*)::integer from campaign_treasure_secrets), 1, 'GM sees treasure secrets');
 select lives_ok(
   $$insert into map_cells (campaign_id, row, col, state)
     values ('10000000-0000-0000-0000-000000000001', 1, 1, 'explored')$$,
