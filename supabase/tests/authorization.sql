@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(104);
+select plan(120);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -340,11 +340,16 @@ select throws_ok(
     where id = '70000000-0000-0000-0000-000000000001'$$,
   '42501', null, 'character owner cannot move a light source to another campaign'
 );
-select throws_ok(
-  $$update character_gear
-    set character_id = '40000000-0000-0000-0000-000000000002'
-    where id = '50000000-0000-0000-0000-000000000001'$$,
-  '42501', null, 'character owner cannot reassign gear to another character'
+update character_gear
+set character_id = '40000000-0000-0000-0000-000000000002'
+where id = '50000000-0000-0000-0000-000000000001';
+select is(
+  (
+    select character_id from character_gear
+    where id = '50000000-0000-0000-0000-000000000001'
+  ),
+  '40000000-0000-0000-0000-000000000001'::uuid,
+  'character owner cannot reassign gear to another character'
 );
 select throws_ok(
   $$insert into campaign_threads (campaign_id, title)
@@ -468,6 +473,147 @@ select throws_ok(
     )$$,
   'P0001', 'Character not found, or you cannot adjust this character.',
   'player cannot adjust another character'
+);
+select lives_ok(
+  $$select add_character_gear(
+      '40000000-0000-0000-0000-000000000001', 'Rope', 1, 1, 'Silk'
+    )$$,
+  'character owner can add gear through the command'
+);
+select is(
+  (
+    select count(*)::integer from campaign_events
+    where event_type = 'character.gear_added'
+      and payload->'item'->>'name' = 'Rope'
+  ),
+  1,
+  'adding gear records one event'
+);
+select lives_ok(
+  $$select set_character_gear_equipped(
+      (select id from character_gear
+       where character_id = '40000000-0000-0000-0000-000000000001'
+         and name = 'Rope'),
+      true
+    )$$,
+  'character owner can equip gear through the command'
+);
+select lives_ok(
+  $$select remove_character_gear(
+      (select id from character_gear
+       where character_id = '40000000-0000-0000-0000-000000000001'
+         and name = 'Rope')
+    )$$,
+  'character owner can remove gear through the command'
+);
+select is(
+  (
+    select count(*)::integer from campaign_events
+    where event_type in (
+      'character.gear_added', 'character.gear_equipped', 'character.gear_removed'
+    )
+      and payload::text like '%Rope%'
+  ),
+  3,
+  'gear lifecycle records each mutation'
+);
+select lives_ok(
+  $$select add_character_spell(
+      '40000000-0000-0000-0000-000000000001',
+      'Light', 1, 'Close', '1 hour', 'Creates light.'
+    )$$,
+  'character owner can add a spell through the command'
+);
+select lives_ok(
+  $$select set_character_spell_prepared(
+      (select id from character_spells
+       where character_id = '40000000-0000-0000-0000-000000000001'
+         and name = 'Light'),
+      true
+    )$$,
+  'character owner can prepare a spell through the command'
+);
+select ok(
+  (
+    select (record_character_spell_check(id, 15, 15)->>'succeeded_since_rest')::boolean
+    from character_spells
+    where character_id = '40000000-0000-0000-0000-000000000001'
+      and name = 'Light'
+  ),
+  'successful spell check begins its rest cycle'
+);
+select ok(
+  (
+    select (record_character_spell_check(id, 5, 5)->>'lost')::boolean
+    from character_spells
+    where character_id = '40000000-0000-0000-0000-000000000001'
+      and name = 'Light'
+  ),
+  'failed spell check after success locks the spell'
+);
+select is(
+  (
+    select count(*)::integer from campaign_events
+    where event_type in (
+      'character.spell_added', 'character.spell_prepared',
+      'character.spell_check_recorded'
+    )
+      and payload::text like '%Light%'
+  ),
+  4,
+  'spell setup and checks record each mutation'
+);
+select lives_ok(
+  $$select remove_character_spell(
+      (select id from character_spells
+       where character_id = '40000000-0000-0000-0000-000000000001'
+         and name = 'Light')
+    )$$,
+  'character owner can remove a spell through the command'
+);
+select is(
+  (
+    select count(*)::integer from campaign_events
+    where event_type = 'character.spell_removed'
+      and payload->'spell'->>'name' = 'Light'
+  ),
+  1,
+  'removing a spell records one event'
+);
+select throws_ok(
+  $$select add_character_gear(
+      '40000000-0000-0000-0000-000000000002', 'Stolen', 1, 1, null
+    )$$,
+  'P0001', 'Character not found, or you cannot manage this character.',
+  'player cannot add gear to another character'
+);
+select throws_ok(
+  $$select record_character_spell_check(
+      '50000000-0000-0000-0000-000000000004', 0, 10
+    )$$,
+  'P0001', 'Natural spell check roll must be from 1 to 20.',
+  'spell command rejects an invalid natural roll'
+);
+update character_gear
+set equipped = true
+where id = '50000000-0000-0000-0000-000000000001';
+select is(
+  (
+    select equipped from character_gear
+    where id = '50000000-0000-0000-0000-000000000001'
+  ),
+  false,
+  'owner cannot bypass the gear command with a direct update'
+);
+delete from character_spells
+where id = '50000000-0000-0000-0000-000000000004';
+select is(
+  (
+    select count(*)::integer from character_spells
+    where id = '50000000-0000-0000-0000-000000000004'
+  ),
+  1,
+  'owner cannot bypass the spell command with a direct delete'
 );
 reset role;
 

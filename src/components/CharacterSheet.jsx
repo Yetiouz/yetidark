@@ -161,31 +161,34 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   }
 
   const toggleEquipped = async (item) => {
-    const nextGear = gear.map((i) => (i.id === item.id ? { ...i, equipped: !i.equipped } : i))
-    setGear(nextGear)
-    await supabase.from('character_gear').update({ equipped: !item.equipped }).eq('id', item.id)
-
-    const dexMod = modifier((character.stats || {}).dex ?? 10)
-    const equippedArmor = nextGear.find((g) => g.equipped && g.base_ac != null)
-    const equippedShield = nextGear.find((g) => g.equipped && g.is_shield)
-    const baseAc = equippedArmor ? equippedArmor.base_ac + (equippedArmor.dex_applies ? dexMod : 0) : 10 + dexMod
-    const nextAc = baseAc + (equippedShield ? 2 : 0)
-    if (nextAc !== character.ac) {
-      setCharacter((c) => ({ ...c, ac: nextAc }))
-      await supabase.from('characters').update({ ac: nextAc }).eq('id', characterId)
-    }
+    const { data, error } = await supabase.rpc('set_character_gear_equipped', {
+      p_gear_id: item.id,
+      p_equipped: !item.equipped,
+    })
+    if (error) return
+    setGear((all) => all.map((current) => (current.id === item.id ? { ...current, ...data } : current)))
+    setCharacter((current) => ({ ...current, ac: Number(data.character_ac) }))
   }
 
   const removeGear = async (item) => {
-    setGear((g) => g.filter((i) => i.id !== item.id))
-    await supabase.from('character_gear').delete().eq('id', item.id)
+    const { error } = await supabase.rpc('remove_character_gear', { p_gear_id: item.id })
+    if (!error) setGear((all) => all.filter((current) => current.id !== item.id))
   }
 
   const addGear = async () => {
     const name = gearDraft.trim()
     if (!name || !characterId) return
-    await supabase.from('character_gear').insert({ character_id: characterId, name, slots: 1, quantity: 1, equipped: false })
-    setGearDraft('')
+    const { data, error } = await supabase.rpc('add_character_gear', {
+      p_character_id: characterId,
+      p_name: name,
+      p_slots: 1,
+      p_quantity: 1,
+      p_notes: null,
+    })
+    if (!error) {
+      setGear((all) => all.some((item) => item.id === data.id) ? all : [...all, data])
+      setGearDraft('')
+    }
   }
 
   const spendFeatureUse = async (feature) => {
@@ -200,8 +203,11 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   }
 
   const togglePrepared = async (spell) => {
-    setSpells((s) => s.map((i) => (i.id === spell.id ? { ...i, prepared: !i.prepared } : i)))
-    await supabase.from('character_spells').update({ prepared: !spell.prepared }).eq('id', spell.id)
+    const { data, error } = await supabase.rpc('set_character_spell_prepared', {
+      p_spell_id: spell.id,
+      p_prepared: !spell.prepared,
+    })
+    if (!error) setSpells((all) => all.map((item) => (item.id === spell.id ? { ...item, ...data } : item)))
   }
 
   const updateSpellCheckDraft = (spellId, field, value) => {
@@ -215,9 +221,8 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     const draft = spellCheckDrafts[spell.id] || {}
     const naturalRoll = Number.parseInt(draft.naturalRoll, 10)
     const total = Number.parseInt(draft.total, 10)
-    let result
     try {
-      result = resolveSpellCheck({
+      resolveSpellCheck({
         naturalRoll,
         total,
         tier: spell.tier,
@@ -227,17 +232,15 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       return
     }
 
-    const update = {
-      lost: result.locked,
-      succeeded_since_rest: result.succeededSinceRest,
-      last_check_natural: naturalRoll,
-      last_check_total: total,
-      last_check_succeeded: result.succeeded,
-      last_check_at: new Date().toISOString(),
+    const { data, error } = await supabase.rpc('record_character_spell_check', {
+      p_spell_id: spell.id,
+      p_natural_roll: naturalRoll,
+      p_total: total,
+    })
+    if (!error) {
+      setSpells((all) => all.map((item) => (item.id === spell.id ? { ...item, ...data } : item)))
+      setSpellCheckDrafts((drafts) => ({ ...drafts, [spell.id]: {} }))
     }
-    setSpells((all) => all.map((item) => (item.id === spell.id ? { ...item, ...update } : item)))
-    await supabase.from('character_spells').update(update).eq('id', spell.id)
-    setSpellCheckDrafts((drafts) => ({ ...drafts, [spell.id]: {} }))
   }
 
   const completeFullRest = async () => {
@@ -279,24 +282,25 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   }
 
   const removeSpell = async (spell) => {
-    setSpells((s) => s.filter((i) => i.id !== spell.id))
-    await supabase.from('character_spells').delete().eq('id', spell.id)
+    const { error } = await supabase.rpc('remove_character_spell', { p_spell_id: spell.id })
+    if (!error) setSpells((all) => all.filter((item) => item.id !== spell.id))
   }
 
   const addSpell = async () => {
     const name = spellDraft.name.trim()
     if (!name || !characterId) return
-    await supabase.from('character_spells').insert({
-      character_id: characterId,
-      name,
-      tier: Number(spellDraft.tier) || 1,
-      range: spellDraft.range.trim() || null,
-      duration: spellDraft.duration.trim() || null,
-      description: spellDraft.description.trim() || null,
-      prepared: false,
-      lost: false,
+    const { data, error } = await supabase.rpc('add_character_spell', {
+      p_character_id: characterId,
+      p_name: name,
+      p_tier: Number(spellDraft.tier) || 1,
+      p_range: spellDraft.range.trim() || null,
+      p_duration: spellDraft.duration.trim() || null,
+      p_description: spellDraft.description.trim() || null,
     })
-    setSpellDraft({ name: '', tier: 1, range: '', duration: '', description: '' })
+    if (!error) {
+      setSpells((all) => all.some((spell) => spell.id === data.id) ? all : [...all, data])
+      setSpellDraft({ name: '', tier: 1, range: '', duration: '', description: '' })
+    }
   }
 
   // Owner-only, unlike HP/XP/coin/gear which the GM can also touch -- a
