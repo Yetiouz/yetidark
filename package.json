@@ -8,8 +8,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test:rules": "node --test src/game/rules/*.test.js",
     "audit:prod": "pnpm audit --prod --audit-level=moderate",
-    "verify": "pnpm audit:prod && pnpm build"
+    "verify": "pnpm audit:prod && pnpm test:rules && pnpm build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

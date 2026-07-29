@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(84);
+select plan(86);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -102,6 +102,8 @@ values
 select hasnt_column('public', 'campaign_npcs', 'notes', 'NPC secrets are absent from member-readable rows');
 select hasnt_column('public', 'campaign_factions', 'goal', 'faction goals are absent from member-readable rows');
 select hasnt_column('public', 'campaign_treasure', 'notes', 'treasure secrets are absent from member-readable rows');
+select has_column('public', 'characters', 'rules_version', 'characters record the applied rules version');
+select has_column('public', 'characters', 'creation_rolls', 'characters retain creation roll provenance');
 select is(
   (select public from storage.buckets where id = 'maps'),
   false,
