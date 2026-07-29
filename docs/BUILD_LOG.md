@@ -102,7 +102,7 @@ history remains the detailed source of truth.
 - Kept React compiler migration rules out of the initial gate so existing
   loading effects and map interactions can be modernized in focused changes.
 
-## July 29, 2026 — Atomic character creation prepared
+## July 29, 2026 — Atomic character creation released
 
 - Replaced separate character, gear, talent, and feature writes with one
   authoritative database transaction.
@@ -113,3 +113,5 @@ history remains the detailed source of truth.
   direct character inserts cannot bypass the command.
 - Rebuilt the local database through migration 029 and passed all 152 database
   authorization tests.
+- Applied migration 029 to production and verified that the local and remote
+  migration ledgers match with no pending database changes.

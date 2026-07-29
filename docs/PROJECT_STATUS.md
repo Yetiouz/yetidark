@@ -27,21 +27,21 @@ The current architecture remains appropriate:
 | M0.5 item | Status | Notes |
 |---|---|---|
 | Reconcile live Supabase schema | Complete | Migration chain now represents the live application schema. |
-| Rebuild a clean database | Complete | Local rebuild applies migrations 001–025 successfully. |
+| Rebuild a clean database | Complete | Local rebuild applies migrations 001–029 successfully. |
 | Lockfile and environment example | Complete | pnpm lockfile, pinned package manager, and `.env.example` are checked in. |
 | Build verification and CI | Complete for the current JavaScript app | Dependency audit, linting, rules tests, production build, and GitHub Actions run through one verification command. Formatting and static typing remain optional follow-up work. |
-| RLS and storage tests | Substantially complete | The 104-test database suite is on `main`. Continue adding tests with each command or policy. |
+| RLS and storage tests | Substantially complete | The 152-test database suite is on `main`. Continue adding tests with each command or policy. |
 | Protect discovery data and maps | Complete | Public discovery uses safe data boundaries; maps are private and served with authorized signed URLs. |
 | Separate GM secrets | Complete for current trackers | NPC, faction, and treasure secrets are stored separately with GM-only access. |
 | Versioned rules module | Complete for character rules | Character rules are versioned and covered by focused tests. |
-| Correct audited character rules | Complete for the audited set | Starting HP, roll provenance, gear slots, equipped gear, talent rolls, spell cycles, and full rests are implemented. |
-| Campaign event ledger | In progress | The ledger records HP, XP, coin, and full rests in production. Gear, spell, clock, and light commands remain. |
-| Authoritative app dice and identity | Not complete | Identity protections exist, but app-generated dice still originate in the browser. |
-| URL routing and session restoration | Not started | Navigation still relies on React state and is lost on refresh or shared links. |
+| Correct audited character rules | Complete for the audited set | Starting HP, roll provenance, gear slots, equipped gear, talent rolls, spell cycles, full rests, and atomic character creation are implemented. |
+| Campaign event ledger | Complete for the audited mutations | HP, XP, coin, full rests, gear, spells, clocks, light, dice, and character creation use authoritative commands and events. |
+| Authoritative app dice and identity | Complete for current app dice | App-generated dice and actor identity are derived by trusted database commands. |
+| URL routing and session restoration | In review | PR #18 is fully built and deployed; signed-in refresh and shared-link verification remain. |
 
 ## Live production baseline
 
-Production currently includes database migrations through **025**:
+Production currently includes database migrations through **029**:
 
 - reproducible schema and aligned migration history
 - authorization and cross-campaign integrity hardening
@@ -52,15 +52,15 @@ Production currently includes database migrations through **025**:
 - standing talent rolls
 - spell success/lock cycles
 - atomic full rest with ration consumption
-- append-only campaign events for HP, XP, coin, and full rests
+- append-only campaign events and commands for audited state mutations
+- trusted server-side app dice
+- atomic character creation with rollback protection
 
 ## Recommended next sequence
 
-1. Extend authoritative ledger commands to gear and spell mutations.
-2. Extend commands to campaign clocks and light sources.
-3. Move browser-generated dice behind a trusted server command.
-4. Add URL routing and restore campaign/character context after refresh.
-5. Run a structured multiplayer playtest before beginning a larger AI-GM
+1. Complete signed-in verification and merge URL routing.
+2. Merge the route-level code-splitting follow-up.
+3. Run a structured multiplayer playtest before beginning a larger AI-GM
    milestone.
 
 ## Working rules
