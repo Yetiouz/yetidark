@@ -101,3 +101,15 @@ history remains the detailed source of truth.
   unused character-builder setter identified by the first lint pass.
 - Kept React compiler migration rules out of the initial gate so existing
   loading effects and map interactions can be modernized in focused changes.
+
+## July 29, 2026 — Atomic character creation prepared
+
+- Replaced separate character, gear, talent, and feature writes with one
+  authoritative database transaction.
+- Derived character ownership from the authenticated user and required campaign
+  membership inside the command.
+- Added a `character.created` campaign event with starting-record counts.
+- Proved that invalid child records roll back the entire character and that
+  direct character inserts cannot bypass the command.
+- Rebuilt the local database through migration 029 and passed all 152 database
+  authorization tests.
