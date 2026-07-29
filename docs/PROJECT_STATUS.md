@@ -89,6 +89,14 @@ Production currently includes database migrations through **029**:
    failures.
 3. Begin the Milestone 1 vertical gameplay loop only after the playtest passes.
 
+## Milestone 1 UI observation
+
+The multiplayer playtest confirmed that clocks and other shared campaign state
+are available to players through Campaign Log, but the icon-only toolbar makes
+that state difficult to discover during play. Milestone 1 should decide which
+clocks, light state, and recent authoritative events belong directly on the
+player table before expanding the interface further.
+
 ## Working rules
 
 - Never edit production data during inspection.
