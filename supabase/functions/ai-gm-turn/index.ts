@@ -177,7 +177,11 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return corsResponse({ error: 'Not signed in.' }, 401)
 
-  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!serviceRoleKey) return corsResponse({ error: 'AI GM server access is not configured.' }, 500)
+
+  const supabase = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
     global: { headers: { Authorization: authHeader } },
   })
 
@@ -194,6 +198,13 @@ Deno.serve(async (req) => {
 
   if (campaignError || !campaign) return corsResponse({ error: 'Campaign not found, or you are not a member.' }, 404)
   if (campaign.gm_type !== 'ai') return corsResponse({ error: 'This campaign has a human GM.' }, 400)
+
+  // All reads above and below use the caller's JWT and RLS. Only after the
+  // caller and AI campaign are validated do writes use service_role, keeping
+  // AI-authored entries impossible to forge through the public data API.
+  const writer = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
 
   const [{ data: party }, { data: npcs }, { data: factions }, { data: log }] = await Promise.all([
     supabase.from('characters').select('name, ancestry, class, level, hp, max_hp, ac').eq('campaign_id', campaignId),
@@ -367,7 +378,7 @@ ${transcriptText}
             roller_name: string
           }
           const roll = rollNotation(notation, mode || 'flat')
-          const { data: diceRow } = await supabase
+          const { data: diceRow } = await writer
             .from('dice_rolls')
             .insert({
               campaign_id: campaignId,
@@ -384,7 +395,7 @@ ${transcriptText}
             .select()
             .single()
 
-          await supabase.from('scene_log').insert({
+          await writer.from('scene_log').insert({
             campaign_id: campaignId,
             type: 'roll',
             sender_name: roller_name,
@@ -421,7 +432,7 @@ ${transcriptText}
     return corsResponse({ error: 'The GM used too many tool calls without wrapping up. Try Continue again.' }, 500)
   }
 
-  const { error: insertError } = await supabase.from('scene_log').insert({
+  const { error: insertError } = await writer.from('scene_log').insert({
     campaign_id: campaignId,
     type: 'ai_gm',
     sender_name: `${campaign.name} — AI GM`,
