@@ -26,7 +26,6 @@ export default function App() {
   const [view, setView] = useState(initialRoute.view)
   const [routeCampaignId, setRouteCampaignId] = useState(initialRoute.campaignId)
   const [activeCampaign, setActiveCampaign] = useState(null)
-  const [activeCharacter, setActiveCharacter] = useState(null)
   const [viewingCharacterId, setViewingCharacterId] = useState(initialRoute.characterId)
   const [routeLoading, setRouteLoading] = useState(routeNeedsCampaign(initialRoute.view))
   const [sheetReturnView, setSheetReturnView] = useState('campaign-lobby')
@@ -43,7 +42,6 @@ export default function App() {
     setRouteLoading(routeNeedsCampaign(route.view))
     if (!route.campaignId) {
       setActiveCampaign(null)
-      setActiveCharacter(null)
     }
   }, [])
 
@@ -162,7 +160,6 @@ export default function App() {
           navigateTo('campaign-lobby', { campaignId: routeCampaignId, replace: true })
           return
         }
-        setActiveCharacter(character)
       }
       setRouteLoading(false)
     }
@@ -177,20 +174,15 @@ export default function App() {
     navigateTo('campaign-lobby', { campaignId: campaign.id })
   }
 
-  const chooseCharacter = async ({ mode, characterId } = {}) => {
+  const chooseCharacter = ({ mode } = {}) => {
     if (mode === 'create') {
       navigateTo('builder')
       return
     }
-    if (characterId) {
-      const { data } = await supabase.from('characters').select('*').eq('id', characterId).maybeSingle()
-      setActiveCharacter(data || null)
-    }
     navigateTo('campaign-lobby')
   }
 
-  const finishBuilding = (character) => {
-    setActiveCharacter(character)
+  const finishBuilding = () => {
     navigateTo('campaign-lobby')
   }
 
