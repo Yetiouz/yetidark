@@ -91,6 +91,31 @@ history remains the detailed source of truth.
 - Raised the database test suite to 104 passing checks.
 - Applied and verified migration 025 in production.
 
+## July 29, 2026 — Frontend lint gate prepared
+
+- Added React-aware ESLint checks for application code, hooks, tests, and
+  configuration files.
+- Added linting to the same verification command used locally and by GitHub
+  Actions.
+- Removed unused character-selection state, an unused tracker import, and an
+  unused character-builder setter identified by the first lint pass.
+- Kept React compiler migration rules out of the initial gate so existing
+  loading effects and map interactions can be modernized in focused changes.
+
+## July 29, 2026 — Atomic character creation released
+
+- Replaced separate character, gear, talent, and feature writes with one
+  authoritative database transaction.
+- Derived character ownership from the authenticated user and required campaign
+  membership inside the command.
+- Added a `character.created` campaign event with starting-record counts.
+- Proved that invalid child records roll back the entire character and that
+  direct character inserts cannot bypass the command.
+- Rebuilt the local database through migration 029 and passed all 152 database
+  authorization tests.
+- Applied migration 029 to production and verified that the local and remote
+  migration ledgers match with no pending database changes.
+
 ## July 29, 2026 — URL routing prepared for release
 
 - Added URL-backed navigation for the lobby, profile, campaign creation,

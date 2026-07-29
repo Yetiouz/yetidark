@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(143);
+select plan(152);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -202,6 +202,90 @@ reset role;
 -- A member sees revealed information, but not GM-only records or writes.
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
+select throws_ok(
+  $$insert into characters (
+      campaign_id, owner_user_id, name, ancestry, class, stats, hp, max_hp, ac
+    ) values (
+      '10000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000002',
+      'Bypass Hero', 'Human', 'Fighter', '{}', 4, 4, 10
+    )$$,
+  '42501', null, 'player cannot bypass the atomic character command'
+);
+select lives_ok(
+  $$select create_character(
+      '10000000-0000-0000-0000-000000000001',
+      jsonb_build_object(
+        'name', 'Atomic Hero',
+        'ancestry', 'Human',
+        'class', 'Fighter',
+        'stats', '{"str":12,"dex":10,"con":11,"int":9,"wis":10,"cha":8}'::jsonb,
+        'hp', 5,
+        'max_hp', 5,
+        'ac', 12,
+        'coin', 7,
+        'rules_version', 'shadowdark-core-2026-07'
+      ),
+      '[{"name":"Torch","slots":1,"quantity":2}]'::jsonb,
+      '[{"source":"class talent","description":"+1 attack","roll_formula":"2d6","roll_total":7,"rules_version":"shadowdark-core-2026-07"}]'::jsonb,
+      '[{"source":"ancestry","name":"Ambitious","description":"Gain one talent."}]'::jsonb
+    )$$,
+  'campaign member can create a complete character atomically'
+);
+select is(
+  (
+    select owner_user_id from characters
+    where name = 'Atomic Hero'
+  ),
+  '00000000-0000-0000-0000-000000000002'::uuid,
+  'atomic creation derives the owner from the authenticated user'
+);
+select is(
+  (
+    select count(*)::integer from character_gear
+    where character_id = (select id from characters where name = 'Atomic Hero')
+  ),
+  1,
+  'atomic creation inserts starting gear'
+);
+select is(
+  (
+    select count(*)::integer from character_talents
+    where character_id = (select id from characters where name = 'Atomic Hero')
+  ),
+  1,
+  'atomic creation inserts starting talents'
+);
+select is(
+  (
+    select count(*)::integer from character_features
+    where character_id = (select id from characters where name = 'Atomic Hero')
+  ),
+  1,
+  'atomic creation inserts starting features'
+);
+select is(
+  (
+    select count(*)::integer from campaign_events
+    where event_type = 'character.created'
+      and entity_id = (select id from characters where name = 'Atomic Hero')
+  ),
+  1,
+  'atomic creation records one campaign event'
+);
+select throws_ok(
+  $$select create_character(
+      '10000000-0000-0000-0000-000000000001',
+      '{"name":"Rollback Hero","ancestry":"Human","class":"Fighter","stats":{},"hp":4,"max_hp":4}'::jsonb,
+      '[{}]'::jsonb
+    )$$,
+  '23502', null, 'invalid starting records fail the character transaction'
+);
+select is(
+  (select count(*)::integer from characters where name = 'Rollback Hero'),
+  0,
+  'failed character creation leaves no partial character'
+);
 select is((select count(*)::integer from encounter_monsters), 1, 'player sees only revealed monsters');
 select is((select count(*)::integer from gm_notes), 1, 'player sees only revealed notes');
 select is((select count(*)::integer from campaign_npcs), 1, 'player can read public NPC details');
