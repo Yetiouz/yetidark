@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(95);
+select plan(104);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -11,7 +11,8 @@ insert into auth.users (
 ) values
   ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'gm@example.test', crypt('test', gen_salt('bf')), now(), '{}', '{"display_name":"GM"}', now(), now()),
   ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'player@example.test', crypt('test', gen_salt('bf')), now(), '{}', '{"display_name":"Player"}', now(), now()),
-  ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'outsider@example.test', crypt('test', gen_salt('bf')), now(), '{}', '{"display_name":"Outsider"}', now(), now());
+  ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'outsider@example.test', crypt('test', gen_salt('bf')), now(), '{}', '{"display_name":"Outsider"}', now(), now()),
+  ('00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'unrelated@example.test', crypt('test', gen_salt('bf')), now(), '{}', '{"display_name":"Unrelated"}', now(), now());
 
 alter table campaigns disable trigger on_campaign_created;
 insert into campaigns (id, name, gm_type, gm_user_id, join_code, is_public, join_password_hash)
@@ -129,6 +130,7 @@ select has_column('public', 'characters', 'creation_rolls', 'characters retain c
 select has_column('public', 'character_talents', 'roll_formula', 'talents record their roll formula');
 select has_column('public', 'character_talents', 'roll_total', 'talents record their rolled total');
 select has_column('public', 'character_talents', 'rules_version', 'talents record their rules version');
+select has_table('public', 'campaign_events', 'campaign event ledger exists');
 select is(
   (select public from storage.buckets where id = 'maps'),
   false,
@@ -404,6 +406,77 @@ select ok(
     where id = '50000000-0000-0000-0000-000000000004'
   ),
   'full rest clears spell locks and cycle history'
+);
+select is(
+  (
+    select count(*)::integer
+    from campaign_events
+    where event_type = 'character.full_rest_completed'
+      and entity_id = '40000000-0000-0000-0000-000000000001'
+  ),
+  1,
+  'full rest records one campaign event'
+);
+select is(
+  (adjust_character_resource(
+    '40000000-0000-0000-0000-000000000001', 'hp', -2, 'Trap damage'
+  )->>'after')::numeric,
+  3::numeric,
+  'character owner can adjust HP through the command'
+);
+select is(
+  (select hp from characters where id = '40000000-0000-0000-0000-000000000001'),
+  3,
+  'resource command updates the character atomically'
+);
+select is(
+  (
+    select payload->>'reason'
+    from campaign_events
+    where event_type = 'character.resource_adjusted'
+    order by created_at desc
+    limit 1
+  ),
+  'Trap damage',
+  'resource event records its reason'
+);
+select is(
+  (
+    select actor_user_id
+    from campaign_events
+    where event_type = 'character.resource_adjusted'
+    order by created_at desc
+    limit 1
+  ),
+  '00000000-0000-0000-0000-000000000002'::uuid,
+  'resource event derives the authenticated actor'
+);
+select throws_ok(
+  $$insert into campaign_events (
+      campaign_id, actor_user_id, event_type, entity_type, entity_id
+    ) values (
+      '10000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000002',
+      'forged', 'character',
+      '40000000-0000-0000-0000-000000000001'
+    )$$,
+  '42501', null, 'player cannot forge a campaign event'
+);
+select throws_ok(
+  $$select adjust_character_resource(
+      '40000000-0000-0000-0000-000000000002', 'hp', -1, null
+    )$$,
+  'P0001', 'Character not found, or you cannot adjust this character.',
+  'player cannot adjust another character'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000004","role":"authenticated"}';
+select is(
+  (select count(*)::integer from campaign_events),
+  0,
+  'outsider cannot read campaign events'
 );
 reset role;
 

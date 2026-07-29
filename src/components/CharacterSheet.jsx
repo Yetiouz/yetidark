@@ -129,23 +129,35 @@ export default function CharacterSheet({ characterId, session, onBack }) {
 
   const adjustHp = async (delta) => {
     if (!character) return
-    const nextHp = Math.max(0, Math.min(character.max_hp, character.hp + delta))
-    setCharacter((c) => ({ ...c, hp: nextHp }))
-    await supabase.from('characters').update({ hp: nextHp }).eq('id', characterId)
+    const { data, error } = await supabase.rpc('adjust_character_resource', {
+      p_character_id: characterId,
+      p_resource: 'hp',
+      p_delta: delta,
+      p_reason: null,
+    })
+    if (!error) setCharacter((c) => ({ ...c, hp: Number(data.after) }))
   }
 
   const adjustXp = async (delta) => {
     if (!character) return
-    const nextXp = Math.max(0, character.xp + delta)
-    setCharacter((c) => ({ ...c, xp: nextXp }))
-    await supabase.from('characters').update({ xp: nextXp }).eq('id', characterId)
+    const { data, error } = await supabase.rpc('adjust_character_resource', {
+      p_character_id: characterId,
+      p_resource: 'xp',
+      p_delta: delta,
+      p_reason: null,
+    })
+    if (!error) setCharacter((c) => ({ ...c, xp: Number(data.after) }))
   }
 
   const adjustCoin = async (delta) => {
     if (!character) return
-    const nextCoin = Math.max(0, Number(character.coin) + delta)
-    setCharacter((c) => ({ ...c, coin: nextCoin }))
-    await supabase.from('characters').update({ coin: nextCoin }).eq('id', characterId)
+    const { data, error } = await supabase.rpc('adjust_character_resource', {
+      p_character_id: characterId,
+      p_resource: 'coin',
+      p_delta: delta,
+      p_reason: null,
+    })
+    if (!error) setCharacter((c) => ({ ...c, coin: Number(data.after) }))
   }
 
   const toggleEquipped = async (item) => {
