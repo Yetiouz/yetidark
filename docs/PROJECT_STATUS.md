@@ -1,19 +1,19 @@
 # Delve project status
 
-**Updated:** July 29, 2026
-**Production:** https://yetidark.vercel.app
-**Repository:** `Yetiouz/yetidark`
+Updated: July 30, 2026
+Production: https://yetidark.vercel.app
+Repository: Yetiouz/yetidark
 
-This is the short operational handoff for Delve. `BUILD_LOG.md` contains the
-chronological history, while the original Milestone 0 audit remains the source
-for the stabilization goals.
+This is the short operational handoff for Delve. BUILD_LOG.md contains the
+chronological history, while the original Milestone 0 audit remains the
+source for the stabilization goals.
 
 ## Current state
 
-Delve is a working multiplayer Shadowdark campaign application. Authentication,
-campaigns, characters, player and GM tables, maps and fog, realtime activity,
-campaign management, rules references, trackers, and the first AI-GM workflow
-all use Supabase-backed production data.
+Delve is a working multiplayer Shadowdark campaign application.
+Authentication, campaigns, characters, player and GM tables, maps and fog,
+realtime activity, campaign management, rules references, trackers, and the
+first AI-GM workflow all use Supabase-backed production data.
 
 The current architecture remains appropriate:
 
@@ -24,17 +24,17 @@ The current architecture remains appropriate:
 
 ## Stabilization milestone status
 
-**M0.5 is complete.** The two-account production playtest passed on July 29,
+M0.5 is complete. The two-account production playtest passed on July 29,
 2026 after resolving the player-entry, resource-reason, and realtime
 duplicate-display defects found during the test.
 
 | M0.5 item | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | Reconcile live Supabase schema | Complete | Migration chain now represents the live application schema. |
 | Rebuild a clean database | Complete | Local rebuild applies migrations 001–029 successfully. |
-| Lockfile and environment example | Complete | pnpm lockfile, pinned package manager, and `.env.example` are checked in. |
+| Lockfile and environment example | Complete | pnpm lockfile, pinned package manager, and .env.example are checked in. |
 | Build verification and CI | Complete for the current JavaScript app | Dependency audit, linting, rules tests, production build, and GitHub Actions run through one verification command. Formatting and static typing remain optional follow-up work. |
-| RLS and storage tests | Substantially complete | The 152-test database suite is on `main`. Continue adding tests with each command or policy. |
+| RLS and storage tests | Substantially complete | The 152-test database suite is on main. Continue adding tests with each command or policy. |
 | Protect discovery data and maps | Complete | Public discovery uses safe data boundaries; maps are private and served with authorized signed URLs. |
 | Separate GM secrets | Complete for current trackers | NPC, faction, and treasure secrets are stored separately with GM-only access. |
 | Versioned rules module | Complete for character rules | Character rules are versioned and covered by focused tests. |
@@ -46,16 +46,17 @@ duplicate-display defects found during the test.
 ## Authentication and routing release handoff
 
 PR #18 passed the dependency audit, 11 rules tests, 5 routing tests, the
-production build, and direct preview checks for every application route. Direct
-route loads and browser back/forward navigation retain the requested URL.
+production build, and direct preview checks for every application route.
+Direct route loads and browser back/forward navigation retain the requested
+URL.
 
-The stacked route-level code-splitting follow-up reduces the initial production
-JavaScript bundle from about 577 kB to 375 kB and removes the prior large-chunk
-build warning.
+The stacked route-level code-splitting follow-up reduces the initial
+production JavaScript bundle from about 577 kB to 375 kB and removes the
+prior large-chunk build warning.
 
-GitHub OAuth is now the primary sign-in path, with email magic links retained as
-a fallback. This avoids blocking access when Supabase's built-in email sender
-reaches its project-wide quota.
+GitHub OAuth is now the primary sign-in path, with email magic links
+retained as a fallback. This avoids blocking access when Supabase's
+built-in email sender reaches its project-wide quota.
 
 The signed-in production routing checks now confirm:
 
@@ -66,12 +67,12 @@ The signed-in production routing checks now confirm:
 The two-account production check confirmed that a player cannot remain on a
 GM-only route and is redirected to the player table.
 
-The temporary Supabase preview redirects used during testing were removed after
-PR #18 merged.
+The temporary Supabase preview redirects used during testing were removed
+after PR #18 merged.
 
 ## Live production baseline
 
-Production currently includes database migrations through **029**:
+Production currently includes database migrations through 029:
 
 - reproducible schema and aligned migration history
 - authorization and cross-campaign integrity hardening
@@ -88,20 +89,31 @@ Production currently includes database migrations through **029**:
 
 ## Recommended next sequence
 
-1. Define the player-table information hierarchy for scene, objective, clocks,
-   light, and recent authoritative events.
-2. Turn the proven manual flow into the first Milestone 1 vertical gameplay
-   slice.
-3. Add critical-flow automation around that slice before expanding the AI-GM
-   workflow.
+1. Define the player-table information hierarchy for scene, objective,
+clocks, light, and recent authoritative events.
+2. Turn the proven manual flow into the first Milestone 1 vertical
+gameplay slice.
+3. Add critical-flow automation around that slice before expanding the
+AI-GM workflow.
 
 ## Milestone 1 UI observation
 
-The multiplayer playtest confirmed that clocks and other shared campaign state
-are available to players through Campaign Log, but the icon-only toolbar makes
-that state difficult to discover during play. Milestone 1 should decide which
-clocks, light state, and recent authoritative events belong directly on the
-player table before expanding the interface further.
+The multiplayer playtest confirmed that clocks and other shared campaign
+state are available to players through Campaign Log, but the icon-only
+toolbar makes that state difficult to discover during play. Milestone 1
+should decide which clocks, light state, and recent authoritative events
+belong directly on the player table before expanding the interface further.
+
+A first pass on item 1 landed July 30, 2026: a read-only status rail
+(objective, active clocks, lit light sources) on the player table, and
+authoritative HP/XP/coin/rest changes now echo into the scene log as short
+narration lines instead of being invisible outside a character sheet. This
+is scoped to existing data and the current fixed-viewport layout, not a
+redesign -- it's an interim step toward the fuller reference UI (a personal
+stat bar, immediate-situation/known-details panels, structured objectives)
+described in the design references, which needs schema and UI work of its
+own and should be scoped separately when Milestone 1's vertical slice work
+begins.
 
 ## Working rules
 
@@ -109,7 +121,7 @@ player table before expanding the interface further.
 - Keep every database change in a numbered migration.
 - Rebuild and run database authorization tests before applying a migration.
 - Use preview deployments and pull requests for meaningful changes.
-- Treat direct browser writes to important game state as migration candidates
-  for authoritative commands and ledger events.
-- Keep secrets out of the repository. Only public browser configuration belongs
-  in `.env.example`.
+- Treat direct browser writes to important game state as migration
+candidates for authoritative commands and ledger events.
+- Keep secrets out of the repository. Only public browser configuration
+belongs in .env.example.
