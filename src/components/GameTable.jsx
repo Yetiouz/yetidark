@@ -993,6 +993,20 @@ GM view
 </div>
 )}
 
+<div className="flex items-center gap-1.5 mb-3">
+{SCENE_TABS.map((t) => (
+<button
+key={t.key}
+onClick={() => setSceneTab(t.key)}
+className={`text-xs px-3 py-1.5 rounded-md border ${
+sceneTab === t.key ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+}`}
+>
+{t.label}
+</button>
+))}
+</div>
+
 <div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start">
 {/* LEFT RAIL: my character */}
 <div className="flex flex-col gap-3">
@@ -1087,20 +1101,6 @@ t.status === 'acting' ? 'bg-blue-500/20 text-blue-300 font-medium' : 'text-neutr
 
 {/* CENTER: scene + log + composer helpers */}
 <div className="flex flex-col gap-3 min-w-0">
-<div className="flex items-center gap-1.5">
-{SCENE_TABS.map((t) => (
-<button
-key={t.key}
-onClick={() => setSceneTab(t.key)}
-className={`text-xs px-3 py-1.5 rounded-md border ${
-sceneTab === t.key ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
-}`}
->
-{t.label}
-</button>
-))}
-</div>
-
 {showMapPane && (
 <div className="bg-neutral-900 rounded-lg p-4">
 <div className="flex items-center justify-between mb-2.5">
