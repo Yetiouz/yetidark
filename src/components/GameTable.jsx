@@ -593,16 +593,20 @@ const chatLog = log.filter((entry) => entry.type === 'chat')
 // since that's the most urgent to know about. Light only shows sources
 // that are actually lit right now, soonest-to-expire first, capped so
 // the rail can't grow without bound -- the full set still lives in
-// Campaign Log via the header button.
+// Campaign Log via the header button. Clocks and light sources show
+// even when idle/unlit (dimmed) so the party knows they exist, not
+// just that something is already in motion.
 const objective = threads[0] || null
 const activeClocks = clocks
-.filter((c) => c.segments_filled > 0)
+.slice()
 .sort((a, b) => (b.segments_filled / b.segments_total) - (a.segments_filled / a.segments_total))
 .slice(0, 4)
 const litSources = lightSources
-.filter((s) => s.lit)
 .map((s) => ({ ...s, remaining: displayedMinutes(s, nowTick) }))
-.sort((a, b) => a.remaining - b.remaining)
+.sort((a, b) => {
+if (a.lit !== b.lit) return a.lit ? -1 : 1
+return a.remaining - b.remaining
+})
 .slice(0, 3)
 const showRail = Boolean(objective) || activeClocks.length > 0 || litSources.length > 0
 
@@ -971,7 +975,7 @@ Log
 {activeClocks.map((c) => (
 <div key={c.id}>
 <div className="flex items-center justify-between mb-1">
-<span className="text-[11px] text-neutral-300 truncate">{c.name}</span>
+<span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-neutral-300' : 'text-neutral-500'}`}>{c.name}</span>
 <span className="text-[10px] text-neutral-500 shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
 </div>
 <div className="flex gap-0.5">
@@ -993,22 +997,22 @@ className={`h-1.5 flex-1 rounded-sm ${i < c.segments_filled ? 'bg-blue-400' : 'b
 <p className="text-xs text-neutral-400 mb-2">Light</p>
 <div className="flex flex-col gap-2">
 {litSources.map((s) => {
-const low = s.remaining <= 10
+const low = s.lit && s.remaining <= 10
 const owner = party.find((p) => p.id === s.character_id)
 return (
 <div key={s.id}>
 <div className="flex items-center justify-between mb-1">
-<span className={`text-[11px] flex items-center gap-1 truncate ${low ? 'text-amber-400' : 'text-neutral-300'}`}>
-<Flame size={11} /> {s.name}{owner ? ` · ${owner.name}` : ''}
+<span className={`text-[11px] flex items-center gap-1 truncate ${!s.lit ? 'text-neutral-500' : low ? 'text-amber-400' : 'text-neutral-300'}`}>
+<Flame size={11} className={!s.lit ? 'opacity-40' : ''} /> {s.name}{owner ? ` · ${owner.name}` : ''}
 </span>
-<span className={`text-[10px] shrink-0 ml-1.5 ${low ? 'text-amber-400' : 'text-neutral-500'}`}>
-{formatMinutes(s.remaining)}
+<span className={`text-[10px] shrink-0 ml-1.5 ${!s.lit ? 'text-neutral-600' : low ? 'text-amber-400' : 'text-neutral-500'}`}>
+{s.lit ? formatMinutes(s.remaining) : 'Unlit'}
 </span>
 </div>
 <div className="h-1.5 rounded-sm bg-neutral-800 overflow-hidden">
 <div
-className={`h-full ${low ? 'bg-amber-500' : 'bg-amber-600/70'}`}
-style={{ width: `${Math.min(100, (s.remaining / s.total_minutes) * 100)}%` }}
+className={`h-full ${!s.lit ? 'bg-neutral-700' : low ? 'bg-amber-500' : 'bg-amber-600/70'}`}
+style={{ width: `${s.lit ? Math.min(100, (s.remaining / s.total_minutes) * 100) : 0}%` }}
 />
 </div>
 </div>
