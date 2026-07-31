@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2, Flame } from 'lucide-react'
-import MapGrid from './MapGrid.jsx'
+import ZoneScene from './ZoneScene.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { flatDieNotation } from '../lib/dice.js'
 import { useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
@@ -98,7 +98,6 @@ if (rollTimerRef.current) clearInterval(rollTimerRef.current)
 }, [])
 
 const [mapInfo, setMapInfo] = useState(null)
-const [cellState, setCellState] = useState({})
 const [turnOrder, setTurnOrder] = useState([])
 const [votes, setVotes] = useState([])
 const [party, setParty] = useState([])
@@ -115,6 +114,7 @@ const { url: mapUrl, error: mapAccessError } = useCampaignMapUrl(mapInfo)
 const [threads, setThreads] = useState([])
 const [clocks, setClocks] = useState([])
 const [lightSources, setLightSources] = useState([])
+const [monsters, setMonsters] = useState([])
 const [nowTick, setNowTick] = useState(() => Date.now())
 
 // Only matters while a light source is actually burning, but a cheap 1s
@@ -183,17 +183,6 @@ setGmType(data?.gm_type || null)
 })
 
 supabase
-.from('map_cells')
-.select('row, col, state')
-.eq('campaign_id', campaignId)
-.then(({ data }) => {
-if (cancelled) return
-const next = {}
-for (const cell of data || []) next[`${cell.row},${cell.col}`] = cell.state
-setCellState(next)
-})
-
-supabase
 .from('turn_order')
 .select('order_list')
 .eq('campaign_id', campaignId)
@@ -204,7 +193,7 @@ reloadVotes(campaignId)
 
 supabase
 .from('characters')
-.select('id, name, class, level, hp, max_hp, ac, avatar_url')
+.select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone')
 .eq('campaign_id', campaignId)
 .order('created_at', { ascending: true })
 .then(({ data }) => { if (!cancelled) setParty(data || []) })
@@ -228,6 +217,12 @@ supabase
 .select('id, name, character_id, lit, lit_at, remaining_minutes, total_minutes')
 .eq('campaign_id', campaignId)
 .then(({ data }) => { if (!cancelled) setLightSources(data || []) })
+
+supabase
+.from('encounter_monsters')
+.select('id, name, zone, hidden')
+.eq('campaign_id', campaignId)
+.then(({ data }) => { if (!cancelled) setMonsters(data || []) })
 
 const channel = supabase
 .channel(`game-table-${campaignId}`)
@@ -256,15 +251,6 @@ askAiGmRef.current?.()
 }, AUTO_TURN_DEBOUNCE_MS)
 }
 }
-}
-)
-.on(
-'postgres_changes',
-{ event: '*', schema: 'public', table: 'map_cells', filter: `campaign_id=eq.${campaignId}` },
-(payload) => {
-const row = payload.new
-if (!row) return
-setCellState((s) => ({ ...s, [`${row.row},${row.col}`]: row.state }))
 }
 )
 .on(
@@ -332,6 +318,15 @@ else if (payload.eventType === 'UPDATE') setLightSources((l) => l.map((x) => (x.
 else if (payload.eventType === 'DELETE') setLightSources((l) => l.filter((x) => x.id !== payload.old.id))
 }
 )
+.on(
+'postgres_changes',
+{ event: '*', schema: 'public', table: 'encounter_monsters', filter: `campaign_id=eq.${campaignId}` },
+(payload) => {
+if (payload.eventType === 'INSERT') setMonsters((m) => appendUniqueById(m, payload.new))
+else if (payload.eventType === 'UPDATE') setMonsters((m) => m.map((x) => (x.id === payload.new.id ? payload.new : x)))
+else if (payload.eventType === 'DELETE') setMonsters((m) => m.filter((x) => x.id !== payload.old.id))
+}
+)
 .subscribe()
 
 return () => {
@@ -343,14 +338,6 @@ autoTurnTimerRef.current = null
 }
 }
 }, [campaignId])
-
-const revealCell = async (row, col) => {
-if (!campaignId) return
-setCellState((s) => ({ ...s, [`${row},${col}`]: 'explored' }))
-await supabase
-.from('map_cells')
-.upsert({ campaign_id: campaignId, row, col, state: 'explored' }, { onConflict: 'campaign_id,row,col' })
-}
 
 // Inserts and reads the row straight back (instead of waiting on the
 // realtime round-trip) so your own rolls and messages show up
@@ -609,6 +596,7 @@ return a.remaining - b.remaining
 })
 .slice(0, 3)
 const showRail = Boolean(objective) || activeClocks.length > 0 || litSources.length > 0
+const litCharacterId = lightSources.find((s) => s.lit)?.character_id || null
 
 // Shared by the human-GM Scene log panel and the AI-GM unified chat feed
 // (same ref, reused) -- keyed on the full log so it scrolls correctly
@@ -777,21 +765,13 @@ GM view
 <div className={`grid grid-cols-1 gap-3 mb-3 ${showRail ? 'md:grid-cols-[1fr_220px_200px]' : 'md:grid-cols-[1fr_220px]'}`}>
 <div className="bg-neutral-900 rounded-lg p-4">
 <p className="text-xs text-neutral-400 mb-2">Map</p>
-{mapAccessError && <p className="text-xs text-red-400 mb-2">{mapAccessError}</p>}
-<MapGrid
+<ZoneScene
 mapUrl={mapUrl}
-cols={mapInfo?.map_cols || 10}
-rows={mapInfo?.map_rows || 6}
-cellState={cellState}
-partyRow={mapInfo?.party_row}
-partyCol={mapInfo?.party_col}
-mode={isGm ? 'reveal' : 'view'}
-onCellClick={isGm ? (r, c) => revealCell(r, c) : undefined}
+mapAccessError={mapAccessError}
+party={party}
+monsters={monsters}
+litCharacterId={litCharacterId}
 />
-<div className="flex items-center gap-3.5 mt-2 text-[10px] text-neutral-500">
-<span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-neutral-300 inline-block" /> Explored</span>
-<span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-neutral-700 inline-block" /> Fog, not yet seen</span>
-</div>
 <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-neutral-800">
 <span className="text-xs text-neutral-400">Where to next?</span>
 <div className="flex gap-1.5">
