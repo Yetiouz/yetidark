@@ -47,6 +47,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [lightSources, setLightSources] = useState([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
+  const [moraleChecking, setMoraleChecking] = useState(false)
   const fileInputRef = useRef(null)
   const { url: mapUrl, error: mapAccessError } = useCampaignMapUrl(mapInfo)
 
@@ -70,7 +71,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('characters')
-      .select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, stats')
+      .select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, stats, status, death_timer')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setParty(data || []) })
@@ -246,6 +247,23 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const setMonsterZone = async (id, zone) => {
     setEncounter((list) => list.map((m) => (m.id === id ? { ...m, zone } : m)))
     await supabase.from('encounter_monsters').update({ zone }).eq('id', id)
+  }
+
+  // GM-triggered DC 15 WIS morale check for a monster group -- the app
+  // doesn't try to auto-detect "half the group is down," that judgment
+  // call stays with the GM, same as picking who/what a check applies to.
+  const moraleCheck = async () => {
+    if (moraleChecking) return
+    const label = window.prompt('Morale check for which group?', encounter[0]?.name || 'Monsters')
+    if (!label) return
+    const notation = window.prompt('WIS check notation?', '1d20') || '1d20'
+    setMoraleChecking(true)
+    await supabase.rpc('resolve_morale_check', {
+      p_campaign_id: campaignId,
+      p_group_label: label,
+      p_wis_notation: notation,
+    })
+    setMoraleChecking(false)
   }
 
   const uploadMap = async (file) => {
@@ -471,6 +489,15 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     Reveal hidden monster
                   </button>
                 )}
+                {encounter.length > 0 && (
+                  <button
+                    onClick={moraleCheck}
+                    disabled={moraleChecking}
+                    className="flex-1 text-xs border border-neutral-700 rounded-md py-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+                  >
+                    {moraleChecking ? 'Rolling…' : 'Morale check (DC 15 WIS)'}
+                  </button>
+                )}
               </div>
 
               {turnOrder.length > 0 && (
@@ -576,6 +603,15 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         </div>
                       )}
                       <span className="text-sm font-medium text-white">{p.name}</span>
+                      {p.status && p.status !== 'alive' && (
+                        <span
+                          className={`text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+                            p.status === 'dying' ? 'border-red-600 text-red-400' : p.status === 'stable' ? 'border-amber-500 text-amber-400' : 'border-neutral-600 text-neutral-500'
+                          }`}
+                        >
+                          {p.status === 'dying' ? `Dying (${p.death_timer ?? '?'})` : p.status}
+                        </span>
+                      )}
                     </div>
                     <p className="text-[11px] text-neutral-400">
                       {p.class} &middot; lvl {p.level} &middot; {p.hp}/{p.max_hp} hp &middot; ac {p.ac}
