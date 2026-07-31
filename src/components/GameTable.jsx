@@ -94,6 +94,11 @@ const [attackNotation, setAttackNotation] = useState('1d20')
 const [damageNotation, setDamageNotation] = useState('1d6')
 const [attacking, setAttacking] = useState(false)
 const [attackError, setAttackError] = useState(null)
+const [stabilizeTargetId, setStabilizeTargetId] = useState('')
+const [stabilizeNotation, setStabilizeNotation] = useState('1d20')
+const [stabilizing, setStabilizing] = useState(false)
+const [stabilizeError, setStabilizeError] = useState(null)
+const [deathCheckPendingId, setDeathCheckPendingId] = useState(null)
 const [rollError, setRollError] = useState(null)
 
 useEffect(() => {
@@ -198,7 +203,7 @@ reloadVotes(campaignId)
 
 supabase
 .from('characters')
-.select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, owner_user_id')
+.select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, owner_user_id, status, death_timer')
 .eq('campaign_id', campaignId)
 .order('created_at', { ascending: true })
 .then(({ data }) => { if (!cancelled) setParty(data || []) })
@@ -630,6 +635,44 @@ const resolveAttack = async () => {
   }
 }
 
+// Stabilize: DC 15 INT check against a dying party member at Close
+// range, same authoritative-command pattern as attacks/dice.
+const resolveStabilize = async () => {
+  if (!stabilizeTargetId || stabilizing) return
+  setStabilizing(true)
+  setStabilizeError(null)
+  const healerName = myCharacter?.name || displayName || 'Someone'
+  const { data, error } = await supabase.rpc('resolve_stabilize_check', {
+    p_campaign_id: campaignId,
+    p_healer_name: healerName,
+    p_target_character_id: stabilizeTargetId,
+    p_int_notation: stabilizeNotation,
+  })
+  setStabilizing(false)
+  if (error) {
+    setStabilizeError(error.message || 'Could not attempt that.')
+    return
+  }
+  if (data.scene_entry) {
+    setLog((all) => (all.some((entry) => entry.id === data.scene_entry.id) ? all : [...all, data.scene_entry]))
+  }
+}
+
+// Death check: rolled on a dying character's subsequent turn. Natural
+// 20 recovers with 1 HP, otherwise the death timer ticks down.
+const rollDeathCheck = async (characterId) => {
+  if (deathCheckPendingId) return
+  setDeathCheckPendingId(characterId)
+  const { data, error } = await supabase.rpc('resolve_dying_turn', {
+    p_campaign_id: campaignId,
+    p_character_id: characterId,
+  })
+  setDeathCheckPendingId(null)
+  if (!error && data?.scene_entry) {
+    setLog((all) => (all.some((entry) => entry.id === data.scene_entry.id) ? all : [...all, data.scene_entry]))
+  }
+}
+
 // Shared by the human-GM Scene log panel and the AI-GM unified chat feed
 // (same ref, reused) -- keyed on the full log so it scrolls correctly
 // whichever one is showing.
@@ -1016,6 +1059,47 @@ className="flex-1 text-xs border border-neutral-700 rounded-md text-neutral-200 
 </>
 )}
 </div>
+
+<div className="bg-neutral-900 rounded-lg p-3">
+<p className="text-xs text-neutral-400 mb-2">Stabilize</p>
+{party.filter((p) => p.status === 'dying').length === 0 ? (
+<p className="text-[11px] text-neutral-500">No one is dying right now.</p>
+) : (
+<>
+<select
+value={stabilizeTargetId}
+onChange={(e) => setStabilizeTargetId(e.target.value)}
+className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white mb-1.5"
+>
+<option value="">Target...</option>
+{party.filter((p) => p.status === 'dying').map((p) => (
+<option key={p.id} value={p.id}>{p.name}{(p.zone || 'near') !== 'close' ? ' (not Close)' : ''}</option>
+))}
+</select>
+<div className="flex gap-1.5 mb-1.5">
+<input
+value={stabilizeNotation}
+onChange={(e) => setStabilizeNotation(e.target.value)}
+placeholder="1d20+1"
+className="w-16 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+/>
+<button
+onClick={resolveStabilize}
+disabled={!stabilizeTargetId || stabilizing}
+className="flex-1 text-xs border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+>
+{stabilizing ? 'Rolling…' : 'Stabilize (DC 15 INT)'}
+</button>
+</div>
+{stabilizeError && (
+<div className="flex items-center gap-1.5 text-red-400">
+<AlertCircle size={12} />
+<p className="text-[11px]">{stabilizeError}</p>
+</div>
+)}
+</>
+)}
+</div>
 </div>
 
 {showRail && (
@@ -1122,11 +1206,14 @@ Nothing has happened yet. Say or do something below, then hit Continue when the 
 <p className="text-xs text-neutral-500 sm:col-span-3">No characters in this campaign yet.</p>
 )}
 {party.map((p) => (
-<button
+<div
 key={p.id}
+className="bg-neutral-900 border border-neutral-800 rounded-xl p-3 hover:border-neutral-600"
+>
+<button
 onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
 disabled={!onOpenCharacterSheet}
-className="text-left bg-neutral-900 border border-neutral-800 rounded-xl p-3 hover:border-neutral-600 disabled:cursor-default disabled:hover:border-neutral-800"
+className="text-left w-full disabled:cursor-default"
 >
 <div className="flex items-center gap-2 mb-1.5">
 {p.avatar_url ? (
@@ -1137,6 +1224,15 @@ className="text-left bg-neutral-900 border border-neutral-800 rounded-xl p-3 hov
 </div>
 )}
 <span className="text-sm font-medium text-white">{p.name}</span>
+{p.status && p.status !== 'alive' && (
+<span
+className={`text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+p.status === 'dying' ? 'border-red-600 text-red-400' : p.status === 'stable' ? 'border-amber-500 text-amber-400' : 'border-neutral-600 text-neutral-500'
+}`}
+>
+{p.status === 'dying' ? `Dying (${p.death_timer ?? '?'})` : p.status}
+</span>
+)}
 </div>
 <p className="text-[11px] text-neutral-400 mb-2">
 {p.class} &middot; lvl {p.level}
@@ -1152,6 +1248,16 @@ style={{ width: `${p.max_hp ? (p.hp / p.max_hp) * 100 : 0}%` }}
 <span>ac {p.ac}</span>
 </div>
 </button>
+{p.status === 'dying' && (
+<button
+onClick={() => rollDeathCheck(p.id)}
+disabled={deathCheckPendingId === p.id}
+className="mt-2 w-full text-[11px] border border-red-800/60 text-red-300 rounded-md py-1 hover:bg-red-950/40 disabled:opacity-50"
+>
+{deathCheckPendingId === p.id ? 'Rolling…' : 'Roll death check'}
+</button>
+)}
+</div>
 ))}
 </div>
 </div>
