@@ -40,8 +40,8 @@ return source.remaining_minutes
 // transaction.
 //
 // Layout: three-column shell (party/scene-controls rail / scene+log /
-// GM notes+encounter rail) matching the delve-ui-reference gm-session
-// mockup, inside the same fixed-viewport header/scroll/composer frame as
+// GM notes rail) matching the delve-ui-reference gm-session mockup,
+// inside the same fixed-viewport header/scroll/composer frame as
 // before. Danger level, crawling-round tracking, and the per-entity trap
 // inspector from that mockup aren't reproduced -- there's no schema
 // behind them, and inventing one wasn't part of this pass. "Quick
@@ -520,7 +520,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
       <div className="flex-1 overflow-y-auto px-6">
         <div className="max-w-6xl mx-auto w-full pb-4">
-          <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] gap-3 mb-3 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start">
             {/* LEFT RAIL: party glance, scene controls, quick tables */}
             <div className="flex flex-col gap-3">
               <div className="bg-neutral-900 rounded-lg p-3">
@@ -771,7 +771,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               </div>
             </div>
 
-            {/* RIGHT RAIL: GM notes + encounter glance */}
+            {/* RIGHT RAIL: GM notes */}
             <div className="flex flex-col gap-3">
               <div className="bg-neutral-900 rounded-lg p-3">
                 <p className="text-xs text-neutral-400 mb-2">GM notes (private)</p>
@@ -803,22 +803,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     <Plus size={13} />
                   </button>
                 </div>
-              </div>
-
-              <div className="bg-neutral-900 rounded-lg p-3">
-                <p className="text-xs text-neutral-400 mb-2">Encounter</p>
-                {encounter.length === 0 ? (
-                  <p className="text-[11px] text-neutral-500">No monsters yet.</p>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    {encounter.map((m) => (
-                      <div key={m.id} className="flex items-center justify-between text-[11px]">
-                        <span className="text-neutral-300 truncate">{m.name}{m.hidden ? ' (hidden)' : ''}</span>
-                        <span className="text-neutral-500 shrink-0 ml-1.5">{m.hp}/{m.max_hp}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           </div>
