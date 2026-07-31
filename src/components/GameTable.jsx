@@ -1,16 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2, Flame } from 'lucide-react'
+import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2, Flame, HelpCircle, Swords, Backpack } from 'lucide-react'
 import ZoneScene from './ZoneScene.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { flatDieNotation } from '../lib/dice.js'
 import { useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 import { appendUniqueById } from '../app/realtimeCollections.js'
+import { gearSlotCapacity, occupiedGearSlots } from '../game/rules/character.js'
 
 const dice = [20, 12, 10, 8, 6, 4]
 const VOTE_POLL_KEY = 'where-next'
 const VOTE_OPTIONS = [
 { key: 'vault', label: 'Vault' },
 { key: 'entry', label: 'Back to entry' },
+]
+const SCENE_TABS = [
+{ key: 'scene', label: 'Scene' },
+{ key: 'map', label: 'Map' },
+{ key: 'split', label: 'Split' },
 ]
 
 // Auto-respond debounce: after any non-AI message lands in an AI-GM
@@ -59,12 +65,13 @@ return source.remaining_minutes
 // Every roll (app-rolled or self-reported) is persisted to the `dice_rolls`
 // audit table, not just summarized in the scene log.
 //
-// Layout: fixed-viewport shell (header / scrollable content / pinned
-// composer) instead of one long scrolling page. The composer at the
-// bottom is a single input + action button shared by both GM modes, laid
-// out in the same 1fr/220px grid as the Map/sidebar row above it so it
-// spans the full width and lines up with those columns regardless of how
-// far the content above has scrolled.
+// Layout: three-column shell (character rail / scene+log / situation
+// rail) matching the delve-ui-reference player-session mockup, inside the
+// same fixed-viewport header/scroll/composer frame as before. A few
+// mockup elements are intentionally not reproduced because there's no
+// real data behind them yet -- Luck, weapon-specific attack/damage dice,
+// and a tracked conditions/active-effects list. The "Talents" panel below
+// uses real character_talents rows instead of inventing that state.
 export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
 const user = session?.user
 const [displayName, setDisplayName] = useState('')
@@ -100,6 +107,7 @@ const [stabilizing, setStabilizing] = useState(false)
 const [stabilizeError, setStabilizeError] = useState(null)
 const [deathCheckPendingId, setDeathCheckPendingId] = useState(null)
 const [rollError, setRollError] = useState(null)
+const [sceneTab, setSceneTab] = useState('split') // 'scene' | 'map' | 'split' -- purely a view toggle, no new data
 
 useEffect(() => {
 return () => {
@@ -126,6 +134,21 @@ const [clocks, setClocks] = useState([])
 const [lightSources, setLightSources] = useState([])
 const [monsters, setMonsters] = useState([])
 const [nowTick, setNowTick] = useState(() => Date.now())
+
+// My character's gear and talents -- powers the left-rail "Quick actions"
+// and "Talents" panels. Fetched separately from `party` (which only
+// carries the compact HP/AC/zone fields every card needs) since only my
+// own character's full gear list matters here. Not realtime-subscribed:
+// gear/talents don't change mid-session often enough to justify a second
+// channel, so this just refetches whenever which character is "mine"
+// changes.
+const [myGear, setMyGear] = useState([])
+const [myTalents, setMyTalents] = useState([])
+
+// Revealed GM notes -- these already had a player-readable RLS policy
+// (is_campaign_member + revealed = true) but nothing on this screen ever
+// rendered them. This is the "Known details" panel from the mockup.
+const [gmNotes, setGmNotes] = useState([])
 
 // Only matters while a light source is actually burning, but a cheap 1s
 // interval the whole time this screen is open is simplest and matches
@@ -203,7 +226,7 @@ reloadVotes(campaignId)
 
 supabase
 .from('characters')
-.select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, owner_user_id, status, death_timer')
+.select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, owner_user_id, status, death_timer, stats')
 .eq('campaign_id', campaignId)
 .order('created_at', { ascending: true })
 .then(({ data }) => { if (!cancelled) setParty(data || []) })
@@ -233,6 +256,14 @@ supabase
 .select('id, name, zone, hidden')
 .eq('campaign_id', campaignId)
 .then(({ data }) => { if (!cancelled) setMonsters(data || []) })
+
+supabase
+.from('gm_notes')
+.select('id, text, revealed')
+.eq('campaign_id', campaignId)
+.eq('revealed', true)
+.order('created_at', { ascending: true })
+.then(({ data }) => { if (!cancelled) setGmNotes(data || []) })
 
 const channel = supabase
 .channel(`game-table-${campaignId}`)
@@ -335,6 +366,22 @@ else if (payload.eventType === 'DELETE') setLightSources((l) => l.filter((x) => 
 if (payload.eventType === 'INSERT') setMonsters((m) => appendUniqueById(m, payload.new))
 else if (payload.eventType === 'UPDATE') setMonsters((m) => m.map((x) => (x.id === payload.new.id ? payload.new : x)))
 else if (payload.eventType === 'DELETE') setMonsters((m) => m.filter((x) => x.id !== payload.old.id))
+}
+)
+.on(
+'postgres_changes',
+{ event: '*', schema: 'public', table: 'gm_notes', filter: `campaign_id=eq.${campaignId}` },
+(payload) => {
+if (payload.eventType === 'DELETE') {
+setGmNotes((n) => n.filter((x) => x.id !== payload.old.id))
+return
+}
+const row = payload.new
+if (!row.revealed) {
+setGmNotes((n) => n.filter((x) => x.id !== row.id))
+return
+}
+setGmNotes((n) => (n.some((x) => x.id === row.id) ? n.map((x) => (x.id === row.id ? row : x)) : [...n, row]))
 }
 )
 .subscribe()
@@ -605,9 +652,55 @@ if (a.lit !== b.lit) return a.lit ? -1 : 1
 return a.remaining - b.remaining
 })
 .slice(0, 3)
-const showRail = Boolean(objective) || activeClocks.length > 0 || litSources.length > 0
 const litCharacterId = lightSources.find((s) => s.lit)?.character_id || null
 const myCharacter = party.find((p) => p.owner_user_id === user?.id) || null
+
+// My gear/talents -- refetched (not realtime-subscribed) whenever which
+// character is "mine" changes. See the myGear/myTalents state comment
+// above for why this doesn't need its own channel.
+useEffect(() => {
+if (!myCharacter?.id) {
+setMyGear([])
+setMyTalents([])
+return
+}
+let cancelled = false
+supabase
+.from('character_gear')
+.select('id, name, slots, equipped, quantity')
+.eq('character_id', myCharacter.id)
+.then(({ data }) => { if (!cancelled) setMyGear(data || []) })
+supabase
+.from('character_talents')
+.select('id, source, description')
+.eq('character_id', myCharacter.id)
+.then(({ data }) => { if (!cancelled) setMyTalents(data || []) })
+return () => { cancelled = true }
+}, [myCharacter?.id])
+
+// Gear slot usage for the stat bar -- reuses the same rules helpers the
+// character sheet and builder already use, so this number always agrees
+// with what's shown there.
+const gearCapacity = myCharacter
+? gearSlotCapacity({
+strengthScore: Number(myCharacter.stats?.str) || 10,
+constitutionScore: Number(myCharacter.stats?.con) || 10,
+features: myTalents.map((t) => t.description),
+})
+: 0
+const gearUsed = occupiedGearSlots(myGear)
+
+// "Combat" vs "Exploration" is derived, not stored -- there's no
+// explicit mode field in the schema, and a non-empty turn order is a
+// reasonable, honest stand-in rather than inventing a new column.
+const sceneMode = turnOrder.length > 0 ? 'Combat' : 'Exploration'
+
+// The scene tab is a pure view toggle over content we already have: no
+// separate "scene image" vs "tactical map" data exists, so Scene hides
+// the map and shows the log full-width, Map hides the log, and Split
+// (the default, matching the old always-both layout) shows both.
+const showMapPane = sceneTab !== 'scene'
+const showLogPane = sceneTab !== 'map'
 
 // Attack resolution goes through the same authoritative server command
 // pattern as roll_campaign_dice: rolls to hit, compares to the target's
@@ -671,6 +764,16 @@ const rollDeathCheck = async (characterId) => {
   if (!error && data?.scene_entry) {
     setLog((all) => (all.some((entry) => entry.id === data.scene_entry.id) ? all : [...all, data.scene_entry]))
   }
+}
+
+// "Ready" a piece of equipped gear -- there's no per-item damage die or
+// attack bonus in the schema (character_gear is just name/slots/equipped/
+// quantity), so this can't roll anything on its own. What it can
+// honestly do is narrate the action into the shared log, which is a real,
+// useful quick action rather than a non-functional button.
+const readyGear = (item) => {
+if (!item) return
+postToLog({ type: 'narration', text: `${myCharacter?.name || displayName || 'Someone'} readies ${item.name}.` })
 }
 
 // Shared by the human-GM Scene log panel and the AI-GM unified chat feed
@@ -779,7 +882,7 @@ return (
 
 return (
 <div className="h-screen flex flex-col overflow-hidden">
-<div className="shrink-0 max-w-4xl mx-auto w-full px-6 pt-6 pb-3 flex items-center justify-between">
+<div className="shrink-0 max-w-6xl mx-auto w-full px-6 pt-6 pb-3 flex items-center justify-between">
 <div className="flex items-center gap-2.5">
 <p className="text-white font-medium">{campaignName}</p>
 </div>
@@ -828,8 +931,39 @@ GM view
 </div>
 </div>
 
+{myCharacter && (
+<div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+<div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
+<p className="text-[10px] tracking-wide text-neutral-500 mb-0.5">HP</p>
+<p className="text-lg font-semibold text-white">
+<span className={myCharacter.hp <= myCharacter.max_hp * 0.3 ? 'text-red-400' : 'text-green-400'}>{myCharacter.hp}</span>
+<span className="text-neutral-500"> / {myCharacter.max_hp}</span>
+</p>
+</div>
+<div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
+<p className="text-[10px] tracking-wide text-neutral-500 mb-0.5">AC</p>
+<p className="text-lg font-semibold text-white">{myCharacter.ac}</p>
+</div>
+<div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
+<p className="text-[10px] tracking-wide text-neutral-500 mb-0.5">Gear</p>
+<p className="text-lg font-semibold text-amber-400">{gearUsed}<span className="text-neutral-500"> / {gearCapacity}</span></p>
+</div>
+<div className={`rounded-lg px-3 py-2 border ${litSources[0]?.lit ? 'border-amber-500/60 bg-amber-500/5' : 'bg-neutral-900 border-neutral-800'}`}>
+<p className="text-[10px] tracking-wide text-neutral-500 mb-0.5 flex items-center gap-1"><Flame size={10} /> TORCH</p>
+{litSources[0]?.lit ? (
+<p className="text-sm font-semibold text-amber-300">
+{formatMinutes(litSources[0].remaining)}
+<span className="text-neutral-500 font-normal"> · {party.find((p) => p.id === litSources[0].character_id)?.name || '—'}</span>
+</p>
+) : (
+<p className="text-sm text-neutral-500">Unlit</p>
+)}
+</div>
+</div>
+)}
+
 <div className="flex-1 overflow-y-auto px-6">
-<div className="max-w-4xl mx-auto w-full pb-4">
+<div className="max-w-6xl mx-auto w-full pb-4">
 {gmType === 'ai' && aiTurnError && (
 <div className="mb-3 flex items-start gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
 <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
@@ -837,9 +971,104 @@ GM view
 </div>
 )}
 
-<div className={`grid grid-cols-1 gap-3 mb-3 ${showRail ? 'md:grid-cols-[1fr_220px_200px]' : 'md:grid-cols-[1fr_220px]'}`}>
+<div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] gap-3 mb-3 items-start">
+{/* LEFT RAIL: my character */}
+<div className="flex flex-col gap-3">
+{myCharacter ? (
+<>
+<div className="bg-neutral-900 border border-neutral-800 rounded-lg p-3">
+<p className="text-sm font-medium text-white">{myCharacter.name}</p>
+<p className="text-[11px] text-neutral-500">Level {myCharacter.level} &middot; {myCharacter.class}</p>
+</div>
+
+<div className="bg-neutral-900 rounded-lg p-3">
+<p className="text-xs text-neutral-400 mb-2">Quick actions</p>
+<div className="flex flex-col gap-1.5">
+{myGear.filter((g) => g.equipped).length === 0 && (
+<p className="text-[11px] text-neutral-500">No equipped gear yet.</p>
+)}
+{myGear.filter((g) => g.equipped).map((g) => (
+<button
+key={g.id}
+onClick={() => readyGear(g)}
+className="flex items-center gap-1.5 text-xs border border-neutral-700 rounded-md px-2 py-1.5 text-neutral-200 hover:bg-neutral-800 text-left"
+>
+<Swords size={12} className="text-neutral-500 shrink-0" /> <span className="truncate">{g.name}</span>
+</button>
+))}
+{onOpenCharacterSheet && myCharacter && (
+<button
+onClick={() => onOpenCharacterSheet(myCharacter.id)}
+className="flex items-center gap-1.5 text-xs border border-neutral-700 rounded-md px-2 py-1.5 text-neutral-200 hover:bg-neutral-800 text-left"
+>
+<Backpack size={12} className="text-neutral-500 shrink-0" /> Inspect character
+</button>
+)}
+</div>
+</div>
+
+<div className="bg-neutral-900 rounded-lg p-3">
+<p className="text-xs text-neutral-400 mb-2">Talents</p>
+{myTalents.length === 0 ? (
+<p className="text-[11px] text-neutral-500">None yet.</p>
+) : (
+<div className="flex flex-col gap-2">
+{myTalents.map((t) => (
+<div key={t.id} className="text-[11px]">
+<p className="text-neutral-200">{t.description}</p>
+<p className="text-neutral-600">{t.source}</p>
+</div>
+))}
+</div>
+)}
+</div>
+</>
+) : (
+<div className="bg-neutral-900 border border-neutral-800 rounded-lg p-3">
+<p className="text-[11px] text-neutral-500">You don't have a character in this campaign yet.</p>
+</div>
+)}
+
+<div className="bg-neutral-900 rounded-lg p-3">
+<p className="text-xs text-neutral-400 mb-2">Turn order</p>
+{turnOrder.length === 0 ? (
+<p className="text-[11px] text-neutral-500">Not set yet -- the GM rolls initiative to start.</p>
+) : (
+<div className="flex flex-col gap-1">
+{turnOrder.map((t, i) => (
+<div
+key={t.id || i}
+className={`flex items-center justify-between text-[11px] px-2 py-1 rounded ${
+t.status === 'acting' ? 'bg-blue-500/20 text-blue-300 font-medium' : 'text-neutral-300'
+}`}
+>
+<span>{t.name}</span>
+<span className={t.status === 'acting' ? '' : 'text-neutral-500'}>{t.status}</span>
+</div>
+))}
+</div>
+)}
+</div>
+</div>
+
+{/* CENTER: scene + log + composer helpers */}
+<div className="flex flex-col gap-3 min-w-0">
+<div className="flex items-center gap-1.5">
+{SCENE_TABS.map((t) => (
+<button
+key={t.key}
+onClick={() => setSceneTab(t.key)}
+className={`text-xs px-3 py-1.5 rounded-md border ${
+sceneTab === t.key ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+}`}
+>
+{t.label}
+</button>
+))}
+</div>
+
+{showMapPane && (
 <div className="bg-neutral-900 rounded-lg p-4">
-<p className="text-xs text-neutral-400 mb-2">Map</p>
 <ZoneScene
 mapUrl={mapUrl}
 mapAccessError={mapAccessError}
@@ -865,29 +1094,9 @@ myVote === o.key ? 'border-blue-500 text-blue-200' : 'border-neutral-700 text-ne
 </div>
 </div>
 </div>
-
-<div className="flex flex-col gap-3">
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-2">Turn order</p>
-{turnOrder.length === 0 ? (
-<p className="text-xs text-neutral-500">Not set yet -- the GM rolls initiative to start.</p>
-) : (
-<div className="flex flex-col gap-1">
-{turnOrder.map((t, i) => (
-<div
-key={t.id || i}
-className={`flex items-center justify-between text-xs px-2 py-1.5 rounded ${
-t.status === 'acting' ? 'bg-blue-500/20 text-blue-300 font-medium' : 'text-neutral-300'
-}`}
->
-<span>{t.name}</span>
-<span className={t.status === 'acting' ? '' : 'text-neutral-500'}>{t.status}</span>
-</div>
-))}
-</div>
 )}
-</div>
 
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 <div className="bg-neutral-900 rounded-lg p-3">
 <style>{`
 @keyframes dice-spin {
@@ -1013,6 +1222,7 @@ Log
 </div>
 </div>
 
+<div className="flex flex-col gap-3">
 <div className="bg-neutral-900 rounded-lg p-3">
 <p className="text-xs text-neutral-400 mb-2">Attack</p>
 {monsters.length === 0 ? (
@@ -1101,9 +1311,68 @@ className="flex-1 text-xs border border-neutral-700 rounded-md text-neutral-200 
 )}
 </div>
 </div>
+</div>
 
-{showRail && (
+{showLogPane && (gmType === 'ai' ? (
+<div className="bg-neutral-900 rounded-lg p-4">
+<p className="text-xs text-neutral-400 mb-2">AI GM</p>
+<div ref={sceneLogRef} className="min-h-[240px] max-h-[420px] overflow-y-auto flex flex-col gap-2.5 pr-1">
+{log.length === 0 && (
+<p className="text-xs text-neutral-500 text-center mt-4">
+Nothing has happened yet. Say or do something below, then hit Continue when the party's ready.
+</p>
+)}
+{log.map((entry) => renderChatBubble(entry))}
+</div>
+</div>
+) : (
+<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+<div className="bg-neutral-900 rounded-lg p-4">
+<p className="text-xs text-neutral-400 mb-2">Scene log</p>
+<div className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
+{narrationLog.length === 0 && <p className="text-xs text-neutral-500">Nothing has happened yet.</p>}
+{narrationLog.map((entry) => renderLogEntry(entry))}
+</div>
+</div>
+
+<div className="bg-neutral-900 rounded-lg p-4">
+<p className="text-xs text-neutral-400 mb-2">Party chat</p>
+<div ref={chatLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
+{chatLog.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- say something below.</p>}
+{chatLog.map((entry) => renderLogEntry(entry))}
+</div>
+</div>
+</div>
+))}
+</div>
+
+{/* RIGHT RAIL: current scene / known details / objective / party */}
 <div className="flex flex-col gap-3">
+<div className="bg-neutral-900 rounded-lg p-3">
+<p className="text-xs text-neutral-400 mb-1.5">Current scene</p>
+<span className={`inline-block text-xs px-2 py-1 rounded-md border ${
+sceneMode === 'Combat' ? 'border-red-600/60 text-red-300 bg-red-500/10' : 'border-blue-600/60 text-blue-300 bg-blue-500/10'
+}`}>
+{sceneMode}
+</span>
+</div>
+
+<div className="bg-neutral-900 rounded-lg p-3">
+<p className="text-xs text-neutral-400 mb-2">Known details</p>
+{gmNotes.length === 0 ? (
+<p className="text-[11px] text-neutral-500">Nothing revealed yet.</p>
+) : (
+<div className="flex flex-col gap-1.5">
+{gmNotes.map((n) => (
+<div key={n.id} className="flex items-start gap-1.5 text-[11px] text-neutral-300 border border-neutral-800 rounded-md px-2 py-1.5">
+<HelpCircle size={11} className="text-neutral-500 mt-0.5 shrink-0" />
+<span>{n.text}</span>
+</div>
+))}
+</div>
+)}
+</div>
+
 {objective && (
 <div className="bg-neutral-900 rounded-lg p-3">
 <p className="text-xs text-neutral-400 mb-1.5">Objective</p>
@@ -1135,124 +1404,46 @@ className={`h-1.5 flex-1 rounded-sm ${i < c.segments_filled ? 'bg-blue-400' : 'b
 </div>
 )}
 
-{litSources.length > 0 && (
 <div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-2">Light</p>
-<div className="flex flex-col gap-2">
-{litSources.map((s) => {
-const low = s.lit && s.remaining <= 10
-const owner = party.find((p) => p.id === s.character_id)
-return (
-<div key={s.id}>
-<div className="flex items-center justify-between mb-1">
-<span className={`text-[11px] flex items-center gap-1 truncate ${!s.lit ? 'text-neutral-500' : low ? 'text-amber-400' : 'text-neutral-300'}`}>
-<Flame size={11} className={!s.lit ? 'opacity-40' : ''} /> {s.name}{owner ? ` · ${owner.name}` : ''}
-</span>
-<span className={`text-[10px] shrink-0 ml-1.5 ${!s.lit ? 'text-neutral-600' : low ? 'text-amber-400' : 'text-neutral-500'}`}>
-{s.lit ? formatMinutes(s.remaining) : 'Unlit'}
-</span>
-</div>
-<div className="h-1.5 rounded-sm bg-neutral-800 overflow-hidden">
-<div
-className={`h-full ${!s.lit ? 'bg-neutral-700' : low ? 'bg-amber-500' : 'bg-amber-600/70'}`}
-style={{ width: `${s.lit ? Math.min(100, (s.remaining / s.total_minutes) * 100) : 0}%` }}
-/>
-</div>
-</div>
-)
-})}
-</div>
-</div>
-)}
-</div>
-)}
-</div>
-
-{gmType === 'ai' ? (
-<div className="bg-neutral-900 rounded-lg p-4 mb-3">
-<p className="text-xs text-neutral-400 mb-2">AI GM</p>
-<div ref={sceneLogRef} className="min-h-[240px] max-h-[420px] overflow-y-auto flex flex-col gap-2.5 pr-1">
-{log.length === 0 && (
-<p className="text-xs text-neutral-500 text-center mt-4">
-Nothing has happened yet. Say or do something below, then hit Continue when the party's ready.
-</p>
-)}
-{log.map((entry) => renderChatBubble(entry))}
-</div>
-</div>
-) : (
-<div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-<div className="bg-neutral-900 rounded-lg p-4">
-<p className="text-xs text-neutral-400 mb-2">Scene log</p>
-<div className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
-{narrationLog.length === 0 && <p className="text-xs text-neutral-500">Nothing has happened yet.</p>}
-{narrationLog.map((entry) => renderLogEntry(entry))}
-</div>
-</div>
-
-<div className="bg-neutral-900 rounded-lg p-4">
-<p className="text-xs text-neutral-400 mb-2">Party chat</p>
-<div ref={chatLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
-{chatLog.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- say something below.</p>}
-{chatLog.map((entry) => renderLogEntry(entry))}
-</div>
-</div>
-</div>
-)}
-
 <p className="text-xs text-neutral-400 mb-2">Party</p>
-<div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-{party.length === 0 && (
-<p className="text-xs text-neutral-500 sm:col-span-3">No characters in this campaign yet.</p>
-)}
+{party.length === 0 && <p className="text-[11px] text-neutral-500">No characters in this campaign yet.</p>}
+<div className="flex flex-col gap-2">
 {party.map((p) => (
-<div
-key={p.id}
-className="bg-neutral-900 border border-neutral-800 rounded-xl p-3 hover:border-neutral-600"
->
+<div key={p.id} className="border border-neutral-800 rounded-md p-2">
 <button
 onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
 disabled={!onOpenCharacterSheet}
-className="text-left w-full disabled:cursor-default"
+className="w-full text-left disabled:cursor-default"
 >
-<div className="flex items-center gap-2 mb-1.5">
+<div className="flex items-center justify-between mb-1">
+<div className="flex items-center gap-1.5 min-w-0">
 {p.avatar_url ? (
-<img src={p.avatar_url} alt={p.name} className="w-8 h-8 rounded-full object-cover border border-neutral-700" />
+<img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-neutral-700 shrink-0" />
 ) : (
-<div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center shrink-0">
-<User size={14} className="text-neutral-500" />
+<div className="w-5 h-5 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center shrink-0">
+<User size={10} className="text-neutral-500" />
 </div>
 )}
-<span className="text-sm font-medium text-white">{p.name}</span>
+<span className="text-xs font-medium text-white truncate">{p.name}</span>
+</div>
+<span className="text-[11px] text-neutral-500 shrink-0">{p.hp}/{p.max_hp}</span>
+</div>
+<div className="h-1 rounded-full bg-red-900/40 overflow-hidden">
+<div className={`h-full ${hpBarColor(p.hp, p.max_hp)}`} style={{ width: `${p.max_hp ? (p.hp / p.max_hp) * 100 : 0}%` }} />
+</div>
+</button>
 {p.status && p.status !== 'alive' && (
-<span
-className={`text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+<span className={`inline-block mt-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
 p.status === 'dying' ? 'border-red-600 text-red-400' : p.status === 'stable' ? 'border-amber-500 text-amber-400' : 'border-neutral-600 text-neutral-500'
-}`}
->
+}`}>
 {p.status === 'dying' ? `Dying (${p.death_timer ?? '?'})` : p.status}
 </span>
 )}
-</div>
-<p className="text-[11px] text-neutral-400 mb-2">
-{p.class} &middot; lvl {p.level}
-</p>
-<div className="h-1.5 rounded-full bg-red-900/40 overflow-hidden">
-<div
-className={`h-full ${hpBarColor(p.hp, p.max_hp)}`}
-style={{ width: `${p.max_hp ? (p.hp / p.max_hp) * 100 : 0}%` }}
-/>
-</div>
-<div className="flex justify-between text-[11px] text-neutral-500 mt-1">
-<span>{p.hp}/{p.max_hp} hp</span>
-<span>ac {p.ac}</span>
-</div>
-</button>
 {p.status === 'dying' && (
 <button
 onClick={() => rollDeathCheck(p.id)}
 disabled={deathCheckPendingId === p.id}
-className="mt-2 w-full text-[11px] border border-red-800/60 text-red-300 rounded-md py-1 hover:bg-red-950/40 disabled:opacity-50"
+className="mt-1.5 w-full text-[11px] border border-red-800/60 text-red-300 rounded-md py-1 hover:bg-red-950/40 disabled:opacity-50"
 >
 {deathCheckPendingId === p.id ? 'Rolling…' : 'Roll death check'}
 </button>
@@ -1262,9 +1453,12 @@ className="mt-2 w-full text-[11px] border border-red-800/60 text-red-300 rounded
 </div>
 </div>
 </div>
+</div>
+</div>
+</div>
 
 <div className="shrink-0 border-t border-neutral-800">
-<div className="max-w-4xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3 items-center">
+<div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_220px] gap-3 items-center">
 <input
 value={message}
 onChange={(e) => setMessage(e.target.value)}
@@ -1272,6 +1466,15 @@ onKeyDown={(e) => e.key === 'Enter' && (gmType === 'ai' ? sendAndAskAiGm() : sen
 placeholder="Say or do something"
 className="min-w-0 bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
 />
+{onOpenLibrary && (
+<button
+onClick={onOpenLibrary}
+title="Ask a rule"
+className="text-sm border border-neutral-700 rounded-md px-3 py-2 flex items-center gap-1.5 text-neutral-300 hover:bg-neutral-800 whitespace-nowrap"
+>
+<HelpCircle size={15} /> Ask a rule
+</button>
+)}
 {gmType === 'ai' ? (
 <button
 onClick={sendAndAskAiGm}
