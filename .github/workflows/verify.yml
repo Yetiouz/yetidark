@@ -35,3 +35,23 @@ jobs:
 
       - name: Verify production build and dependencies
         run: pnpm verify
+
+  database:
+    name: Supabase migrations and authorization tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase database
+        run: supabase db start
+
+      - name: Run migrations and pgTAP authorization suite
+        run: supabase test db
