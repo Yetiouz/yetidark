@@ -13,15 +13,15 @@ history remains the detailed source of truth.
 
 - Added magic-link authentication and the account profile.
 - Added campaign creation, public/private discovery, join codes, membership,
-  and player/GM roles.
+and player/GM roles.
 - Added character creation, selection, sheets, portraits, gear, talents, XP,
-  coin, backgrounds, and features.
+coin, backgrounds, and features.
 - Replaced mock campaign play with Supabase-backed data.
 - Added map upload, hex overlay, GM-controlled fog of war, and party position.
 - Added realtime scene log, party chat, dice results, turn order, votes,
-  encounters, monsters, and GM notes.
+encounters, monsters, and GM notes.
 - Added campaign settings, house rules, threads, clocks, timeline, light
-  tracking, rules library, and NPC/faction/treasure trackers.
+tracking, rules library, and NPC/faction/treasure trackers.
 - Added the initial AI-GM Edge Function and table conversation flow.
 - Added the original project handoff document and GM-brain reference material.
 
@@ -32,7 +32,7 @@ history remains the detailed source of truth.
 - Added retry handling and clearer Edge Function errors.
 - Added map zoom and pan.
 - Added spells, core classes and ancestries, class features, and armor-class
-  calculation.
+calculation.
 
 ## July 28, 2026 — Builders and Milestone 0 audit
 
@@ -43,119 +43,142 @@ history remains the detailed source of truth.
 - Completed the Milestone 0 audit at commit `d7eb09b`.
 - Confirmed that the current stack should be preserved.
 - Identified database reproducibility, authorization, rules correctness,
-  authoritative commands, routing, and delivery safety as the stabilization
-  priorities.
+authoritative commands, routing, and delivery safety as the stabilization
+priorities.
 
 ## July 28–29, 2026 — Reproducibility and delivery
 
 - Reconstructed the current live Supabase schema as a reproducible migration
-  chain.
+chain.
 - Aligned migration identifiers with production.
 - Added Supabase CLI configuration and repeatable local rebuild instructions.
 - Added a deterministic pnpm lockfile and public environment example.
 - Added dependency auditing, rules tests, production build verification, and a
-  GitHub Actions gate.
+GitHub Actions gate.
 - Added production browser security headers and adopted preview-branch/pull-
-  request delivery.
+request delivery.
 
 ## July 28–29, 2026 — Security hardening
 
 - Restricted campaign discovery and joining boundaries.
 - Hardened campaign membership, campaign creation, identity attribution, scene
-  logs, dice audit links, avatars, rules files, and cross-campaign references.
+logs, dice audit links, avatars, rules files, and cross-campaign references.
 - Serialized AI-GM turn generation to prevent concurrent duplicate narration.
 - Split NPC, faction, and treasure secrets into GM-only records.
 - Made campaign map storage private and replaced public URLs with authorized
-  signed access.
+signed access.
 - Expanded database authorization and storage-policy tests.
 
 ## July 29, 2026 — Shadowdark rules stabilization
 
 - Added a versioned character rules module and focused rules tests.
 - Persisted raw ability rolls, starting HP rolls, applied rules version, and
-  character-creation provenance.
+character-creation provenance.
 - Corrected starting HP and gear-slot behavior.
 - Applied the equipped-items house rule.
 - Made class talent results stand and retain their roll provenance.
 - Implemented the approved per-rest spell success and lock cycle, including
-  natural-1 mishaps.
+natural-1 mishaps.
 - Added atomic full rests that consume a ration, restore HP and daily features,
-  and reset spell-cycle state.
+and reset spell-cycle state.
 
 ## July 29, 2026 — Event ledger foundation released
 
 - Added an append-only campaign event table in migration 025.
 - Added an authoritative command for HP, XP, and coin adjustments.
 - Recorded authenticated actors, before/after values, requested and applied
-  deltas, reasons, and full rests.
+deltas, reasons, and full rests.
 - Raised the database test suite to 104 passing checks.
 - Applied and verified migration 025 in production.
 
 ## July 29, 2026 — Frontend lint gate prepared
 
 - Added React-aware ESLint checks for application code, hooks, tests, and
-  configuration files.
+configuration files.
 - Added linting to the same verification command used locally and by GitHub
-  Actions.
+Actions.
 - Removed unused character-selection state, an unused tracker import, and an
-  unused character-builder setter identified by the first lint pass.
+unused character-builder setter identified by the first lint pass.
 - Kept React compiler migration rules out of the initial gate so existing
-  loading effects and map interactions can be modernized in focused changes.
+loading effects and map interactions can be modernized in focused changes.
 
 ## July 29, 2026 — Atomic character creation released
 
 - Replaced separate character, gear, talent, and feature writes with one
-  authoritative database transaction.
+authoritative database transaction.
 - Derived character ownership from the authenticated user and required campaign
-  membership inside the command.
+membership inside the command.
 - Added a `character.created` campaign event with starting-record counts.
 - Proved that invalid child records roll back the entire character and that
-  direct character inserts cannot bypass the command.
+direct character inserts cannot bypass the command.
 - Rebuilt the local database through migration 029 and passed all 152 database
-  authorization tests.
+authorization tests.
 - Applied migration 029 to production and verified that the local and remote
-  migration ledgers match with no pending database changes.
+migration ledgers match with no pending database changes.
 
 ## July 29, 2026 — URL routing prepared for release
 
 - Added URL-backed navigation for the lobby, profile, campaign creation,
-  campaign screens, character creation, and character sheets.
+campaign screens, character creation, and character sheets.
 - Added session restoration from campaign and character URLs.
 - Added route parsing and formatting tests plus the Vercel SPA rewrite needed
-  for direct links and refreshes.
+for direct links and refreshes.
 - Verified all public and nested preview routes, direct route loads, and browser
-  back/forward navigation.
+back/forward navigation.
 - Documented the deferred signed-in campaign refresh, shared-link, and
-  player/GM authorization checks after the built-in email provider reached its
-  project-wide send limit.
+player/GM authorization checks after the built-in email provider reached its
+project-wide send limit.
 - Split authenticated screens into route-level chunks, reducing the initial
-  production JavaScript bundle from about 577 kB to 375 kB and clearing the
-  previous large-chunk build warning.
+production JavaScript bundle from about 577 kB to 375 kB and clearing the
+previous large-chunk build warning.
 
 ## July 29, 2026 — Reliable sign-in and playtest handoff
 
 - Added GitHub OAuth as the primary sign-in path while retaining email magic
-  links as a fallback.
+links as a fallback.
 - Confirmed GitHub sign-in through Supabase on production.
 - Completed signed-in production refresh checks for campaign and GM settings
-  routes.
+routes.
 - Confirmed a copied character URL restores the correct signed-in destination
-  in a new tab.
+in a new tab.
 - Added the structured two-account multiplayer playtest that closes
-  stabilization and gates the Milestone 1 gameplay loop.
+stabilization and gates the Milestone 1 gameplay loop.
 
 ## July 29, 2026 — Stabilization milestone completed
 
 - Completed the structured production playtest with separate GM and player
-  accounts.
+accounts.
 - Verified role-aware routing, realtime chat, authoritative dice, reasoned
-  character changes, shared clocks, scene synchronization, and durable resume.
+character changes, shared clocks, scene synchronization, and durable resume.
 - Fixed player entry into already-live human-GM sessions.
 - Required reasons for HP, XP, and coin changes and verified the resulting
-  event record in production through a read-only query.
+event record in production through a read-only query.
 - Prevented command responses and realtime inserts from rendering duplicate
-  clocks or light sources.
+clocks or light sources.
 - Confirmed the reported duplicate clock was one database row and required no
-  production-data cleanup.
+production-data cleanup.
 - Closed M0.5 and carried shared-state discoverability into Milestone 1 UI
-  planning.
+planning.
+
+## July 30, 2026 — Player-table status rail
+
+- Added a read-only status rail to the player table: the oldest open thread
+as a stand-in "objective," clocks that have moved (most-complete first), and
+currently-lit light sources (soonest-to-expire first, flagged under 10
+minutes remaining). All three already existed and were already
+member-readable -- only Campaign Log surfaced them before, behind an
+icon-only toolbar button the M0.5 playtest flagged as easy to miss during
+play.
+- The rail renders nothing when a campaign isn't using clocks or light yet,
+so it adds no weight to campaigns that don't need it; full editing stays in
+Campaign Log.
+- Re-created `adjust_character_resource` and `complete_character_rest` in
+migration 030 to also drop a short line into the scene log ("Bjorn: +5 HP —
+healing potion", "Bjorn completed a full rest — HP restored to 8/8"),
+matching the pattern `roll_campaign_dice` already used for dice. HP/XP/coin
+and rest changes were previously recorded only in `campaign_events`, with no
+UI surfacing them anywhere.
+- Scoped deliberately as an interim step on top of existing data and the
+current fixed-viewport layout -- not the fuller reference player HUD (a
+personal stat bar, immediate-situation/known-details panels, structured
+objectives), which needs its own schema and design work.
