@@ -971,7 +971,7 @@ GM view
 </div>
 )}
 
-<div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] gap-3 mb-3 items-start">
+<div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start">
 {/* LEFT RAIL: my character */}
 <div className="flex flex-col gap-3">
 {myCharacter ? (
