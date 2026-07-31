@@ -4,6 +4,7 @@ import { Eye, Plus, Upload, Dices, SkipForward, User, Settings, ScrollText, Book
 import ZoneScene from './ZoneScene.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { campaignMapPath, useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
+import { abilityModifier } from '../game/rules/character.js'
 
 // Everything here is real Supabase data, synced live: the encounter
 // tracker, GM notes, turn order, the scene log, and the zone map (upload
@@ -55,7 +56,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('encounter_monsters')
-      .select('id, name, ac, hp, max_hp, hidden, zone')
+      .select('id, name, ac, hp, max_hp, hidden, zone, dex_mod')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setEncounter(data || []) })
@@ -69,7 +70,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('characters')
-      .select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone')
+      .select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, stats')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setParty(data || []) })
@@ -177,9 +178,12 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     if (acInput === null) return
     const hpInput = window.prompt('Starting / max HP?', '4')
     if (hpInput === null) return
+    const dexInput = window.prompt('DEX modifier (for initiative)?', '0')
+    if (dexInput === null) return
     const ac = parseInt(acInput, 10) || 10
     const hp = Math.max(1, parseInt(hpInput, 10) || 1)
-    await supabase.from('encounter_monsters').insert({ campaign_id: campaignId, name, ac, hp, max_hp: hp, hidden: false })
+    const dexMod = parseInt(dexInput, 10) || 0
+    await supabase.from('encounter_monsters').insert({ campaign_id: campaignId, name, ac, hp, max_hp: hp, hidden: false, dex_mod: dexMod })
     setMonsterDraft('')
   }
 
@@ -194,23 +198,25 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     setNoteDraft('')
   }
 
-  // Rolls 1d20 for every party member + visible monster through the same
-  // dice engine as the player table, logs each roll to `dice_rolls` (so
-  // it's auditable like everything else), and posts the usual scene_log
-  // summary line linked back to that audit row.
+  // Shadowdark initiative: highest 1d20+DEX starts. Rolls for every party
+  // member + visible monster through the same dice engine as the player
+  // table (auditable via dice_rolls), then the order just rotates
+  // (advanceTurn below) rather than re-sorting -- clockwise, not a ranked
+  // tracker that reshuffles every round.
   const rollInitiative = async () => {
     if (!campaignId) return
     const participants = [
-      ...party.map((c) => ({ id: c.id, name: c.name })),
-      ...encounter.filter((m) => !m.hidden).map((m) => ({ id: m.id, name: m.name })),
+      ...party.map((c) => ({ id: c.id, name: c.name, dexMod: abilityModifier(Number(c.stats?.dex) || 10) })),
+      ...encounter.filter((m) => !m.hidden).map((m) => ({ id: m.id, name: m.name, dexMod: m.dex_mod || 0 })),
     ]
     if (participants.length === 0) return
 
     const rolled = (await Promise.all(
       participants.map(async (participant) => {
+        const notation = `1d20${participant.dexMod >= 0 ? '+' : ''}${participant.dexMod}`
         const { data, error } = await supabase.rpc('roll_campaign_dice', {
           p_campaign_id: campaignId,
-          p_notation: '1d20',
+          p_notation: notation,
           p_mode: 'flat',
           p_reason: `${participant.name} — initiative`,
           p_roller_name: participant.name,
