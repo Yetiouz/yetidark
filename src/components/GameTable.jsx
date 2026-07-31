@@ -89,6 +89,11 @@ const askAiGmRef = useRef(null) // mirrors askAiGm below, kept current so the re
 const [notationInput, setNotationInput] = useState('1d20')
 const [rollMode, setRollMode] = useState('flat') // 'flat' | 'advantage' | 'disadvantage'
 const [reasonInput, setReasonInput] = useState('')
+const [attackTargetId, setAttackTargetId] = useState('')
+const [attackNotation, setAttackNotation] = useState('1d20')
+const [damageNotation, setDamageNotation] = useState('1d6')
+const [attacking, setAttacking] = useState(false)
+const [attackError, setAttackError] = useState(null)
 const [rollError, setRollError] = useState(null)
 
 useEffect(() => {
@@ -193,7 +198,7 @@ reloadVotes(campaignId)
 
 supabase
 .from('characters')
-.select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone')
+.select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, owner_user_id')
 .eq('campaign_id', campaignId)
 .order('created_at', { ascending: true })
 .then(({ data }) => { if (!cancelled) setParty(data || []) })
@@ -597,6 +602,33 @@ return a.remaining - b.remaining
 .slice(0, 3)
 const showRail = Boolean(objective) || activeClocks.length > 0 || litSources.length > 0
 const litCharacterId = lightSources.find((s) => s.lit)?.character_id || null
+const myCharacter = party.find((p) => p.owner_user_id === user?.id) || null
+
+// Attack resolution goes through the same authoritative server command
+// pattern as roll_campaign_dice: rolls to hit, compares to the target's
+// AC, rolls damage on a hit, and applies it -- one audited round trip.
+const resolveAttack = async () => {
+  if (!attackTargetId || attacking) return
+  setAttacking(true)
+  setAttackError(null)
+  const attackerName = myCharacter?.name || displayName || 'Attacker'
+  const { data, error } = await supabase.rpc('resolve_attack_roll', {
+    p_campaign_id: campaignId,
+    p_attacker_name: attackerName,
+    p_attack_notation: attackNotation,
+    p_damage_notation: damageNotation,
+    p_target_type: 'monster',
+    p_target_id: attackTargetId,
+  })
+  setAttacking(false)
+  if (error) {
+    setAttackError(error.message || 'Could not resolve that attack.')
+    return
+  }
+  if (data.scene_entry) {
+    setLog((all) => (all.some((entry) => entry.id === data.scene_entry.id) ? all : [...all, data.scene_entry]))
+  }
+}
 
 // Shared by the human-GM Scene log panel and the AI-GM unified chat feed
 // (same ref, reused) -- keyed on the full log so it scrolls correctly
@@ -936,6 +968,53 @@ Log
 </button>
 </div>
 </div>
+</div>
+
+<div className="bg-neutral-900 rounded-lg p-3">
+<p className="text-xs text-neutral-400 mb-2">Attack</p>
+{monsters.length === 0 ? (
+<p className="text-[11px] text-neutral-500">No monsters in this encounter yet.</p>
+) : (
+<>
+<select
+value={attackTargetId}
+onChange={(e) => setAttackTargetId(e.target.value)}
+className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white mb-1.5"
+>
+<option value="">Target...</option>
+{monsters.map((m) => (
+<option key={m.id} value={m.id}>{m.name}</option>
+))}
+</select>
+<div className="flex gap-1.5 mb-1.5">
+<input
+value={attackNotation}
+onChange={(e) => setAttackNotation(e.target.value)}
+placeholder="1d20+3"
+className="w-16 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+/>
+<input
+value={damageNotation}
+onChange={(e) => setDamageNotation(e.target.value)}
+placeholder="1d6+1"
+className="w-16 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+/>
+<button
+onClick={resolveAttack}
+disabled={!attackTargetId || attacking}
+className="flex-1 text-xs border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+>
+{attacking ? 'Rolling…' : 'Attack'}
+</button>
+</div>
+{attackError && (
+<div className="flex items-center gap-1.5 text-red-400">
+<AlertCircle size={12} />
+<p className="text-[11px]">{attackError}</p>
+</div>
+)}
+</>
+)}
 </div>
 </div>
 
