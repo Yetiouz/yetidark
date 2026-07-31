@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
-import { Eye, Plus, Flag, Upload, RotateCcw, Dices, SkipForward, User, Settings, ScrollText, BookOpen, Users } from 'lucide-react'
+import { Eye, Plus, Upload, Dices, SkipForward, User, Settings, ScrollText, BookOpen, Users } from 'lucide-react'
 
-import MapGrid from './MapGrid.jsx'
+import ZoneScene from './ZoneScene.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { campaignMapPath, useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 
 // Everything here is real Supabase data, synced live: the encounter
-// tracker, GM notes, turn order, the scene log, and the map panel (upload,
-// grid size, party marker, reveal/re-fog).
+// tracker, GM notes, turn order, the scene log, and the zone map (upload
+// a scene image, then set each character/monster's Close/Near/Far zone).
 //
 // Initiative rolls go through the same authoritative server command as
 // player app rolls and are persisted with their scene-log entries in one
@@ -43,8 +43,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   }, [user])
 
   const [mapInfo, setMapInfo] = useState(null)
-  const [cellState, setCellState] = useState({})
-  const [mapMode, setMapMode] = useState('reveal') // 'reveal' | 'move'
+  const [lightSources, setLightSources] = useState([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
   const fileInputRef = useRef(null)
@@ -56,7 +55,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('encounter_monsters')
-      .select('id, name, ac, hp, max_hp, hidden')
+      .select('id, name, ac, hp, max_hp, hidden, zone')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setEncounter(data || []) })
@@ -70,7 +69,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('characters')
-      .select('id, name, class, level, hp, max_hp, ac, avatar_url')
+      .select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setParty(data || []) })
@@ -84,21 +83,16 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('campaigns')
-      .select('map_path, map_url, map_cols, map_rows, party_row, party_col')
+      .select('map_path, map_url')
       .eq('id', campaignId)
       .maybeSingle()
       .then(({ data }) => { if (!cancelled) setMapInfo(data) })
 
     supabase
-      .from('map_cells')
-      .select('row, col, state')
+      .from('campaign_light_sources')
+      .select('id, name, character_id, lit, lit_at, remaining_minutes, total_minutes')
       .eq('campaign_id', campaignId)
-      .then(({ data }) => {
-        if (cancelled) return
-        const next = {}
-        for (const cell of data || []) next[`${cell.row},${cell.col}`] = cell.state
-        setCellState(next)
-      })
+      .then(({ data }) => { if (!cancelled) setLightSources(data || []) })
 
     supabase
       .from('scene_log')
@@ -145,11 +139,11 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'map_cells', filter: `campaign_id=eq.${campaignId}` },
+        { event: '*', schema: 'public', table: 'campaign_light_sources', filter: `campaign_id=eq.${campaignId}` },
         (payload) => {
-          const row = payload.new
-          if (!row) return
-          setCellState((s) => ({ ...s, [`${row.row},${row.col}`]: row.state }))
+          if (payload.eventType === 'INSERT') setLightSources((l) => [...l, payload.new])
+          else if (payload.eventType === 'UPDATE') setLightSources((l) => l.map((x) => (x.id === payload.new.id ? payload.new : x)))
+          else if (payload.eventType === 'DELETE') setLightSources((l) => l.filter((x) => x.id !== payload.old.id))
         }
       )
       .on(
@@ -238,21 +232,14 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     await supabase.from('turn_order').upsert({ campaign_id: campaignId, order_list: rotated }, { onConflict: 'campaign_id' })
   }
 
-  const revealCell = async (row, col) => {
-    if (!campaignId) return
-    setCellState((s) => ({ ...s, [`${row},${col}`]: 'explored' }))
-    await supabase.from('map_cells').upsert({ campaign_id: campaignId, row, col, state: 'explored' }, { onConflict: 'campaign_id,row,col' })
+  const setCharacterZone = async (id, zone) => {
+    setParty((list) => list.map((p) => (p.id === id ? { ...p, zone } : p)))
+    await supabase.from('characters').update({ zone }).eq('id', id)
   }
 
-  const movePartyTo = async (row, col) => {
-    if (!campaignId) return
-    setMapInfo((m) => ({ ...(m || {}), party_row: row, party_col: col }))
-    await supabase.from('campaigns').update({ party_row: row, party_col: col }).eq('id', campaignId)
-  }
-
-  const handleMapClick = (row, col) => {
-    if (mapMode === 'move') movePartyTo(row, col)
-    else revealCell(row, col)
+  const setMonsterZone = async (id, zone) => {
+    setEncounter((list) => list.map((m) => (m.id === id ? { ...m, zone } : m)))
+    await supabase.from('encounter_monsters').update({ zone }).eq('id', id)
   }
 
   const uploadMap = async (file) => {
@@ -276,19 +263,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       return
     }
     setMapInfo((m) => ({ ...(m || {}), map_path: path, map_url: null }))
-  }
-
-  const updateGridSize = async (field, value) => {
-    const n = Math.max(2, Math.min(30, parseInt(value, 10) || 1))
-    setMapInfo((m) => ({ ...(m || {}), [field]: n }))
-    await supabase.from('campaigns').update({ [field]: n }).eq('id', campaignId)
-  }
-
-  const refogMap = async () => {
-    if (!campaignId) return
-    if (!window.confirm("Clear all explored fog for this map? This can't be undone.")) return
-    await supabase.from('map_cells').delete().eq('campaign_id', campaignId)
-    setCellState({})
   }
 
   const sendMessage = async () => {
@@ -441,18 +415,34 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 {encounter.map((m) => (
                   <div
                     key={m.id}
-                    className={`flex items-center justify-between text-xs p-2 bg-neutral-800/60 rounded-md border ${
+                    className={`flex flex-col gap-1 text-xs p-2 bg-neutral-800/60 rounded-md border ${
                       m.hidden ? 'border-red-800/60' : 'border-neutral-700'
                     }`}
                   >
-                    <div>
-                      <span className="font-medium text-white">{m.name}</span>
-                      <span className="text-neutral-500"> &middot; ac {m.ac}{m.hidden ? ' · hidden' : ''}</span>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-medium text-white">{m.name}</span>
+                        <span className="text-neutral-500"> &middot; ac {m.ac}{m.hidden ? ' · hidden' : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => adjustHp(m, -1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">-</button>
+                        <span className="min-w-[44px] text-center text-neutral-200">{m.hp} / {m.max_hp} hp</span>
+                        <button onClick={() => adjustHp(m, 1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">+</button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => adjustHp(m, -1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">-</button>
-                      <span className="min-w-[44px] text-center text-neutral-200">{m.hp} / {m.max_hp} hp</span>
-                      <button onClick={() => adjustHp(m, 1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300">+</button>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-neutral-500 mr-0.5">Zone</span>
+                      {['close', 'near', 'far'].map((z) => (
+                        <button
+                          key={z}
+                          onClick={() => setMonsterZone(m.id, z)}
+                          className={`text-[10px] px-1.5 py-0.5 rounded border capitalize ${
+                            (m.zone || 'near') === z ? 'border-blue-500 text-blue-300 bg-blue-500/10' : 'border-neutral-700 text-neutral-400'
+                          }`}
+                        >
+                          {z}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -554,26 +544,52 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 <p className="text-xs text-neutral-500 sm:col-span-3">No characters in this campaign yet.</p>
               )}
               {party.map((p) => (
-                <button
+                <div
                   key={p.id}
-                  onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
-                  disabled={!onOpenCharacterSheet}
-                  className="text-left bg-neutral-900 border border-neutral-800 rounded-xl p-3 hover:border-neutral-600 disabled:cursor-default disabled:hover:border-neutral-800"
+                  className="bg-neutral-900 border border-neutral-800 rounded-xl p-3 hover:border-neutral-600"
                 >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    {p.avatar_url ? (
-                      <img src={p.avatar_url} alt={p.name} className="w-8 h-8 rounded-full object-cover border border-neutral-700" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center shrink-0">
-                        <User size={14} className="text-neutral-500" />
-                      </div>
-                    )}
-                    <span className="text-sm font-medium text-white">{p.name}</span>
+                  <button
+                    onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
+                    disabled={!onOpenCharacterSheet}
+                    className="text-left w-full disabled:cursor-default"
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      {p.avatar_url ? (
+                        <img
+                          src={p.avatar_url}
+                          alt={p.name}
+                          className="w-8 h-8 rounded-full object-cover border-2"
+                          style={{ borderColor: p.color || '#3b82f6' }}
+                        />
+                      ) : (
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                          style={{ background: `${p.color || '#3b82f6'}33`, border: `2px solid ${p.color || '#3b82f6'}` }}
+                        >
+                          <User size={14} style={{ color: p.color || '#3b82f6' }} />
+                        </div>
+                      )}
+                      <span className="text-sm font-medium text-white">{p.name}</span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400">
+                      {p.class} &middot; lvl {p.level} &middot; {p.hp}/{p.max_hp} hp &middot; ac {p.ac}
+                    </p>
+                  </button>
+                  <div className="flex items-center gap-1 mt-2 pt-2 border-t border-neutral-800">
+                    <span className="text-[10px] text-neutral-500 mr-0.5">Zone</span>
+                    {['close', 'near', 'far'].map((z) => (
+                      <button
+                        key={z}
+                        onClick={() => setCharacterZone(p.id, z)}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border capitalize ${
+                          (p.zone || 'near') === z ? 'border-blue-500 text-blue-300 bg-blue-500/10' : 'border-neutral-700 text-neutral-400'
+                        }`}
+                      >
+                        {z}
+                      </button>
+                    ))}
                   </div>
-                  <p className="text-[11px] text-neutral-400">
-                    {p.class} &middot; lvl {p.level} &middot; {p.hp}/{p.max_hp} hp &middot; ac {p.ac}
-                  </p>
-                </button>
+                </div>
               ))}
             </div>
           </div>
@@ -596,55 +612,20 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 >
                   <Upload size={13} /> {uploading ? 'Uploading...' : campaignMapPath(mapInfo) ? 'Replace map image' : 'Upload map image'}
                 </button>
-                <div className="flex items-center gap-1 text-xs text-neutral-400">
-                  <span>cols</span>
-                  <input
-                    type="number"
-                    value={mapInfo?.map_cols ?? 10}
-                    onChange={(e) => updateGridSize('map_cols', e.target.value)}
-                    className="w-12 bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-white"
-                  />
-                  <span>rows</span>
-                  <input
-                    type="number"
-                    value={mapInfo?.map_rows ?? 6}
-                    onChange={(e) => updateGridSize('map_rows', e.target.value)}
-                    className="w-12 bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-white"
-                  />
-                </div>
-                <button
-                  onClick={() => setMapMode((m) => (m === 'move' ? 'reveal' : 'move'))}
-                  className={`text-xs border rounded-md px-2 py-1 flex items-center gap-1.5 hover:bg-neutral-800 ${
-                    mapMode === 'move' ? 'border-blue-500 text-blue-300 bg-blue-500/10' : 'border-neutral-700 text-neutral-200'
-                  }`}
-                >
-                  <Flag size={13} /> {mapMode === 'move' ? 'Click map to drop party' : 'Move party marker'}
-                </button>
-                <button
-                  onClick={refogMap}
-                  className="text-xs border border-neutral-700 rounded-md px-2 py-1 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
-                >
-                  <RotateCcw size={13} /> Re-fog map
-                </button>
               </div>
             </div>
             {(uploadError || mapAccessError) && (
               <p className="text-xs text-red-400 mb-2">{uploadError || mapAccessError}</p>
             )}
-            <MapGrid
+            <ZoneScene
               mapUrl={mapUrl}
-              cols={mapInfo?.map_cols || 10}
-              rows={mapInfo?.map_rows || 6}
-              cellState={cellState}
-              partyRow={mapInfo?.party_row}
-              partyCol={mapInfo?.party_col}
-              mode={mapMode}
-              onCellClick={handleMapClick}
+              mapAccessError={mapAccessError}
+              party={party}
+              monsters={encounter}
+              litCharacterId={lightSources.find((s) => s.lit)?.character_id || null}
             />
             <p className="text-[11px] text-neutral-500 mt-2">
-              {mapMode === 'move'
-                ? 'Click anywhere on the map to move the party marker.'
-                : "Fog clears permanently as cells are explored. Use re-fog for story reasons like amnesia."}
+              Set each character or monster's zone from the cards below -- Close, Near, or Far from the party.
             </p>
           </div>
         </div>
