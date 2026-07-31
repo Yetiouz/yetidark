@@ -53,6 +53,59 @@ Complete when initiative stays clockwise (not a ranked tracker), HP changes
 are auditable through the event ledger, and the GM's player-view preview
 exactly matches what players see.
 
+### Design decisions confirmed (mockup review, July 31)
+
+Two rounds of mockups for the player table and GM dashboard were reviewed
+and approved, informed by research into what Shadowdark's actual rules
+require a map to track (see `docs/BUILD_LOG.md` for the session notes). The
+following are locked in for the Milestone 1 build, not just visual polish:
+
+The map moves off the hex grid for in-scene rendering. Shadowdark's real
+range system is three unmeasured bands — close (melee), near (~30ft),
+far (sight) — not a grid, so cell-by-cell movement was modeling the wrong
+thing. The new model is an illustrated scene image with Close/Near/Far
+zone rings drawn over it, tokens placed within a zone rather than a cell.
+Dungeon layout and orientation (which room connects to which) stays a
+separate concern from in-scene range.
+
+Light radius is dynamic and centered on whoever is currently carrying the
+active light source, not fixed to the room — consistent with no Shadowdark
+ancestry having darkvision, which makes "who's lit" a constantly-moving,
+gameplay-critical state rather than a static room property.
+
+Exploration gets its own counter, separate from combat rounds: a crawling
+round / next-encounter-check pair, tied to time spent and noise level,
+modeling Shadowdark's wandering-monster-check mechanic.
+
+Secret zones (traps, hidden doors) get three states instead of a binary
+hidden/revealed flag: hidden, tell-visible (noticeable to specific classes
+at normal pace, e.g. Thieves), and revealed. This matches how Shadowdark
+actually handles secrets — physical tells and player description, not a
+flat perception roll.
+
+Monster visibility on the GM map splits into two independent toggles:
+whether the monster's presence is visible to players at all, and whether
+its HP specifically is visible once it's known about.
+
+Each player character gets one assigned color, used consistently
+everywhere it appears: map token ring, header presence avatar, chat sender
+name, party HP list entry.
+
+GM notes move off a flat notes panel entirely. Persistent notes attach to
+whatever's selected on the map (a monster, a trap, a feature) as a
+contextual inspector; one-off hidden context shows as an inline GM-only
+annotation in the log stream, next to the specific moment it explains.
+
+Session log and Party chat stay as two separate, always-visible panels —
+no tabs. Active effects move to the character sidebar and GM notes move to
+the map-selection inspector instead of competing for a third tab; tabbing
+all three together was considered and rejected because it risks burying
+messages behind whichever tab isn't active.
+
+The player view also gains a top stat strip (HP/AC/Gear/Luck/Torch) and
+presence avatars in the header on both views, showing who's actually
+online.
+
 ## Milestone 2 — Spellcasting and advancement
 
 Spell state (`successful_since_rest`, `locked_until_rest`, mishap/penance)
