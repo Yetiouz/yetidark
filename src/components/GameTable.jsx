@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2, Flame, HelpCircle, Swords, Backpack } from 'lucide-react'
+import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2, Flame, HelpCircle, Swords, Backpack, Sparkles, Package, Mic, ZoomIn, ZoomOut, Sun, ShieldCheck } from 'lucide-react'
 import ZoneScene from './ZoneScene.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { flatDieNotation } from '../lib/dice.js'
@@ -67,11 +67,16 @@ return source.remaining_minutes
 //
 // Layout: three-column shell (character rail / scene+log / situation
 // rail) matching the delve-ui-reference player-session mockup, inside the
-// same fixed-viewport header/scroll/composer frame as before. A few
-// mockup elements are intentionally not reproduced because there's no
-// real data behind them yet -- Luck, weapon-specific attack/damage dice,
-// and a tracked conditions/active-effects list. The "Talents" panel below
-// uses real character_talents rows instead of inventing that state.
+// same fixed-viewport header/scroll/composer frame as before.
+//
+// A handful of mockup elements have no real data behind them yet -- Luck,
+// weapon-specific attack/damage dice, tracked conditions/active effects,
+// and the AI GM's per-message "pending adjudication" check card. Per
+// explicit direction, those are kept as visible placeholder UI (clearly
+// inert/disabled, honest empty states, no fabricated numbers) so the
+// layout reads the way the mockup does, rather than being omitted --
+// they're slots waiting on real schema/mechanics, not real features yet.
+// The "Talents" panel uses real character_talents rows.
 export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
 const user = session?.user
 const [displayName, setDisplayName] = useState('')
@@ -885,8 +890,21 @@ return (
 <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pt-6 pb-3 flex items-center justify-between">
 <div className="flex items-center gap-2.5">
 <p className="text-white font-medium">{campaignName}</p>
+<span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300 border border-green-600/40">Live now</span>
 </div>
 <div className="flex items-center gap-1.5">
+<div className="flex items-center -space-x-1.5 mr-1">
+{party.slice(0, 4).map((p) => (
+<div
+key={p.id}
+title={p.name}
+className="w-6 h-6 rounded-full border-2 border-neutral-950 flex items-center justify-center text-[10px] font-medium text-white"
+style={{ backgroundColor: p.color || '#3f3f46' }}
+>
+{p.name?.[0]?.toUpperCase() || '?'}
+</div>
+))}
+</div>
 {onOpenLog && (
 <button
 onClick={onOpenLog}
@@ -932,7 +950,7 @@ GM view
 </div>
 
 {myCharacter && (
-<div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+<div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
 <div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
 <p className="text-[10px] tracking-wide text-neutral-500 mb-0.5">HP</p>
 <p className="text-lg font-semibold text-white">
@@ -947,6 +965,10 @@ GM view
 <div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
 <p className="text-[10px] tracking-wide text-neutral-500 mb-0.5">Gear</p>
 <p className="text-lg font-semibold text-amber-400">{gearUsed}<span className="text-neutral-500"> / {gearCapacity}</span></p>
+</div>
+<div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
+<p className="text-[10px] tracking-wide text-neutral-500 mb-0.5 flex items-center gap-1"><Sparkles size={10} /> LUCK</p>
+<p className="text-lg font-semibold text-neutral-600" title="Luck isn't tracked yet -- placeholder slot">&mdash;</p>
 </div>
 <div className={`rounded-lg px-3 py-2 border ${litSources[0]?.lit ? 'border-amber-500/60 bg-amber-500/5' : 'bg-neutral-900 border-neutral-800'}`}>
 <p className="text-[10px] tracking-wide text-neutral-500 mb-0.5 flex items-center gap-1"><Flame size={10} /> TORCH</p>
@@ -1004,6 +1026,13 @@ className="flex items-center gap-1.5 text-xs border border-neutral-700 rounded-m
 <Backpack size={12} className="text-neutral-500 shrink-0" /> Inspect character
 </button>
 )}
+<button
+disabled
+title="Item consumption isn't wired up yet -- placeholder slot"
+className="flex items-center gap-1.5 text-xs border border-neutral-800 rounded-md px-2 py-1.5 text-neutral-600 text-left cursor-not-allowed"
+>
+<Package size={12} className="text-neutral-600 shrink-0" /> Use item
+</button>
 </div>
 </div>
 
@@ -1021,6 +1050,11 @@ className="flex items-center gap-1.5 text-xs border border-neutral-700 rounded-m
 ))}
 </div>
 )}
+</div>
+
+<div className="bg-neutral-900 rounded-lg p-3">
+<p className="text-xs text-neutral-400 mb-2 flex items-center gap-1"><ShieldCheck size={11} className="text-neutral-500" /> Active effects</p>
+<p className="text-[11px] text-neutral-500">Not tracked yet -- conditions/buffs are a planned feature.</p>
 </div>
 </>
 ) : (
@@ -1069,6 +1103,21 @@ sceneTab === t.key ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-ne
 
 {showMapPane && (
 <div className="bg-neutral-900 rounded-lg p-4">
+<div className="flex items-center justify-between mb-2.5">
+<span className="text-xs text-neutral-400">Scene</span>
+<div className="flex items-center gap-1">
+{[ZoomIn, ZoomOut, Sun].map((Icon, i) => (
+<button
+key={i}
+disabled
+title="Map view controls aren't wired up yet -- placeholder"
+className="p-1 rounded border border-neutral-800 text-neutral-600 cursor-not-allowed"
+>
+<Icon size={12} />
+</button>
+))}
+</div>
+</div>
 <ZoneScene
 mapUrl={mapUrl}
 mapAccessError={mapAccessError}
@@ -1323,6 +1372,28 @@ Nothing has happened yet. Say or do something below, then hit Continue when the 
 </p>
 )}
 {log.map((entry) => renderChatBubble(entry))}
+{aiTurnPending && (
+<div className="flex justify-start">
+<div className="max-w-[85%] bg-neutral-800/70 border border-neutral-700 rounded-xl px-3.5 py-2.5">
+<p className="font-medium text-neutral-300 flex items-center gap-1.5 mb-1 text-xs">
+<Loader2 size={12} className="animate-spin" /> Pending adjudication
+</p>
+<p className="text-xs text-neutral-500 mb-2">The AI GM is resolving what happens next.</p>
+<div className="flex gap-1.5">
+{['No roll', 'Request check', 'Clarify'].map((label) => (
+<button
+key={label}
+disabled
+title="Manual adjudication controls aren't wired up yet -- placeholder"
+className="text-[11px] border border-neutral-700 rounded-md px-2 py-1 text-neutral-600 cursor-not-allowed"
+>
+{label}
+</button>
+))}
+</div>
+</div>
+</div>
+)}
 </div>
 </div>
 ) : (
@@ -1458,7 +1529,7 @@ className="mt-1.5 w-full text-[11px] border border-red-800/60 text-red-300 round
 </div>
 
 <div className="shrink-0 border-t border-neutral-800">
-<div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_220px] gap-3 items-center">
+<div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_220px] gap-3 items-center">
 <input
 value={message}
 onChange={(e) => setMessage(e.target.value)}
@@ -1466,6 +1537,13 @@ onKeyDown={(e) => e.key === 'Enter' && (gmType === 'ai' ? sendAndAskAiGm() : sen
 placeholder="Say or do something"
 className="min-w-0 bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
 />
+<button
+disabled
+title="Voice input isn't wired up yet -- placeholder"
+className="text-sm border border-neutral-800 rounded-md px-3 py-2 text-neutral-600 cursor-not-allowed"
+>
+<Mic size={15} />
+</button>
 {onOpenLibrary && (
 <button
 onClick={onOpenLibrary}

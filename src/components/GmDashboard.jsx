@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Eye, Plus, Upload, Dices, SkipForward, Settings, ScrollText, BookOpen, Users, Flame } from 'lucide-react'
+import { Eye, EyeOff, Plus, Upload, Dices, SkipForward, Settings, ScrollText, BookOpen, Users, Flame, AlertTriangle, RotateCw, Timer, Sun, CloudFog, Target, Mic, Paperclip, Megaphone, Lock } from 'lucide-react'
 
 import ZoneScene from './ZoneScene.jsx'
 import { supabase } from '../lib/supabaseClient.js'
@@ -41,12 +41,17 @@ return source.remaining_minutes
 //
 // Layout: three-column shell (party/scene-controls rail / scene+log /
 // GM notes rail) matching the delve-ui-reference gm-session mockup,
-// inside the same fixed-viewport header/scroll/composer frame as
-// before. Danger level, crawling-round tracking, and the per-entity trap
-// inspector from that mockup aren't reproduced -- there's no schema
-// behind them, and inventing one wasn't part of this pass. "Quick
-// tables" below are real dice-engine shortcuts (a flat roll with a
-// label), not lookup tables Delve doesn't have data for.
+// inside the same fixed-viewport header/scroll/composer frame as before.
+//
+// Danger level, crawling-round tracking, the next-encounter-check
+// countdown, the per-entity (trap/statue) selected inspector, and
+// Secrets/Light/Fog map toggles have no schema behind them yet. Per
+// explicit direction, those stay as visible placeholder UI (dimmed,
+// disabled, honest empty states) rather than being omitted, so the
+// layout reads the way the mockup does -- they're slots waiting on real
+// mechanics, not real features yet. "Quick tables" are real dice-engine
+// shortcuts (a flat roll with a label), not lookup tables Delve doesn't
+// have data for. Clocks & threats and Preview player view are real.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const [displayName, setDisplayName] = useState('GM')
@@ -60,6 +65,8 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [message, setMessage] = useState('')
   const [gmTab, setGmTab] = useState('map') // 'scene' | 'map' | 'encounter' -- pure view toggle, no new data
   const [nowTick, setNowTick] = useState(() => Date.now())
+  const [clocks, setClocks] = useState([])
+  const [composeMode, setComposeMode] = useState('public') // 'public' -> scene_log, 'private' -> gm_notes
   const sceneLogRef = useRef(null)
   const chatLogRef = useRef(null)
 
@@ -142,6 +149,12 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setLog(data || []) })
 
+    supabase
+      .from('campaign_clocks')
+      .select('id, name, segments_filled, segments_total, created_at')
+      .eq('campaign_id', campaignId)
+      .then(({ data }) => { if (!cancelled) setClocks(data || []) })
+
     const channel = supabase
       .channel(`gm-dashboard-${campaignId}`)
       .on(
@@ -191,6 +204,15 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
         (payload) => setMapInfo(payload.new)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'campaign_clocks', filter: `campaign_id=eq.${campaignId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') setClocks((c) => (c.some((x) => x.id === payload.new.id) ? c : [...c, payload.new]))
+          else if (payload.eventType === 'UPDATE') setClocks((c) => c.map((x) => (x.id === payload.new.id ? payload.new : x)))
+          else if (payload.eventType === 'DELETE') setClocks((c) => c.filter((x) => x.id !== payload.old.id))
+        }
       )
       .subscribe()
 
@@ -369,6 +391,16 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const sendMessage = async () => {
     if (!message.trim() || !campaignId) return
     const text = message.trim()
+    // Public narration -> scene_log, same as before. Private note -> the
+    // GM's own gm_notes list (unrevealed until explicitly shared), reusing
+    // the existing addNote path instead of inventing a new table -- this
+    // just gives that real action a spot in the composer, matching the
+    // mockup's Public narration / Private note toggle.
+    if (composeMode === 'private') {
+      setMessage('')
+      await supabase.from('gm_notes').insert({ campaign_id: campaignId, text })
+      return
+    }
     setMessage('')
     const { data, error } = await supabase
       .from('scene_log')
@@ -399,6 +431,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     .filter((s) => s.lit)
     .map((s) => ({ ...s, remaining: displayedMinutes(s, nowTick) }))
     .sort((a, b) => a.remaining - b.remaining)[0] || null
+
+  // Same real campaign_clocks data GameTable.jsx's status rail shows the
+  // party -- the GM gets it too now, sorted most-complete-first.
+  const activeClocks = clocks
+    .slice()
+    .sort((a, b) => (b.segments_filled / b.segments_total) - (a.segments_filled / a.segments_total))
+    .slice(0, 4)
 
   useEffect(() => {
     if (sceneLogRef.current) sceneLogRef.current.scrollTop = sceneLogRef.current.scrollHeight
@@ -451,8 +490,21 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         <div className="flex items-center gap-2.5">
           <p className="text-white font-medium">{campaignName}</p>
           <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">GM view</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300 border border-green-600/40">Live now</span>
         </div>
         <div className="flex items-center gap-1.5">
+          <div className="flex items-center -space-x-1.5 mr-1">
+            {party.slice(0, 4).map((p) => (
+              <div
+                key={p.id}
+                title={p.name}
+                className="w-6 h-6 rounded-full border-2 border-neutral-950 flex items-center justify-center text-[10px] font-medium text-white"
+                style={{ backgroundColor: p.color || '#3f3f46' }}
+              >
+                {p.name?.[0]?.toUpperCase() || '?'}
+              </div>
+            ))}
+          </div>
           {onOpenLog && (
             <button
               onClick={onOpenLog}
@@ -500,7 +552,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         </div>
       </div>
 
-      <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 grid grid-cols-2 gap-2">
+      <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
         <div className={`rounded-lg px-3 py-2 border ${litTorch ? 'border-amber-500/60 bg-amber-500/5' : 'bg-neutral-900 border-neutral-800'}`}>
           <p className="text-[10px] tracking-wide text-neutral-500 mb-0.5 flex items-center gap-1"><Flame size={10} /> TORCH</p>
           {litTorch ? (
@@ -515,6 +567,18 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         <div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
           <p className="text-[10px] tracking-wide text-neutral-500 mb-0.5">MODE</p>
           <span className={`text-sm font-semibold ${gmSceneMode === 'Combat' ? 'text-red-300' : 'text-blue-300'}`}>{gmSceneMode}</span>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
+          <p className="text-[10px] tracking-wide text-neutral-500 mb-0.5 flex items-center gap-1"><AlertTriangle size={10} /> DANGER</p>
+          <p className="text-sm font-semibold text-neutral-600" title="Danger level isn't tracked yet -- placeholder slot">&mdash;</p>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
+          <p className="text-[10px] tracking-wide text-neutral-500 mb-0.5 flex items-center gap-1"><RotateCw size={10} /> CRAWLING ROUND</p>
+          <p className="text-sm font-semibold text-neutral-600" title="Crawling-round tracking isn't wired up yet -- placeholder slot">&mdash;</p>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
+          <p className="text-[10px] tracking-wide text-neutral-500 mb-0.5 flex items-center gap-1"><Timer size={10} /> NEXT ENCOUNTER CHECK</p>
+          <p className="text-sm font-semibold text-neutral-600" title="Next-encounter-check tracking isn't wired up yet -- placeholder slot">&mdash;</p>
         </div>
       </div>
 
@@ -622,6 +686,24 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   <div className="flex items-center justify-between mb-2.5 flex-wrap gap-2">
                     <p className="text-xs text-neutral-400">Map</p>
                     <div className="flex items-center gap-1.5 flex-wrap">
+                      {onSwitchToPlayerView && (
+                        <button
+                          onClick={onSwitchToPlayerView}
+                          className="text-xs border border-blue-500/40 bg-blue-500/10 rounded-md px-2 py-1 flex items-center gap-1.5 text-blue-200 hover:bg-blue-500/20"
+                        >
+                          <Eye size={13} /> Preview player view
+                        </button>
+                      )}
+                      {[{ Icon: EyeOff, label: 'Secrets' }, { Icon: Sun, label: 'Light' }, { Icon: CloudFog, label: 'Fog' }].map(({ Icon, label }) => (
+                        <button
+                          key={label}
+                          disabled
+                          title={`${label} isn't wired up yet -- placeholder`}
+                          className="text-xs border border-neutral-800 rounded-md px-2 py-1 flex items-center gap-1.5 text-neutral-600 cursor-not-allowed"
+                        >
+                          <Icon size={13} /> {label}
+                        </button>
+                      ))}
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -771,8 +853,37 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               </div>
             </div>
 
-            {/* RIGHT RAIL: GM notes */}
+            {/* RIGHT RAIL: selected entity / clocks & threats / GM notes */}
             <div className="flex flex-col gap-3">
+              <div className="bg-neutral-900 rounded-lg p-3">
+                <p className="text-xs text-neutral-400 mb-2 flex items-center gap-1"><Target size={11} className="text-neutral-500" /> Selected</p>
+                <p className="text-[11px] text-neutral-500">No token selected. Clicking a token to inspect it (traps, statues, notes tied to that entity) is a planned feature.</p>
+              </div>
+
+              {activeClocks.length > 0 && (
+                <div className="bg-neutral-900 rounded-lg p-3">
+                  <p className="text-xs text-neutral-400 mb-2">Clocks &amp; threats</p>
+                  <div className="flex flex-col gap-2">
+                    {activeClocks.map((c) => (
+                      <div key={c.id}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-neutral-300' : 'text-neutral-500'}`}>{c.name}</span>
+                          <span className="text-[10px] text-neutral-500 shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
+                        </div>
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: c.segments_total }).map((_, i) => (
+                            <span
+                              key={i}
+                              className={`h-1.5 flex-1 rounded-sm ${i < c.segments_filled ? 'bg-blue-400' : 'bg-neutral-700'}`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="bg-neutral-900 rounded-lg p-3">
                 <p className="text-xs text-neutral-400 mb-2">GM notes (private)</p>
                 <div className="flex flex-col gap-1.5">
@@ -810,19 +921,51 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       </div>
 
       <div className="shrink-0 border-t border-neutral-800">
-        <div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_240px] gap-3 items-center">
+        <div className="max-w-6xl mx-auto w-full px-6 pt-2.5 flex items-center gap-1.5">
+          <button
+            onClick={() => setComposeMode('public')}
+            className={`text-[11px] border rounded-md px-2 py-1 flex items-center gap-1.5 ${
+              composeMode === 'public' ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-neutral-700 text-neutral-400 hover:bg-neutral-800'
+            }`}
+          >
+            <Megaphone size={11} /> Public narration
+          </button>
+          <button
+            onClick={() => setComposeMode('private')}
+            className={`text-[11px] border rounded-md px-2 py-1 flex items-center gap-1.5 ${
+              composeMode === 'private' ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-neutral-700 text-neutral-400 hover:bg-neutral-800'
+            }`}
+          >
+            <Lock size={11} /> Private note
+          </button>
+        </div>
+        <div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_180px] gap-3 items-center">
           <input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Narrate something to the party"
+            placeholder={composeMode === 'private' ? 'Note only you can see' : 'Narrate something to the party'}
             className="min-w-0 bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
           />
+          <button
+            disabled
+            title="Voice input isn't wired up yet -- placeholder"
+            className="text-sm border border-neutral-800 rounded-md px-3 py-2 text-neutral-600 cursor-not-allowed"
+          >
+            <Mic size={15} />
+          </button>
+          <button
+            disabled
+            title="Attachments aren't wired up yet -- placeholder"
+            className="text-sm border border-neutral-800 rounded-md px-3 py-2 text-neutral-600 cursor-not-allowed"
+          >
+            <Paperclip size={15} />
+          </button>
           <button
             onClick={sendMessage}
             className="text-sm border border-neutral-700 rounded-md px-3.5 py-2 flex items-center justify-center text-neutral-200 hover:bg-neutral-800"
           >
-            Send
+            {composeMode === 'private' ? 'Save note' : 'Send to players'}
           </button>
         </div>
       </div>
