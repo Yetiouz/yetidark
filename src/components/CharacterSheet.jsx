@@ -323,7 +323,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   if (loading || !character) {
     return (
       <div className="max-w-xl mx-auto p-6">
-        <p className="text-xs text-neutral-500">Loading character…</p>
+        <p className="text-xs text-ink-faint">Loading character…</p>
       </div>
     )
   }
@@ -339,7 +339,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   return (
     <div className="max-w-xl mx-auto p-6">
       {onBack && (
-        <button onClick={onBack} className="text-xs text-neutral-400 hover:text-neutral-200 flex items-center gap-1 mb-3">
+        <button onClick={onBack} className="text-xs text-ink-dim hover:text-ink flex items-center gap-1 mb-3">
           <ArrowLeft size={13} /> Back
         </button>
       )}
@@ -355,20 +355,20 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         <button
           onClick={() => isOwner && avatarInputRef.current?.click()}
           disabled={!isOwner || avatarUploading}
-          className={`w-16 h-16 rounded-full overflow-hidden bg-neutral-900 border border-neutral-700 flex items-center justify-center shrink-0 ${
-            isOwner ? 'hover:border-neutral-500 cursor-pointer' : 'cursor-default'
+          className={`w-16 h-16 rounded-full overflow-hidden bg-panel border border-line flex items-center justify-center shrink-0 ${
+            isOwner ? 'hover:border-ink-faint cursor-pointer' : 'cursor-default'
           }`}
           title={isOwner ? (character.avatar_url ? 'Replace portrait' : 'Upload portrait') : undefined}
         >
           {character.avatar_url ? (
             <img src={character.avatar_url} alt={character.name} className="w-full h-full object-cover" />
           ) : (
-            <User size={22} className="text-neutral-600" />
+            <User size={22} className="text-ink-faint" />
           )}
         </button>
         <div>
-          <h1 className="text-white text-lg font-medium">{character.name}</h1>
-          <p className="text-xs text-neutral-400">
+          <h1 className="text-ink text-lg font-medium">{character.name}</h1>
+          <p className="text-xs text-ink-dim">
             {character.ancestry} {character.class} &middot; level {character.level} &middot; {character.alignment || 'Unaligned'}
             {character.background ? ` · ${character.background}` : ''}
           </p>
@@ -376,21 +376,21 @@ export default function CharacterSheet({ characterId, session, onBack }) {
             <button
               onClick={() => avatarInputRef.current?.click()}
               disabled={avatarUploading}
-              className="text-[11px] text-neutral-500 hover:text-neutral-300 flex items-center gap-1 mt-1"
+              className="text-[11px] text-ink-faint hover:text-ink-dim flex items-center gap-1 mt-1"
             >
               <Upload size={11} /> {avatarUploading ? 'Uploading…' : character.avatar_url ? 'Replace portrait' : 'Upload portrait'}
             </button>
           )}
         </div>
       </div>
-      {avatarError && <p className="text-xs text-red-400 mb-3">{avatarError}</p>}
+      {avatarError && <p className="text-xs text-danger-text mb-3">{avatarError}</p>}
 
       <div className="grid grid-cols-6 gap-1.5 mb-4">
         {STAT_KEYS.map((k) => (
-          <div key={k} className="bg-neutral-900 rounded-md p-1.5 text-center">
-            <p className="text-[10px] text-neutral-400 mb-1">{STAT_LABELS[k]}</p>
-            <p className="text-sm text-white">{stats[k] ?? '-'}</p>
-            <p className="text-[10px] text-neutral-500 mt-1">
+          <div key={k} className="bg-panel rounded-md p-1.5 text-center">
+            <p className="text-[10px] text-ink-dim mb-1">{STAT_LABELS[k]}</p>
+            <p className="text-sm text-ink">{stats[k] ?? '-'}</p>
+            <p className="text-[10px] text-ink-faint mt-1">
               {stats[k] != null ? (modifier(stats[k]) >= 0 ? `+${modifier(stats[k])}` : modifier(stats[k])) : ''}
             </p>
           </div>
@@ -398,37 +398,37 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       </div>
 
       <div className="grid grid-cols-3 gap-2.5 mb-4">
-        <div className="bg-neutral-900 rounded-lg p-3">
-          <p className="text-[11px] text-neutral-400 mb-1.5">HP</p>
+        <div className="bg-panel rounded-lg p-3">
+          <p className="text-[11px] text-ink-dim mb-1.5">HP</p>
           <div className="flex items-center justify-between">
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('hp', -1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">-</button>}
-            <span className="text-sm text-white">{character.hp} / {character.max_hp}</span>
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('hp', 1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">+</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('hp', -1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">-</button>}
+            <span className="text-sm text-ink">{character.hp} / {character.max_hp}</span>
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('hp', 1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">+</button>}
           </div>
-          <p className="text-[11px] text-neutral-500 mt-1.5">ac {character.ac}</p>
+          <p className="text-[11px] text-ink-faint mt-1.5">ac {character.ac}</p>
         </div>
 
-        <div className="bg-neutral-900 rounded-lg p-3">
-          <p className="text-[11px] text-neutral-400 mb-1.5">XP</p>
+        <div className="bg-panel rounded-lg p-3">
+          <p className="text-[11px] text-ink-dim mb-1.5">XP</p>
           <div className="flex items-center justify-between">
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('xp', -1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">-</button>}
-            <span className="text-sm text-white">{character.xp}</span>
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('xp', 1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">+</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('xp', -1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">-</button>}
+            <span className="text-sm text-ink">{character.xp}</span>
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('xp', 1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">+</button>}
           </div>
         </div>
 
-        <div className="bg-neutral-900 rounded-lg p-3">
-          <p className="text-[11px] text-neutral-400 mb-1.5">Coin</p>
+        <div className="bg-panel rounded-lg p-3">
+          <p className="text-[11px] text-ink-dim mb-1.5">Coin</p>
           <div className="flex items-center justify-between">
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('coin', -1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">-</button>}
-            <span className="text-sm text-white">{character.coin} gp</span>
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('coin', 1)} className="px-1.5 border border-neutral-700 rounded text-neutral-300 disabled:opacity-40">+</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('coin', -1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">-</button>}
+            <span className="text-sm text-ink">{character.coin} gp</span>
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('coin', 1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">+</button>}
           </div>
         </div>
       </div>
       {canEdit && (
         <div className="mb-4">
-          <label className="text-[11px] text-neutral-400 block mb-1.5">
+          <label className="text-[11px] text-ink-dim block mb-1.5">
             Reason for next HP, XP, or coin change
           </label>
           <input
@@ -436,18 +436,18 @@ export default function CharacterSheet({ characterId, session, onBack }) {
             onChange={(event) => setChangeReason(event.target.value)}
             maxLength={500}
             placeholder="Damage, healing, reward, purchase…"
-            className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-white"
+            className="w-full text-xs bg-bg border border-line rounded-md px-3 py-2 text-ink"
           />
-          <p className="text-[11px] text-neutral-500 mt-1">
+          <p className="text-[11px] text-ink-faint mt-1">
             Required so the campaign history explains the change.
           </p>
-          {resourceError && <p className="text-[11px] text-red-400 mt-1">{resourceError}</p>}
+          {resourceError && <p className="text-[11px] text-danger-text mt-1">{resourceError}</p>}
         </div>
       )}
 
-      <div className="bg-neutral-900 rounded-lg p-4 mb-4">
+      <div className="bg-panel rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between mb-2.5">
-          <p className="text-xs text-neutral-400">
+          <p className="text-xs text-ink-dim">
             Gear &middot; {usedSlots} / {maxSlots} slots
           </p>
           {canEdit && (
@@ -457,33 +457,33 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                 onChange={(e) => setGearDraft(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addGear()}
                 placeholder="Item name"
-                className="text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 w-32 text-white"
+                className="text-xs bg-bg border border-line rounded-md px-2 py-1 w-32 text-ink"
               />
-              <button onClick={addGear} className="text-xs border border-neutral-700 rounded-md px-2 py-1 flex items-center gap-1 text-neutral-200 hover:bg-neutral-800">
+              <button onClick={addGear} className="text-xs border border-line rounded-md px-2 py-1 flex items-center gap-1 text-ink hover:bg-panel2">
                 <Plus size={13} /> Add
               </button>
             </div>
           )}
         </div>
         <div className="flex flex-col gap-1.5">
-          {gear.length === 0 && <p className="text-xs text-neutral-500">No gear yet.</p>}
+          {gear.length === 0 && <p className="text-xs text-ink-faint">No gear yet.</p>}
           {gear.map((item) => (
-            <div key={item.id} className="flex items-center justify-between text-xs p-2 bg-neutral-800/60 rounded-md border border-neutral-700">
+            <div key={item.id} className="flex items-center justify-between text-xs p-2 bg-panel2/60 rounded-md border border-line">
               <label className="flex items-center gap-2 flex-1">
                 {canEdit ? (
                   <input type="checkbox" checked={item.equipped} onChange={() => toggleEquipped(item)} />
                 ) : (
-                  <span className={`w-2 h-2 rounded-full inline-block ${item.equipped ? 'bg-blue-400' : 'bg-neutral-600'}`} />
+                  <span className={`w-2 h-2 rounded-full inline-block ${item.equipped ? 'bg-primary' : 'bg-panel2'}`} />
                 )}
-                <span className="text-white">{item.name}</span>
-                {item.quantity > 1 && <span className="text-neutral-500">&times;{item.quantity}</span>}
-                <span className="text-neutral-500">
+                <span className="text-ink">{item.name}</span>
+                {item.quantity > 1 && <span className="text-ink-faint">&times;{item.quantity}</span>}
+                <span className="text-ink-faint">
                   {item.slots} slot{Number(item.slots) === 1 ? '' : 's'}
                   {item.equipped ? ' · equipped' : ''}
                 </span>
               </label>
               {canEdit && (
-                <button onClick={() => removeGear(item)} className="text-neutral-500 hover:text-red-400">
+                <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text">
                   <Trash2 size={13} />
                 </button>
               )}
@@ -492,48 +492,48 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         </div>
       </div>
 
-      <div className="bg-neutral-900 rounded-lg p-4 mb-4">
-        <p className="text-xs text-neutral-400 mb-2">Talents</p>
-        {talents.length === 0 && <p className="text-xs text-neutral-500">None yet.</p>}
+      <div className="bg-panel rounded-lg p-4 mb-4">
+        <p className="text-xs text-ink-dim mb-2">Talents</p>
+        {talents.length === 0 && <p className="text-xs text-ink-faint">None yet.</p>}
         <ul>
           {talents.map((t) => (
-            <li key={t.id} className="text-[11px] text-neutral-300 mb-1">
-              {t.description} <span className="text-neutral-600">({t.source})</span>
+            <li key={t.id} className="text-[11px] text-ink-dim mb-1">
+              {t.description} <span className="text-ink-faint">({t.source})</span>
             </li>
           ))}
         </ul>
       </div>
 
-      <div className="bg-neutral-900 rounded-lg p-4 mb-4">
-        <p className="text-xs text-neutral-400 mb-2.5 flex items-center gap-1.5">
+      <div className="bg-panel rounded-lg p-4 mb-4">
+        <p className="text-xs text-ink-dim mb-2.5 flex items-center gap-1.5">
           <Shield size={12} /> Class &amp; Ancestry Features
         </p>
-        {features.length === 0 && <p className="text-xs text-neutral-500">None yet.</p>}
+        {features.length === 0 && <p className="text-xs text-ink-faint">None yet.</p>}
         <div className="flex flex-col gap-1.5">
           {features.map((f) => (
-            <div key={f.id} className="text-xs p-2.5 bg-neutral-800/60 rounded-md border border-neutral-700">
+            <div key={f.id} className="text-xs p-2.5 bg-panel2/60 rounded-md border border-line">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <span className="text-white font-medium">{f.name}</span>
-                  <span className="text-[10px] text-neutral-600 ml-1.5">({f.source})</span>
+                  <span className="text-ink font-medium">{f.name}</span>
+                  <span className="text-[10px] text-ink-faint ml-1.5">({f.source})</span>
                 </div>
                 {canEdit && (
-                  <button onClick={() => removeFeature(f)} className="text-neutral-500 hover:text-red-400 shrink-0">
+                  <button onClick={() => removeFeature(f)} className="text-ink-faint hover:text-danger-text shrink-0">
                     <Trash2 size={13} />
                   </button>
                 )}
               </div>
-              <p className="text-neutral-400 mt-1">{f.description}</p>
+              <p className="text-ink-dim mt-1">{f.description}</p>
               {f.uses_max != null && (
                 <div className="flex items-center gap-2 mt-1.5">
-                  <span className="text-[11px] text-neutral-400">
+                  <span className="text-[11px] text-ink-dim">
                     {f.uses_current ?? 0} / {f.uses_max} uses
                   </span>
                   {canEdit && (
                     <button
                       onClick={() => spendFeatureUse(f)}
                       disabled={(f.uses_current ?? 0) <= 0}
-                      className="text-[11px] border border-neutral-700 rounded px-1.5 py-0.5 text-neutral-300 disabled:opacity-40"
+                      className="text-[11px] border border-line rounded px-1.5 py-0.5 text-ink-dim disabled:opacity-40"
                     >
                       Spend
                     </button>
@@ -545,65 +545,65 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         </div>
       </div>
 
-      <div className="bg-neutral-900 rounded-lg p-4">
+      <div className="bg-panel rounded-lg p-4">
         <div className="flex items-center justify-between gap-3 mb-2.5">
-          <p className="text-xs text-neutral-400 flex items-center gap-1.5">
+          <p className="text-xs text-ink-dim flex items-center gap-1.5">
             <Sparkles size={12} /> Spells
           </p>
           {canEdit && (
             <button
               onClick={completeFullRest}
               disabled={resting}
-              className="text-[11px] border border-neutral-700 rounded px-2 py-1 text-neutral-300 hover:bg-neutral-800 disabled:opacity-50"
+              className="text-[11px] border border-line rounded px-2 py-1 text-ink-dim hover:bg-panel2 disabled:opacity-50"
             >
               {resting ? 'Resting…' : 'Complete full rest'}
             </button>
           )}
         </div>
-        {restError && <p className="text-[11px] text-red-400 mb-2">{restError}</p>}
+        {restError && <p className="text-[11px] text-danger-text mb-2">{restError}</p>}
         <div className="flex flex-col gap-1.5 mb-3">
-          {spells.length === 0 && <p className="text-xs text-neutral-500">None known yet.</p>}
+          {spells.length === 0 && <p className="text-xs text-ink-faint">None known yet.</p>}
           {spells.map((spell) => (
-            <div key={spell.id} className="text-xs p-2.5 bg-neutral-800/60 rounded-md border border-neutral-700">
+            <div key={spell.id} className="text-xs p-2.5 bg-panel2/60 rounded-md border border-line">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-white font-medium ${spell.lost ? 'line-through text-neutral-500' : ''}`}>{spell.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/20">
+                  <span className={`text-ink font-medium ${spell.lost ? 'line-through text-ink-faint' : ''}`}>{spell.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-ai-bg text-ai-text border border-ai-line">
                     tier {spell.tier}
                   </span>
                   {(spell.range || spell.duration) && (
-                    <span className="text-neutral-500 text-[11px]">
+                    <span className="text-ink-faint text-[11px]">
                       {[spell.range, spell.duration].filter(Boolean).join(' · ')}
                     </span>
                   )}
                 </div>
                 {canEdit && (
-                  <button onClick={() => removeSpell(spell)} className="text-neutral-500 hover:text-red-400 shrink-0">
+                  <button onClick={() => removeSpell(spell)} className="text-ink-faint hover:text-danger-text shrink-0">
                     <Trash2 size={13} />
                   </button>
                 )}
               </div>
-              {spell.description && <p className="text-neutral-400 mt-1">{spell.description}</p>}
+              {spell.description && <p className="text-ink-dim mt-1">{spell.description}</p>}
               <div className="flex items-center gap-3 mt-2">
-                <label className="flex items-center gap-1.5 text-[11px] text-neutral-400">
+                <label className="flex items-center gap-1.5 text-[11px] text-ink-dim">
                   {canEdit ? (
                     <input type="checkbox" checked={spell.prepared} onChange={() => togglePrepared(spell)} />
                   ) : (
-                    <span className={`w-2 h-2 rounded-full inline-block ${spell.prepared ? 'bg-blue-400' : 'bg-neutral-600'}`} />
+                    <span className={`w-2 h-2 rounded-full inline-block ${spell.prepared ? 'bg-primary' : 'bg-panel2'}`} />
                   )}
                   prepared
                 </label>
                 {spell.succeeded_since_rest && (
-                  <span className="text-[11px] text-green-300">succeeded this rest</span>
+                  <span className="text-[11px] text-positive-text">succeeded this rest</span>
                 )}
                 {spell.lost && (
-                  <span className="flex items-center gap-1 text-[11px] text-red-300">
+                  <span className="flex items-center gap-1 text-[11px] text-danger-text">
                     <Ban size={11} /> locked until full rest
                   </span>
                 )}
               </div>
               {spell.last_check_natural != null && (
-                <p className={`text-[11px] mt-1.5 ${spell.last_check_succeeded ? 'text-green-300' : 'text-amber-300'}`}>
+                <p className={`text-[11px] mt-1.5 ${spell.last_check_succeeded ? 'text-positive-text' : 'text-warning-text'}`}>
                   Last check: natural {spell.last_check_natural}, total {spell.last_check_total}
                   {spell.last_check_natural === 1 ? ' · mishap' : spell.last_check_succeeded ? ' · success' : ' · failure'}
                 </p>
@@ -617,18 +617,18 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                     value={spellCheckDrafts[spell.id]?.naturalRoll ?? ''}
                     onChange={(e) => updateSpellCheckDraft(spell.id, 'naturalRoll', e.target.value)}
                     placeholder="natural d20"
-                    className="w-24 text-[11px] bg-neutral-950 border border-neutral-700 rounded px-1.5 py-1 text-white"
+                    className="w-24 text-[11px] bg-bg border border-line rounded px-1.5 py-1 text-ink"
                   />
                   <input
                     type="number"
                     value={spellCheckDrafts[spell.id]?.total ?? ''}
                     onChange={(e) => updateSpellCheckDraft(spell.id, 'total', e.target.value)}
                     placeholder={`total vs DC ${10 + spell.tier}`}
-                    className="w-28 text-[11px] bg-neutral-950 border border-neutral-700 rounded px-1.5 py-1 text-white"
+                    className="w-28 text-[11px] bg-bg border border-line rounded px-1.5 py-1 text-ink"
                   />
                   <button
                     onClick={() => recordSpellCheck(spell)}
-                    className="text-[11px] border border-neutral-700 rounded px-2 py-1 text-neutral-300 hover:bg-neutral-800"
+                    className="text-[11px] border border-line rounded px-2 py-1 text-ink-dim hover:bg-panel2"
                   >
                     Resolve check
                   </button>
@@ -639,18 +639,18 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         </div>
 
         {canEdit && (
-          <div className="pt-3 border-t border-neutral-800 flex flex-col gap-1.5">
+          <div className="pt-3 border-t border-line-soft flex flex-col gap-1.5">
             <div className="flex gap-1.5">
               <input
                 value={spellDraft.name}
                 onChange={(e) => setSpellDraft((d) => ({ ...d, name: e.target.value }))}
                 placeholder="Spell name"
-                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
+                className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1 text-ink"
               />
               <select
                 value={spellDraft.tier}
                 onChange={(e) => setSpellDraft((d) => ({ ...d, tier: e.target.value }))}
-                className="text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+                className="text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-ink"
               >
                 {[1, 2, 3, 4, 5].map((t) => (
                   <option key={t} value={t}>
@@ -664,13 +664,13 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                 value={spellDraft.range}
                 onChange={(e) => setSpellDraft((d) => ({ ...d, range: e.target.value }))}
                 placeholder="Range (e.g. Near)"
-                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
+                className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1 text-ink"
               />
               <input
                 value={spellDraft.duration}
                 onChange={(e) => setSpellDraft((d) => ({ ...d, duration: e.target.value }))}
                 placeholder="Duration (e.g. Focus)"
-                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
+                className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1 text-ink"
               />
             </div>
             <div className="flex gap-1.5">
@@ -679,9 +679,9 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                 onChange={(e) => setSpellDraft((d) => ({ ...d, description: e.target.value }))}
                 onKeyDown={(e) => e.key === 'Enter' && addSpell()}
                 placeholder="Quick reminder of the effect (optional -- full text lives in the rules library)"
-                className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1 text-white"
+                className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1 text-ink"
               />
-              <button onClick={addSpell} className="text-xs border border-neutral-700 rounded-md px-2 py-1 flex items-center gap-1 text-neutral-200 hover:bg-neutral-800 shrink-0">
+              <button onClick={addSpell} className="text-xs border border-line rounded-md px-2 py-1 flex items-center gap-1 text-ink hover:bg-panel2 shrink-0">
                 <Plus size={13} /> Add
               </button>
             </div>
