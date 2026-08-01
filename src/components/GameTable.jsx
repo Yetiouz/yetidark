@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2, Flame, HelpCircle, Swords, Backpack, Sparkles, Package, Mic, ZoomIn, ZoomOut, Sun, ShieldCheck } from 'lucide-react'
+import { Dices, Send, AlertCircle, User, Bot, Loader2, Flame, HelpCircle, Swords, Backpack, Sparkles, Package, Mic, ZoomIn, ZoomOut, Sun, ShieldCheck } from 'lucide-react'
 import ZoneScene from './ZoneScene.jsx'
 import Row from './ui/Row.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
 import Footer from './ui/Footer.jsx'
+import LogEntry from './LogEntry.jsx'
+import CampaignToolbar from './CampaignToolbar.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { flatDieNotation } from '../lib/dice.js'
 import { useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 import { appendUniqueById } from '../app/realtimeCollections.js'
+import { useCampaignSession, useProfileDisplayName } from '../lib/useCampaignSession.js'
 import { gearSlotCapacity, occupiedGearSlots } from '../game/rules/character.js'
 
 const dice = [20, 12, 10, 8, 6, 4]
@@ -82,10 +85,9 @@ return source.remaining_minutes
 // The "Talents" panel uses real character_talents rows.
 export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
 const user = session?.user
-const [displayName, setDisplayName] = useState('')
+const displayName = useProfileDisplayName(user, 'You')
 const [isGm, setIsGm] = useState(false)
 
-const [log, setLog] = useState([])
 const [message, setMessage] = useState('')
 const [manualDie, setManualDie] = useState(20)
 const [manualValue, setManualValue] = useState('')
@@ -120,14 +122,43 @@ const [sceneTab, setSceneTab] = useState('split') // 'scene' | 'map' | 'split' -
 useEffect(() => {
 return () => {
 if (rollTimerRef.current) clearInterval(rollTimerRef.current)
+if (autoTurnTimerRef.current) clearTimeout(autoTurnTimerRef.current)
 }
 }, [])
 
-const [mapInfo, setMapInfo] = useState(null)
-const [turnOrder, setTurnOrder] = useState([])
+// Auto-respond debounce trigger for AI-GM campaigns -- passed to
+// useCampaignSession below so its scene_log INSERT handler can call it
+// directly, same trigger point as before this was pulled into a hook.
+const handleSceneLogInsert = (newEntry) => {
+if (gmTypeRef.current === 'ai') {
+if (autoTurnTimerRef.current) {
+clearTimeout(autoTurnTimerRef.current)
+autoTurnTimerRef.current = null
+}
+if (newEntry.type !== 'ai_gm') {
+autoTurnTimerRef.current = setTimeout(() => {
+autoTurnTimerRef.current = null
+askAiGmRef.current?.()
+}, AUTO_TURN_DEBOUNCE_MS)
+}
+}
+}
+
+// Shared with GmDashboard.jsx -- see useCampaignSession.js for exactly
+// which tables this covers and why (votes, campaign_threads,
+// encounter_monsters, and gm_notes stay local below instead, since
+// GameTable and GmDashboard read/write those very differently from each
+// other).
+const {
+log, setLog,
+mapInfo, setMapInfo,
+turnOrder, setTurnOrder,
+party, setParty,
+clocks, setClocks,
+lightSources, setLightSources,
+} = useCampaignSession(campaignId, { channelKey: 'game-table', onSceneLogInsert: handleSceneLogInsert })
 const [votes, setVotes] = useState([])
-const [party, setParty] = useState([])
-const [gmType, setGmType] = useState(null) // 'human' | 'ai'
+const gmType = mapInfo?.gm_type || null // 'human' | 'ai'
 const [aiTurnPending, setAiTurnPending] = useState(false)
 const [aiTurnError, setAiTurnError] = useState(null)
 const { url: mapUrl, error: mapAccessError } = useCampaignMapUrl(mapInfo)
@@ -137,9 +168,9 @@ const { url: mapUrl, error: mapAccessError } = useCampaignMapUrl(mapInfo)
 // member-readable) but only surfaced in Campaign Log, behind an icon-only
 // toolbar button. This is the minimal, read-only glance version of that
 // same data on the table itself; editing still happens in Campaign Log.
+// (clocks/lightSources now come from useCampaignSession above; threads
+// and monsters below are GameTable-only, not part of that shared hook.)
 const [threads, setThreads] = useState([])
-const [clocks, setClocks] = useState([])
-const [lightSources, setLightSources] = useState([])
 const [monsters, setMonsters] = useState([])
 const [nowTick, setNowTick] = useState(() => Date.now())
 
@@ -170,16 +201,6 @@ useEffect(() => {
 gmTypeRef.current = gmType
 }, [gmType])
 
-useEffect(() => {
-if (!user) return
-supabase
-.from('profiles')
-.select('display_name')
-.eq('id', user.id)
-.maybeSingle()
-.then(({ data }) => setDisplayName(data?.display_name || user.email || 'You'))
-}, [user])
-
 // Only the GM can unfog the map -- everyone else sees a read-only view.
 useEffect(() => {
 if (!user || !campaignId) return
@@ -201,43 +222,16 @@ supabase
 .then(({ data }) => setVotes(data || []))
 }
 
+// Everything useCampaignSession doesn't cover: votes, the open-thread
+// objective, the read-only monster overlay, and revealed GM notes. Its
+// own realtime channel, separate from the shared one above -- two
+// channels per screen instead of one, but each one's subscription list
+// matches exactly what this screen needs.
 useEffect(() => {
 if (!campaignId) return
 let cancelled = false
 
-supabase
-.from('scene_log')
-.select('id, type, sender_user_id, sender_name, text, roll_source, dice_roll_id, created_at')
-.eq('campaign_id', campaignId)
-.order('created_at', { ascending: true })
-.then(({ data }) => { if (!cancelled) setLog(data || []) })
-
-supabase
-.from('campaigns')
-.select('map_path, map_url, map_cols, map_rows, party_row, party_col, gm_type')
-.eq('id', campaignId)
-.maybeSingle()
-.then(({ data }) => {
-if (cancelled) return
-setMapInfo(data)
-setGmType(data?.gm_type || null)
-})
-
-supabase
-.from('turn_order')
-.select('order_list')
-.eq('campaign_id', campaignId)
-.maybeSingle()
-.then(({ data }) => { if (!cancelled) setTurnOrder(data?.order_list || []) })
-
 reloadVotes(campaignId)
-
-supabase
-.from('characters')
-.select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, owner_user_id, status, death_timer, stats')
-.eq('campaign_id', campaignId)
-.order('created_at', { ascending: true })
-.then(({ data }) => { if (!cancelled) setParty(data || []) })
 
 supabase
 .from('campaign_threads')
@@ -246,18 +240,6 @@ supabase
 .eq('status', 'open')
 .order('created_at', { ascending: true })
 .then(({ data }) => { if (!cancelled) setThreads(data || []) })
-
-supabase
-.from('campaign_clocks')
-.select('id, name, segments_filled, segments_total, created_at')
-.eq('campaign_id', campaignId)
-.then(({ data }) => { if (!cancelled) setClocks(data || []) })
-
-supabase
-.from('campaign_light_sources')
-.select('id, name, character_id, lit, lit_at, remaining_minutes, total_minutes')
-.eq('campaign_id', campaignId)
-.then(({ data }) => { if (!cancelled) setLightSources(data || []) })
 
 supabase
 .from('encounter_monsters')
@@ -274,62 +256,11 @@ supabase
 .then(({ data }) => { if (!cancelled) setGmNotes(data || []) })
 
 const channel = supabase
-.channel(`game-table-${campaignId}`)
-.on(
-'postgres_changes',
-{ event: 'INSERT', schema: 'public', table: 'scene_log', filter: `campaign_id=eq.${campaignId}` },
-(payload) => {
-setLog((l) => (l.some((e) => e.id === payload.new.id) ? l : [...l, payload.new]))
-
-// Auto-respond debounce: only relevant for AI-GM campaigns. Any
-// fresh, non-AI entry (chat, roll, whatever) resets the clock;
-// once nothing new has come in for AUTO_TURN_DEBOUNCE_MS, ask
-// the AI to take its turn. If the AI itself just answered
-// (e.g. someone else's timer fired first, or a human hit
-// Continue), cancel any timer still waiting -- there's nothing
-// left for it to respond to.
-if (gmTypeRef.current === 'ai') {
-if (autoTurnTimerRef.current) {
-clearTimeout(autoTurnTimerRef.current)
-autoTurnTimerRef.current = null
-}
-if (payload.new.type !== 'ai_gm') {
-autoTurnTimerRef.current = setTimeout(() => {
-autoTurnTimerRef.current = null
-askAiGmRef.current?.()
-}, AUTO_TURN_DEBOUNCE_MS)
-}
-}
-}
-)
-.on(
-'postgres_changes',
-{ event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
-(payload) => {
-setMapInfo(payload.new)
-setGmType(payload.new?.gm_type || null)
-}
-)
-.on(
-'postgres_changes',
-{ event: '*', schema: 'public', table: 'turn_order', filter: `campaign_id=eq.${campaignId}` },
-(payload) => setTurnOrder(payload.new?.order_list || [])
-)
+.channel(`game-table-extra-${campaignId}`)
 .on(
 'postgres_changes',
 { event: '*', schema: 'public', table: 'votes', filter: `campaign_id=eq.${campaignId}` },
 () => reloadVotes(campaignId)
-)
-.on(
-'postgres_changes',
-{ event: '*', schema: 'public', table: 'characters', filter: `campaign_id=eq.${campaignId}` },
-(payload) => {
-if (payload.eventType === 'INSERT') {
-setParty((p) => [...p, payload.new])
-} else if (payload.eventType === 'UPDATE') {
-setParty((p) => p.map((c) => (c.id === payload.new.id ? payload.new : c)))
-}
-}
 )
 .on(
 'postgres_changes',
@@ -347,24 +278,6 @@ setThreads((t) => appendUniqueById(t, row))
 } else {
 setThreads((t) => t.map((x) => (x.id === row.id ? row : x)))
 }
-}
-)
-.on(
-'postgres_changes',
-{ event: '*', schema: 'public', table: 'campaign_clocks', filter: `campaign_id=eq.${campaignId}` },
-(payload) => {
-if (payload.eventType === 'INSERT') setClocks((c) => appendUniqueById(c, payload.new))
-else if (payload.eventType === 'UPDATE') setClocks((c) => c.map((x) => (x.id === payload.new.id ? payload.new : x)))
-else if (payload.eventType === 'DELETE') setClocks((c) => c.filter((x) => x.id !== payload.old.id))
-}
-)
-.on(
-'postgres_changes',
-{ event: '*', schema: 'public', table: 'campaign_light_sources', filter: `campaign_id=eq.${campaignId}` },
-(payload) => {
-if (payload.eventType === 'INSERT') setLightSources((l) => appendUniqueById(l, payload.new))
-else if (payload.eventType === 'UPDATE') setLightSources((l) => l.map((x) => (x.id === payload.new.id ? payload.new : x)))
-else if (payload.eventType === 'DELETE') setLightSources((l) => l.filter((x) => x.id !== payload.old.id))
 }
 )
 .on(
@@ -397,10 +310,6 @@ setGmNotes((n) => (n.some((x) => x.id === row.id) ? n.map((x) => (x.id === row.i
 return () => {
 cancelled = true
 supabase.removeChannel(channel)
-if (autoTurnTimerRef.current) {
-clearTimeout(autoTurnTimerRef.current)
-autoTurnTimerRef.current = null
-}
 }
 }, [campaignId])
 
@@ -797,53 +706,6 @@ if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scroll
 
 // Shared by both panels so a roll or chat message renders identically
 // wherever it shows up.
-const renderLogEntry = (entry) => {
-if (entry.type === 'narration') {
-return <span key={entry.id} className="block italic text-ink-dim">{entry.text}</span>
-}
-if (entry.type === 'gm') {
-return (
-<span key={entry.id} className="block">
-<span className="font-medium text-primary-text">{entry.sender_name}:</span>{' '}
-<span className="text-ink">{entry.text}</span>
-</span>
-)
-}
-if (entry.type === 'ai_gm') {
-return (
-<span key={entry.id} className="block bg-ai/10 border border-ai/20 rounded-md px-2.5 py-2 -mx-0.5">
-<span className="font-medium text-ai-text flex items-center gap-1.5 mb-1">
-<Bot size={12} /> AI GM
-</span>
-<span className="text-ink whitespace-pre-wrap">{entry.text}</span>
-</span>
-)
-}
-if (entry.type === 'roll') {
-return (
-<span key={entry.id} className="inline-flex items-center gap-1.5 flex-wrap">
-<span className="font-medium text-white">{entry.sender_name}:</span>
-<span className="text-ink">{entry.text}</span>
-<span
-className={`text-[10px] px-1.5 py-0.5 rounded ${
-entry.roll_source === 'app'
-? 'bg-primary/20 text-primary-text'
-: 'bg-panel2 border border-line text-ink-dim'
-}`}
->
-{entry.roll_source === 'app' ? 'app roll' : 'self-reported'}
-</span>
-</span>
-)
-}
-return (
-<span key={entry.id} className="block">
-<span className="font-medium text-white">{entry.sender_name}:</span>{' '}
-<span className="text-ink">{entry.text}</span>
-</span>
-)
-}
-
 // AI-GM campaigns get one unified, chat-shaped feed (party messages +
 // AI narration + rolls, in order) right here on the table instead of
 // the two-panel Scene log / Party chat split -- the map, dice roller,
@@ -908,47 +770,17 @@ style={{ backgroundColor: p.color || '#3f3f46' }}
 </div>
 ))}
 </div>
-{onOpenLog && (
-<button
-onClick={onOpenLog}
-title="Campaign log"
-className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
->
-<ScrollText size={14} />
-</button>
-)}
-{onOpenLibrary && (
-<button
-onClick={onOpenLibrary}
-title="Rules library"
-className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
->
-<BookOpen size={14} />
-</button>
-)}
-{onOpenTracker && (
-<button
-onClick={onOpenTracker}
-title="NPCs, factions & treasure"
-className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
->
-<Users size={14} />
-</button>
-)}
-{onOpenSettings && (
-<button
-onClick={onOpenSettings}
-title="Campaign settings"
-className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
->
-<Settings size={14} />
-</button>
-)}
-{isGm && gmType !== 'ai' && onOpenGmView && (
+<CampaignToolbar
+onOpenLog={onOpenLog}
+onOpenLibrary={onOpenLibrary}
+onOpenTracker={onOpenTracker}
+onOpenSettings={onOpenSettings}
+after={isGm && gmType !== 'ai' && onOpenGmView && (
 <button onClick={onOpenGmView} className="text-xs border border-line rounded-md px-2.5 py-1 text-ink hover:bg-panel2">
 GM view
 </button>
 )}
+/>
 </div>
 </div>
 
@@ -1393,7 +1225,7 @@ className="text-[11px] border border-line rounded-md px-2 py-1 text-ink-faint cu
 <p className="text-xs text-ink-dim mb-2">Scene log</p>
 <div className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
 {narrationLog.length === 0 && <p className="text-xs text-ink-dim">Nothing has happened yet.</p>}
-{narrationLog.map((entry) => renderLogEntry(entry))}
+{narrationLog.map((entry) => <LogEntry key={entry.id} entry={entry} />)}
 </div>
 </div>
 
@@ -1401,7 +1233,7 @@ className="text-[11px] border border-line rounded-md px-2 py-1 text-ink-faint cu
 <p className="text-xs text-ink-dim mb-2">Party chat</p>
 <div ref={chatLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
 {chatLog.length === 0 && <p className="text-xs text-ink-dim">No messages yet -- say something below.</p>}
-{chatLog.map((entry) => renderLogEntry(entry))}
+{chatLog.map((entry) => <LogEntry key={entry.id} entry={entry} />)}
 </div>
 </div>
 </div>
