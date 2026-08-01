@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield, Package, Check, Gem, Users, Filter, ArrowUpDown, Search } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
-import Tabs from './ui/Tabs.jsx'
 import Row from './ui/Row.jsx'
 import Badge from './ui/Badge.jsx'
 import Card from './ui/Card.jsx'
@@ -17,18 +16,11 @@ import {
 const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 const STAT_LABELS = { str: 'STR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'WIS', cha: 'CHA' }
 
-// Matches design-handoff-spec Section 2.6 / Section 4.4's Overview/Gear/
-// Abilities/Notes/History tab row. "History" is left out here rather than
-// faked -- there's no audit-log read path wired up for a character yet, so
-// a History tab would just be a permanent empty state. Add it once that
-// data actually exists instead of shipping a tab that never has content.
-const SHEET_TABS = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'gear', label: 'Gear' },
-  { key: 'abilities', label: 'Abilities' },
-  { key: 'notes', label: 'Notes' },
-]
-
+// Combined single-scroll layout, no tabs -- Overview/Gear/Abilities/Notes
+// all render in sequence, each under its own section heading. "History" is
+// left out entirely rather than faked -- there's no audit-log read path
+// wired up for a character yet, so it would just be a permanent empty
+// section. Add it once that data actually exists.
 const modifier = abilityModifier
 
 // Full character sheet -- stats, HP/AC, XP, coin, gear (with the STR-or-10
@@ -60,7 +52,6 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState(null)
-  const [activeTab, setActiveTab] = useState('overview')
   const [sortMode, setSortMode] = useState('default')
   const [filterOpen, setFilterOpen] = useState(false)
   const [filterQuery, setFilterQuery] = useState('')
@@ -425,9 +416,8 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       </div>
       {avatarError && <p className="text-xs text-danger-text mb-3">{avatarError}</p>}
 
-      <Tabs tabs={SHEET_TABS} activeKey={activeTab} onChange={setActiveTab} />
+      <h2 className="text-sm font-semibold text-ink uppercase tracking-wide border-b border-line-soft pb-2 mb-4">Overview</h2>
 
-      {activeTab === 'overview' && (
       <div className="max-w-2xl mx-auto">
       <div className="grid grid-cols-6 gap-1.5 mb-4">
         {STAT_KEYS.map((k) => (
@@ -489,9 +479,10 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         </div>
       )}
       </div>
-      )}
 
-      {activeTab === 'gear' && (() => {
+      <h2 className="text-sm font-semibold text-ink uppercase tracking-wide border-b border-line-soft pb-2 mb-4 mt-8">Gear</h2>
+
+      {(() => {
         // Sort/filter operate only on real, already-loaded columns (name,
         // slots, quantity) -- no invented categorization. Filter narrows
         // Carried gear by name; Sort cycles as-added / A-to-Z / most slots.
@@ -750,7 +741,8 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         )
       })()}
 
-      {activeTab === 'abilities' && (
+      <h2 className="text-sm font-semibold text-ink uppercase tracking-wide border-b border-line-soft pb-2 mb-4 mt-8">Abilities</h2>
+
       <div className="max-w-2xl mx-auto">
       <div className="bg-panel rounded-lg p-4 mb-4">
         <p className="text-xs text-ink-dim mb-2">Talents</p>
@@ -949,15 +941,14 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         )}
       </div>
       </div>
-      )}
 
-      {activeTab === 'notes' && (
+      <h2 className="text-sm font-semibold text-ink uppercase tracking-wide border-b border-line-soft pb-2 mb-4 mt-8">Notes</h2>
+
         <div className="max-w-2xl mx-auto">
         <div className="bg-panel rounded-lg p-4 text-xs text-ink-faint">
-          Notes aren't wired up yet -- this tab is reserved for freeform character notes once that's built.
+          Notes aren't wired up yet -- this section is reserved for freeform character notes once that's built.
         </div>
         </div>
-      )}
     </div>
   )
 }
