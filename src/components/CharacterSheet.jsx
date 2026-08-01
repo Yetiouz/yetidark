@@ -336,7 +336,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
 
   if (loading || !character) {
     return (
-      <div className="max-w-xl mx-auto p-6">
+      <div className="max-w-5xl mx-auto p-6">
         <p className="text-xs text-ink-faint">Loading character…</p>
       </div>
     )
@@ -349,9 +349,26 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     features,
   })
   const usedSlots = occupiedGearSlots(gear)
+  // Torches/Rations aren't their own tracked resource -- they're just gear
+  // items a player happens to be carrying. Counting by name (same
+  // case-insensitive match completeFullRest already uses for rations)
+  // keeps these stat cards honest instead of inventing a resource type the
+  // schema doesn't have. This only totals carried quantity, not "how many
+  // are currently lit" -- that's campaign_light_sources' job (see the
+  // Party panel's torch bar on GameTable), and this component doesn't
+  // load that table, so we don't claim to know it here.
+  const torchCount = gear
+    .filter((item) => /torch/i.test(item.name))
+    .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+  const rationCount = gear
+    .filter((item) => /^rations?$/i.test(item.name.trim()))
+    .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+  const equippedGear = gear.filter((item) => item.equipped)
+  const carriedGear = gear.filter((item) => !item.equipped)
+  const gearFull = usedSlots >= maxSlots
 
   return (
-    <div className="max-w-xl mx-auto p-6">
+    <div className="max-w-5xl mx-auto p-6">
       {onBack && (
         <button onClick={onBack} className="text-xs text-ink-dim hover:text-ink flex items-center gap-1 mb-3">
           <ArrowLeft size={13} /> Back
@@ -402,7 +419,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       <Tabs tabs={SHEET_TABS} activeKey={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'overview' && (
-      <>
+      <div className="max-w-2xl mx-auto">
       <div className="grid grid-cols-6 gap-1.5 mb-4">
         {STAT_KEYS.map((k) => (
           <div key={k} className="bg-panel rounded-md p-1.5 text-center">
@@ -462,60 +479,137 @@ export default function CharacterSheet({ characterId, session, onBack }) {
           {resourceError && <p className="text-[11px] text-danger-text mt-1">{resourceError}</p>}
         </div>
       )}
-      </>
+      </div>
       )}
 
       {activeTab === 'gear' && (
-      <div className="bg-panel rounded-lg p-4 mb-4">
-        <div className="flex items-center justify-between mb-2.5">
-          <p className="text-xs text-ink-dim">
-            Gear &middot; {usedSlots} / {maxSlots} slots
-          </p>
-          {canEdit && (
-            <div className="flex gap-1.5">
-              <input
-                value={gearDraft}
-                onChange={(e) => setGearDraft(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addGear()}
-                placeholder="Item name"
-                className="text-xs bg-bg border border-line rounded-md px-2 py-1 w-32 text-ink"
-              />
-              <button onClick={addGear} className="text-xs border border-line rounded-md px-2 py-1 flex items-center gap-1 text-ink hover:bg-panel2">
-                <Plus size={13} /> Add
-              </button>
-            </div>
-          )}
+      <div className="flex flex-col gap-3 mb-4">
+        {/* Stat-card row: Gear/Coin are read straight off the character;
+            Torches/Rations are derived from real carried gear (see
+            torchCount/rationCount above) -- no invented "resource" rows.
+            Party storage isn't here: there's no shared-inventory table, so
+            rather than show a fake empty card, it's just left out. */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className={`rounded-lg p-3 border ${gearFull ? 'bg-warning/10 border-warning/40' : 'bg-panel border-transparent'}`}>
+            <p className="text-[11px] text-ink-dim mb-1">Gear</p>
+            <p className={`text-sm ${gearFull ? 'text-warning-text' : 'text-ink'}`}>{usedSlots} / {maxSlots} slots</p>
+            {gearFull && <p className="text-[10px] text-warning-text mt-1">No free carried slots</p>}
+          </div>
+          <div className="bg-panel rounded-lg p-3">
+            <p className="text-[11px] text-ink-dim mb-1">Coin</p>
+            <p className="text-sm text-ink">{character.coin} gp</p>
+          </div>
+          <div className="bg-panel rounded-lg p-3">
+            <p className="text-[11px] text-ink-dim mb-1">Torches</p>
+            <p className="text-sm text-ink">{torchCount}</p>
+          </div>
+          <div className="bg-panel rounded-lg p-3">
+            <p className="text-[11px] text-ink-dim mb-1">Rations</p>
+            <p className="text-sm text-ink">{rationCount}</p>
+          </div>
         </div>
-        <div className="flex flex-col gap-1.5">
-          {gear.length === 0 && <p className="text-xs text-ink-faint">No gear yet.</p>}
-          {gear.map((item) => (
-            <div key={item.id} className="flex items-center justify-between text-xs p-2 bg-panel2/60 rounded-md border border-line">
-              <label className="flex items-center gap-2 flex-1">
-                {canEdit ? (
-                  <input type="checkbox" checked={item.equipped} onChange={() => toggleEquipped(item)} />
-                ) : (
-                  <span className={`w-2 h-2 rounded-full inline-block ${item.equipped ? 'bg-primary' : 'bg-panel2'}`} />
-                )}
-                <span className="text-ink">{item.name}</span>
-                {item.quantity > 1 && <span className="text-ink-faint">&times;{item.quantity}</span>}
-                <span className="text-ink-faint">
-                  {item.slots} slot{Number(item.slots) === 1 ? '' : 's'}
-                  {item.equipped ? ' · equipped' : ''}
-                </span>
-              </label>
-              {canEdit && (
-                <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text">
-                  <Trash2 size={13} />
-                </button>
-              )}
+
+        {canEdit && (
+          <div className="flex gap-1.5">
+            <input
+              value={gearDraft}
+              onChange={(e) => setGearDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addGear()}
+              placeholder="Item name"
+              className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
+            />
+            <button onClick={addGear} className="text-xs border border-line rounded-md px-2.5 py-1.5 flex items-center gap-1 text-ink hover:bg-panel2 shrink-0">
+              <Plus size={13} /> Add
+            </button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="bg-panel rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-xs text-ink-dim">Equipped</p>
+              <span className="text-[10px] text-positive-text">Equipped items free</span>
             </div>
-          ))}
+            {equippedGear.length === 0 && <p className="text-xs text-ink-faint">Nothing equipped.</p>}
+            <div className="flex flex-col gap-1.5">
+              {equippedGear.map((item) => {
+                // Tags only reflect real columns -- base_ac/is_shield/
+                // dex_applies (from set_character_gear_equipped's own AC
+                // math). No damage-die/property tags: character_gear has
+                // no field for those yet, so weapons just get "Equipped"
+                // rather than a made-up combat stat.
+                const tag = item.is_shield
+                  ? '+2 AC'
+                  : item.base_ac != null
+                    ? `AC ${item.base_ac}${item.dex_applies ? ' + dex' : ''}`
+                    : 'Equipped'
+                return (
+                  <div key={item.id} className="flex items-center justify-between text-xs p-2 bg-panel2/60 rounded-md border border-line">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-ink truncate">{item.name}</span>
+                      {item.quantity > 1 && <span className="text-ink-faint shrink-0">&times;{item.quantity}</span>}
+                      <span className="text-ink-faint shrink-0">{tag}</span>
+                    </div>
+                    {canEdit && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={() => toggleEquipped(item)} className="text-[11px] text-ink-faint hover:text-ink-dim">
+                          Unequip
+                        </button>
+                        <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="bg-panel rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-xs text-ink-dim">Carried gear</p>
+              <span className={`text-[10px] ${gearFull ? 'text-warning-text' : 'text-ink-faint'}`}>{usedSlots} / {maxSlots}</span>
+            </div>
+            <div className="flex flex-wrap gap-1 mb-3">
+              {Array.from({ length: Math.max(maxSlots, usedSlots, 1) }).map((_, i) => (
+                <span
+                  key={i}
+                  className={`w-2 h-2 rounded-full ${i < usedSlots ? (usedSlots > maxSlots ? 'bg-danger' : 'bg-warning') : 'bg-panel2'}`}
+                />
+              ))}
+            </div>
+            {carriedGear.length === 0 && <p className="text-xs text-ink-faint">No carried gear.</p>}
+            <div className="flex flex-col gap-1.5">
+              {carriedGear.map((item) => (
+                <div key={item.id} className="flex items-center justify-between text-xs p-2 bg-panel2/60 rounded-md border border-line">
+                  <label className="flex items-center gap-2 flex-1 min-w-0">
+                    {canEdit ? (
+                      <input type="checkbox" checked={item.equipped} onChange={() => toggleEquipped(item)} />
+                    ) : (
+                      <span className="w-2 h-2 rounded-full inline-block bg-panel2 shrink-0" />
+                    )}
+                    <span className="text-ink truncate">{item.name}</span>
+                    {item.quantity > 1 && <span className="text-ink-faint shrink-0">&times;{item.quantity}</span>}
+                    <span className="text-ink-faint shrink-0">
+                      {item.slots} slot{Number(item.slots) === 1 ? '' : 's'}
+                    </span>
+                  </label>
+                  {canEdit && (
+                    <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text shrink-0">
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
       )}
 
       {activeTab === 'abilities' && (
-      <>
+      <div className="max-w-2xl mx-auto">
       <div className="bg-panel rounded-lg p-4 mb-4">
         <p className="text-xs text-ink-dim mb-2">Talents</p>
         {talents.length === 0 && <p className="text-xs text-ink-faint">None yet.</p>}
@@ -712,12 +806,14 @@ export default function CharacterSheet({ characterId, session, onBack }) {
           </div>
         )}
       </div>
-      </>
+      </div>
       )}
 
       {activeTab === 'notes' && (
+        <div className="max-w-2xl mx-auto">
         <div className="bg-panel rounded-lg p-4 text-xs text-ink-faint">
           Notes aren't wired up yet -- this tab is reserved for freeform character notes once that's built.
+        </div>
         </div>
       )}
     </div>
