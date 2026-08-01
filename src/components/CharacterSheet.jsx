@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import Tabs from './ui/Tabs.jsx'
 import {
   abilityModifier,
   gearSlotCapacity,
@@ -10,6 +11,18 @@ import {
 
 const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 const STAT_LABELS = { str: 'STR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'WIS', cha: 'CHA' }
+
+// Matches design-handoff-spec Section 2.6 / Section 4.4's Overview/Gear/
+// Abilities/Notes/History tab row. "History" is left out here rather than
+// faked -- there's no audit-log read path wired up for a character yet, so
+// a History tab would just be a permanent empty state. Add it once that
+// data actually exists instead of shipping a tab that never has content.
+const SHEET_TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'gear', label: 'Gear' },
+  { key: 'abilities', label: 'Abilities' },
+  { key: 'notes', label: 'Notes' },
+]
 
 const modifier = abilityModifier
 
@@ -42,6 +55,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState(null)
+  const [activeTab, setActiveTab] = useState('overview')
   const avatarInputRef = useRef(null)
 
   useEffect(() => {
@@ -385,6 +399,10 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       </div>
       {avatarError && <p className="text-xs text-danger-text mb-3">{avatarError}</p>}
 
+      <Tabs tabs={SHEET_TABS} activeKey={activeTab} onChange={setActiveTab} />
+
+      {activeTab === 'overview' && (
+      <>
       <div className="grid grid-cols-6 gap-1.5 mb-4">
         {STAT_KEYS.map((k) => (
           <div key={k} className="bg-panel rounded-md p-1.5 text-center">
@@ -444,7 +462,10 @@ export default function CharacterSheet({ characterId, session, onBack }) {
           {resourceError && <p className="text-[11px] text-danger-text mt-1">{resourceError}</p>}
         </div>
       )}
+      </>
+      )}
 
+      {activeTab === 'gear' && (
       <div className="bg-panel rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between mb-2.5">
           <p className="text-xs text-ink-dim">
@@ -491,7 +512,10 @@ export default function CharacterSheet({ characterId, session, onBack }) {
           ))}
         </div>
       </div>
+      )}
 
+      {activeTab === 'abilities' && (
+      <>
       <div className="bg-panel rounded-lg p-4 mb-4">
         <p className="text-xs text-ink-dim mb-2">Talents</p>
         {talents.length === 0 && <p className="text-xs text-ink-faint">None yet.</p>}
@@ -688,6 +712,14 @@ export default function CharacterSheet({ characterId, session, onBack }) {
           </div>
         )}
       </div>
+      </>
+      )}
+
+      {activeTab === 'notes' && (
+        <div className="bg-panel rounded-lg p-4 text-xs text-ink-faint">
+          Notes aren't wired up yet -- this tab is reserved for freeform character notes once that's built.
+        </div>
+      )}
     </div>
   )
 }
