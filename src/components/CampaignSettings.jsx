@@ -142,7 +142,7 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
   if (loading) {
     return (
       <div className="max-w-xl mx-auto p-6">
-        <p className="text-xs text-neutral-500">Loading campaign settings…</p>
+        <p className="text-xs text-ink-faint">Loading campaign settings…</p>
       </div>
     )
   }
@@ -150,25 +150,25 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
   return (
     <div className="max-w-xl mx-auto p-6">
       {onBack && (
-        <button onClick={onBack} className="text-xs text-neutral-400 hover:text-neutral-200 flex items-center gap-1 mb-3">
+        <button onClick={onBack} className="text-xs text-ink-dim hover:text-ink flex items-center gap-1 mb-3">
           <ArrowLeft size={13} /> Back
         </button>
       )}
 
-      <h1 className="text-white text-lg font-medium mb-1">{campaignName}</h1>
-      <p className="text-xs text-neutral-400 mb-4">Campaign settings</p>
+      <h1 className="text-ink text-lg font-medium mb-1">{campaignName}</h1>
+      <p className="text-xs text-ink-dim mb-4">Campaign settings</p>
 
       {isGm && (
-        <div className="bg-neutral-900 rounded-lg p-4 mb-4">
-          <p className="text-xs text-neutral-400 mb-2">Privacy</p>
+        <div className="bg-panel rounded-lg p-4 mb-4">
+          <p className="text-xs text-ink-dim mb-2">Privacy</p>
 
           <div className="flex items-center justify-between mb-3 text-xs">
-            <span className="text-neutral-400">Join code</span>
+            <span className="text-ink-dim">Join code</span>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-white tracking-wide">{joinCode}</span>
+              <span className="font-mono text-ink tracking-wide">{joinCode}</span>
               <button
                 onClick={copyJoinCode}
-                className="text-[11px] px-2 py-0.5 border border-neutral-700 rounded text-neutral-300 hover:bg-neutral-800"
+                className="text-[11px] px-2 py-0.5 border border-line rounded text-ink-dim hover:bg-panel2"
               >
                 {copied ? 'Copied' : 'Copy'}
               </button>
@@ -179,7 +179,7 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
             <button
               onClick={() => setIsPublic(true)}
               className={`flex-1 text-xs py-1.5 rounded-md border ${
-                isPublic ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300'
+                isPublic ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim'
               }`}
             >
               Public
@@ -187,13 +187,13 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
             <button
               onClick={() => setIsPublic(false)}
               className={`flex-1 text-xs py-1.5 rounded-md border ${
-                !isPublic ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300'
+                !isPublic ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim'
               }`}
             >
               Private
             </button>
           </div>
-          <p className="text-[11px] text-neutral-500 mb-2.5">
+          <p className="text-[11px] text-ink-faint mb-2.5">
             {isPublic
               ? 'Anyone signed in can see and join this campaign from the lobby.'
               : 'Hidden from the public list -- joinable only with the code and password below.'}
@@ -205,24 +205,24 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
               value={privacyPassword}
               onChange={(e) => setPrivacyPassword(e.target.value)}
               placeholder="Set a new password (leave blank to keep the current one)"
-              className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white mb-2.5"
+              className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink mb-2.5"
             />
           )}
 
-          {privacyError && <p className="text-xs text-red-400 mb-2">{privacyError}</p>}
+          {privacyError && <p className="text-xs text-danger-text mb-2">{privacyError}</p>}
 
           <button
             onClick={savePrivacy}
             disabled={privacySaving}
-            className="text-xs border border-neutral-700 rounded-md px-3 py-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+            className="text-xs border border-line rounded-md px-3 py-1.5 text-ink hover:bg-panel2 disabled:opacity-50"
           >
             {privacySaving ? 'Saving...' : privacySaved ? 'Saved' : 'Save privacy settings'}
           </button>
         </div>
       )}
 
-      <div className="bg-neutral-900 rounded-lg p-4 mb-4">
-        <p className="text-xs text-neutral-400 mb-2">Modes of play</p>
+      <div className="bg-panel rounded-lg p-4 mb-4">
+        <p className="text-xs text-ink-dim mb-2">Modes of play</p>
         <div className="flex flex-col gap-1.5">
           {MODES_OF_PLAY.map((mode) => (
             <label key={mode.key} className="flex items-start gap-2 text-xs">
@@ -236,33 +236,33 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
               ) : (
                 <span
                   className={`w-2 h-2 rounded-full inline-block mt-1 shrink-0 ${
-                    modes.includes(mode.key) ? 'bg-blue-400' : 'bg-neutral-700'
+                    modes.includes(mode.key) ? 'bg-primary' : 'bg-panel2'
                   }`}
                 />
               )}
               <span>
-                <span className={`font-medium ${modes.includes(mode.key) ? 'text-white' : 'text-neutral-500'}`}>{mode.label}</span>
-                <span className="text-neutral-500"> -- {mode.description}</span>
+                <span className={`font-medium ${modes.includes(mode.key) ? 'text-ink' : 'text-ink-faint'}`}>{mode.label}</span>
+                <span className="text-ink-faint"> -- {mode.description}</span>
               </span>
             </label>
           ))}
         </div>
       </div>
 
-      <div className="bg-neutral-900 rounded-lg p-4 mb-4">
-        <p className="text-xs text-neutral-400 mb-2">House rules</p>
+      <div className="bg-panel rounded-lg p-4 mb-4">
+        <p className="text-xs text-ink-dim mb-2">House rules</p>
         {isGm ? (
           <textarea
             value={houseRules}
             onChange={(e) => setHouseRules(e.target.value)}
             placeholder="Anything the table has agreed on beyond the core rules..."
             rows={6}
-            className="w-full text-sm bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-white resize-y"
+            className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-ink resize-y"
           />
         ) : houseRules ? (
-          <p className="text-sm text-neutral-300 whitespace-pre-wrap">{houseRules}</p>
+          <p className="text-sm text-ink-dim whitespace-pre-wrap">{houseRules}</p>
         ) : (
-          <p className="text-xs text-neutral-500">No house rules set yet.</p>
+          <p className="text-xs text-ink-faint">No house rules set yet.</p>
         )}
       </div>
 
@@ -270,7 +270,7 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
         <button
           onClick={save}
           disabled={saving}
-          className="text-xs border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+          className="text-xs border border-line rounded-md px-3 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2 disabled:opacity-50"
         >
           <Save size={13} /> {saving ? 'Saving...' : 'Save settings'}
         </button>
