@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
-import { Eye, EyeOff, Plus, Upload, Dices, SkipForward, Settings, ScrollText, BookOpen, Users, Flame, AlertTriangle, RotateCw, Timer, Sun, CloudFog, Target, Mic, Paperclip, Megaphone, Lock } from 'lucide-react'
+import { Eye, EyeOff, Plus, Upload, Dices, SkipForward, Flame, AlertTriangle, RotateCw, Timer, Sun, CloudFog, Target, Mic, Paperclip, Megaphone, Lock } from 'lucide-react'
 
 import ZoneScene from './ZoneScene.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
 import Footer from './ui/Footer.jsx'
+import LogEntry from './LogEntry.jsx'
+import CampaignToolbar from './CampaignToolbar.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { campaignMapPath, useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 import { abilityModifier } from '../game/rules/character.js'
+import { useCampaignSession, useProfileDisplayName } from '../lib/useCampaignSession.js'
 
 const GM_TABS = [
 { key: 'scene', label: 'Scene' },
@@ -56,7 +59,7 @@ return source.remaining_minutes
 // have data for. Clocks & threats and Preview player view are real.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
-  const [displayName, setDisplayName] = useState('GM')
+  const displayName = useProfileDisplayName(user, 'GM')
   const [encounter, setEncounter] = useState([])
   const [notes, setNotes] = useState([])
   const [noteDraft, setNoteDraft] = useState('')
@@ -68,26 +71,12 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   // them), so selection is character/monster only for now.
   const [selectedEntity, setSelectedEntity] = useState(null) // { type: 'character' | 'monster', id, name }
   const [monsterDraft, setMonsterDraft] = useState('')
-  const [party, setParty] = useState([])
-  const [turnOrder, setTurnOrder] = useState([])
-  const [log, setLog] = useState([])
   const [message, setMessage] = useState('')
   const [gmTab, setGmTab] = useState('map') // 'scene' | 'map' | 'encounter' -- pure view toggle, no new data
   const [nowTick, setNowTick] = useState(() => Date.now())
-  const [clocks, setClocks] = useState([])
   const [composeMode, setComposeMode] = useState('public') // 'public' -> scene_log, 'private' -> gm_notes
   const sceneLogRef = useRef(null)
   const chatLogRef = useRef(null)
-
-  useEffect(() => {
-    if (!user) return
-    supabase
-      .from('profiles')
-      .select('display_name')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => setDisplayName(data?.display_name || user.email || 'GM'))
-  }, [user])
 
   // Only matters while a torch is actually burning, but a cheap 1s
   // interval the whole time this screen is open is simplest.
@@ -96,8 +85,14 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     return () => clearInterval(t)
   }, [])
 
-  const [mapInfo, setMapInfo] = useState(null)
-  const [lightSources, setLightSources] = useState([])
+  const {
+    log, setLog,
+    mapInfo, setMapInfo,
+    turnOrder, setTurnOrder,
+    party, setParty,
+    clocks,
+    lightSources,
+  } = useCampaignSession(campaignId, { channelKey: 'gm-dashboard' })
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
   const [moraleChecking, setMoraleChecking] = useState(false)
@@ -106,6 +101,11 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const fileInputRef = useRef(null)
   const { url: mapUrl, error: mapAccessError } = useCampaignMapUrl(mapInfo)
 
+  // Second channel for the two tables this screen reads/writes very
+  // differently from the player table: encounter_monsters (full read/write
+  // here vs. GameTable's read-only subset) and gm_notes (all notes,
+  // revealed or not, including entity_type/entity_id -- GameTable only
+  // ever sees revealed ones). Everything else lives in useCampaignSession.
   useEffect(() => {
     if (!campaignId) return
     let cancelled = false
@@ -124,53 +124,8 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setNotes(data || []) })
 
-    supabase
-      .from('characters')
-      .select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, stats, status, death_timer')
-      .eq('campaign_id', campaignId)
-      .order('created_at', { ascending: true })
-      .then(({ data }) => { if (!cancelled) setParty(data || []) })
-
-    supabase
-      .from('turn_order')
-      .select('order_list')
-      .eq('campaign_id', campaignId)
-      .maybeSingle()
-      .then(({ data }) => { if (!cancelled) setTurnOrder(data?.order_list || []) })
-
-    supabase
-      .from('campaigns')
-      .select('map_path, map_url')
-      .eq('id', campaignId)
-      .maybeSingle()
-      .then(({ data }) => { if (!cancelled) setMapInfo(data) })
-
-    supabase
-      .from('campaign_light_sources')
-      .select('id, name, character_id, lit, lit_at, remaining_minutes, total_minutes')
-      .eq('campaign_id', campaignId)
-      .then(({ data }) => { if (!cancelled) setLightSources(data || []) })
-
-    supabase
-      .from('scene_log')
-      .select('id, type, sender_name, text, roll_source, dice_roll_id, created_at')
-      .eq('campaign_id', campaignId)
-      .order('created_at', { ascending: true })
-      .then(({ data }) => { if (!cancelled) setLog(data || []) })
-
-    supabase
-      .from('campaign_clocks')
-      .select('id, name, segments_filled, segments_total, created_at')
-      .eq('campaign_id', campaignId)
-      .then(({ data }) => { if (!cancelled) setClocks(data || []) })
-
     const channel = supabase
-      .channel(`gm-dashboard-${campaignId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'scene_log', filter: `campaign_id=eq.${campaignId}` },
-        (payload) => setLog((l) => (l.some((e) => e.id === payload.new.id) ? l : [...l, payload.new]))
-      )
+      .channel(`gm-dashboard-extra-${campaignId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'encounter_monsters', filter: `campaign_id=eq.${campaignId}` },
@@ -186,41 +141,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         (payload) => {
           if (payload.eventType === 'INSERT') setNotes((list) => [...list, payload.new])
           else if (payload.eventType === 'UPDATE') setNotes((list) => list.map((n) => (n.id === payload.new.id ? payload.new : n)))
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'characters', filter: `campaign_id=eq.${campaignId}` },
-        (payload) => {
-          if (payload.eventType === 'INSERT') setParty((p) => [...p, payload.new])
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'turn_order', filter: `campaign_id=eq.${campaignId}` },
-        (payload) => setTurnOrder(payload.new?.order_list || [])
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'campaign_light_sources', filter: `campaign_id=eq.${campaignId}` },
-        (payload) => {
-          if (payload.eventType === 'INSERT') setLightSources((l) => [...l, payload.new])
-          else if (payload.eventType === 'UPDATE') setLightSources((l) => l.map((x) => (x.id === payload.new.id ? payload.new : x)))
-          else if (payload.eventType === 'DELETE') setLightSources((l) => l.filter((x) => x.id !== payload.old.id))
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
-        (payload) => setMapInfo(payload.new)
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'campaign_clocks', filter: `campaign_id=eq.${campaignId}` },
-        (payload) => {
-          if (payload.eventType === 'INSERT') setClocks((c) => (c.some((x) => x.id === payload.new.id) ? c : [...c, payload.new]))
-          else if (payload.eventType === 'UPDATE') setClocks((c) => c.map((x) => (x.id === payload.new.id ? payload.new : x)))
-          else if (payload.eventType === 'DELETE') setClocks((c) => c.filter((x) => x.id !== payload.old.id))
         }
       )
       .subscribe()
@@ -478,43 +398,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight
   }, [chatLog.length])
 
-  const renderLogEntry = (entry) => {
-    if (entry.type === 'narration') {
-      return <p key={entry.id} className="italic text-ink-dim">{entry.text}</p>
-    }
-    if (entry.type === 'gm') {
-      return (
-        <p key={entry.id}>
-          <span className="font-medium text-primary-text">{entry.sender_name}:</span>{' '}
-          <span className="text-ink">{entry.text}</span>
-        </p>
-      )
-    }
-    if (entry.type === 'roll') {
-      return (
-        <p key={entry.id} className="flex items-center gap-1.5 flex-wrap">
-          <span className="font-medium text-white">{entry.sender_name}:</span>
-          <span className="text-ink">{entry.text}</span>
-          <span
-            className={`text-[10px] px-1.5 py-0.5 rounded ${
-              entry.roll_source === 'app'
-                ? 'bg-primary/20 text-primary-text'
-                : 'bg-panel2 border border-line text-ink-dim'
-            }`}
-          >
-            {entry.roll_source === 'app' ? 'app roll' : 'self-reported'}
-          </span>
-        </p>
-      )
-    }
-    return (
-      <p key={entry.id}>
-        <span className="font-medium text-white">{entry.sender_name}:</span>{' '}
-        <span className="text-ink">{entry.text}</span>
-      </p>
-    )
-  }
-
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pt-6 pb-3 flex items-center justify-between">
@@ -536,50 +419,20 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               </div>
             ))}
           </div>
-          {onOpenLog && (
-            <button
-              onClick={onOpenLog}
-              title="Campaign log"
-              className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
-            >
-              <ScrollText size={14} />
-            </button>
-          )}
-          {onOpenLibrary && (
-            <button
-              onClick={onOpenLibrary}
-              title="Rules library"
-              className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
-            >
-              <BookOpen size={14} />
-            </button>
-          )}
-          {onOpenTracker && (
-            <button
-              onClick={onOpenTracker}
-              title="NPCs, factions & treasure"
-              className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
-            >
-              <Users size={14} />
-            </button>
-          )}
-          {onOpenSettings && (
-            <button
-              onClick={onOpenSettings}
-              title="Campaign settings"
-              className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
-            >
-              <Settings size={14} />
-            </button>
-          )}
-          {onSwitchToPlayerView && (
-            <button
-              onClick={onSwitchToPlayerView}
-              className="text-xs border border-line rounded-md px-2.5 py-1 flex items-center gap-1.5 text-ink hover:bg-panel2"
-            >
-              <Eye size={14} /> Switch to player view
-            </button>
-          )}
+          <CampaignToolbar
+            onOpenLog={onOpenLog}
+            onOpenLibrary={onOpenLibrary}
+            onOpenTracker={onOpenTracker}
+            onOpenSettings={onOpenSettings}
+            after={onSwitchToPlayerView && (
+              <button
+                onClick={onSwitchToPlayerView}
+                className="text-xs border border-line rounded-md px-2.5 py-1 flex items-center gap-1.5 text-ink hover:bg-panel2"
+              >
+                <Eye size={14} /> Switch to player view
+              </button>
+            )}
+          />
         </div>
       </div>
 
@@ -872,7 +725,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   <p className="text-xs text-ink-dim mb-2">Scene log</p>
                   <div ref={sceneLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2 text-sm pr-1">
                     {narrationLog.length === 0 && <p className="text-xs text-ink-dim">No messages yet -- narrate something below.</p>}
-                    {narrationLog.map((entry) => renderLogEntry(entry))}
+                    {narrationLog.map((entry) => <LogEntry as="p" key={entry.id} entry={entry} />)}
                   </div>
                 </div>
 
@@ -880,7 +733,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   <p className="text-xs text-ink-dim mb-2">Party chat</p>
                   <div ref={chatLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2 text-sm pr-1">
                     {chatLog.length === 0 && <p className="text-xs text-ink-dim">Nothing from the players yet.</p>}
-                    {chatLog.map((entry) => renderLogEntry(entry))}
+                    {chatLog.map((entry) => <LogEntry as="p" key={entry.id} entry={entry} />)}
                   </div>
                 </div>
               </div>
