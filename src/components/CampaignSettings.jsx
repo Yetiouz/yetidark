@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Save } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import ToggleSwitch from './ui/ToggleSwitch.jsx'
 
 // Paraphrased, generic descriptions of Shadowdark's optional Modes of
 // Play toggles -- not the rulebook's own wording, same approach used
@@ -227,11 +228,10 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
           {MODES_OF_PLAY.map((mode) => (
             <label key={mode.key} className="flex items-start gap-2 text-xs">
               {isGm ? (
-                <input
-                  type="checkbox"
+                <ToggleSwitch
                   checked={modes.includes(mode.key)}
                   onChange={() => toggleMode(mode.key)}
-                  className="mt-0.5"
+                  label={mode.label}
                 />
               ) : (
                 <span
