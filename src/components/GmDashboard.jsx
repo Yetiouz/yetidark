@@ -98,6 +98,13 @@ return source.remaining_minutes
 // below the map -- it's a right-click context menu on each token now (see
 // ZoneScene.jsx's onSetZone), which is GM-only (GameTable.jsx never passes
 // onSetZone, so players still get the browser's normal right-click menu).
+//
+// Scene controls (Advance round / Pause session / Request a roll / Start
+// encounter / Reveal area / Reveal hidden monster) is no longer its own
+// card in the left rail -- per direct feedback that it and Active encounter
+// felt like they belonged together, those Row actions now live at the top
+// of the Active encounter card itself, above the monster list, separated
+// by a divider. The left rail now holds Quick tables only.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -558,35 +565,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto w-full px-6 pb-4">
           <div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start">
-            {/* LEFT RAIL: scene controls, quick tables -- party status now
-                lives in the right rail, in the same position as
+            {/* LEFT RAIL: quick tables only now -- scene controls moved into
+                the Active encounter card (see CENTER below), and party
+                status lives in the right rail, in the same position as
                 GameTable.jsx's player-page Party card, per direct user
                 feedback that card placement should match the player page
                 as closely as possible. */}
             <div className="flex flex-col gap-3">
-              <Card title="Scene controls">
-                <div className="flex flex-col gap-1.5">
-                  <Row icon={SkipForward} label="Advance round" onClick={advanceTurn} disabled={turnOrder.length === 0} />
-                  <Row
-                    icon={sessionActive ? Pause : Play}
-                    label={togglingSession ? 'Working…' : sessionActive ? 'Pause session' : 'Resume session'}
-                    onClick={toggleSession}
-                    disabled={togglingSession}
-                    title="Pausing stops torches and other timers from counting down for the whole table"
-                  />
-                  <Row icon={Dices} label="Request a roll" onClick={requestRoll} disabled={requestingRoll} />
-                  <Row icon={Swords} label="Start encounter" onClick={startEncounter} />
-                  <Row icon={EyeOff} label="Reveal area" disabled title="Fog-of-war / area reveal isn't built yet -- placeholder" />
-                  {encounter.some((m) => m.hidden) && (
-                    <Row
-                      icon={Eye}
-                      label="Reveal hidden monster"
-                      onClick={() => encounter.filter((m) => m.hidden).forEach((m) => revealMonster(m.id))}
-                    />
-                  )}
-                </div>
-              </Card>
-
               <Card title="Quick tables">
                 <div className="flex flex-col gap-1.5">
                   <Row icon={Shuffle} label="Random encounter" onClick={() => rollQuickTable('Random encounter check', '1d6')} disabled={quickRolling} />
@@ -597,7 +582,8 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               </Card>
             </div>
 
-            {/* CENTER: map, active encounter, scene log -- all always visible now */}
+            {/* CENTER: map, active encounter (now also holds scene controls),
+                scene log -- all always visible now */}
             <div className="flex flex-col gap-3 min-w-0">
               {/* Map and Active encounter used to be Scene/Map/Encounter tabs
                   (pick one, see it, lose the others); the tab switcher is
@@ -686,6 +672,30 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   </div>
                 }
               >
+                {/* Scene controls folded in here (used to be its own card in
+                    the left rail) -- per direct user feedback, running the
+                    encounter and controlling the scene felt like the same
+                    job, so they're the same card now. */}
+                <div className="flex flex-col gap-1.5 mb-3 pb-3 border-b border-line-soft">
+                  <Row icon={SkipForward} label="Advance round" onClick={advanceTurn} disabled={turnOrder.length === 0} />
+                  <Row
+                    icon={sessionActive ? Pause : Play}
+                    label={togglingSession ? 'Working…' : sessionActive ? 'Pause session' : 'Resume session'}
+                    onClick={toggleSession}
+                    disabled={togglingSession}
+                    title="Pausing stops torches and other timers from counting down for the whole table"
+                  />
+                  <Row icon={Dices} label="Request a roll" onClick={requestRoll} disabled={requestingRoll} />
+                  <Row icon={Swords} label="Start encounter" onClick={startEncounter} />
+                  <Row icon={EyeOff} label="Reveal area" disabled title="Fog-of-war / area reveal isn't built yet -- placeholder" />
+                  {encounter.some((m) => m.hidden) && (
+                    <Row
+                      icon={Eye}
+                      label="Reveal hidden monster"
+                      onClick={() => encounter.filter((m) => m.hidden).forEach((m) => revealMonster(m.id))}
+                    />
+                  )}
+                </div>
                 <div className="flex flex-col gap-1.5">
                   {encounter.length === 0 && <p className="text-xs text-ink-dim">No monsters yet -- add one above.</p>}
                   {encounter.map((m) => (
