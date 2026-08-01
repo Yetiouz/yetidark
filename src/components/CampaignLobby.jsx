@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import { getCampaignEntryBlockReason } from '../app/campaignEntry.js'
+import Badge from './ui/Badge.jsx'
 
 // Paraphrased labels for the Modes of Play chips -- same keys as
 // CampaignSettings.jsx's MODES_OF_PLAY, just the short label without the
@@ -288,9 +289,9 @@ export default function CampaignLobby({
                     )}
                   </div>
                   {m.character ? (
-                    <span className="text-xs px-2 py-0.5 rounded bg-positive-bg text-positive-text">Ready</span>
+                    <Badge tone="green">Ready</Badge>
                   ) : (
-                    <span className="text-xs px-2 py-0.5 rounded bg-warning-bg text-warning-text">Needs character</span>
+                    <Badge tone="amber">Needs character</Badge>
                   )}
                 </div>
 
