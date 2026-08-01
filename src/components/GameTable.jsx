@@ -4,7 +4,7 @@ import ZoneScene from './ZoneScene.jsx'
 import Row from './ui/Row.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
 import Footer from './ui/Footer.jsx'
-import LogEntry from './LogEntry.jsx'
+import Modal from './ui/Modal.jsx'
 import CampaignToolbar from './CampaignToolbar.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { flatDieNotation } from '../lib/dice.js'
@@ -96,7 +96,6 @@ const [rollNonce, setRollNonce] = useState(0) // bumped every roll so the CSS an
 const rollTimerRef = useRef(null)
 const rollRequestPendingRef = useRef(false)
 const sceneLogRef = useRef(null)
-const chatLogRef = useRef(null)
 const autoTurnTimerRef = useRef(null) // pending debounce timer for the auto-respond trigger
 const gmTypeRef = useRef(null) // mirrors gmType state, read inside the realtime handler below
 const askAiGmRef = useRef(null) // mirrors askAiGm below, kept current so the realtime handler never calls a stale closure
@@ -118,6 +117,12 @@ const [stabilizeError, setStabilizeError] = useState(null)
 const [deathCheckPendingId, setDeathCheckPendingId] = useState(null)
 const [rollError, setRollError] = useState(null)
 const [sceneTab, setSceneTab] = useState('split') // 'scene' | 'map' | 'split' -- purely a view toggle, no new data
+// The dice roller / Attack / Stabilize cards used to render as permanent
+// stacked cards in the center column -- real screen-space budget the
+// mockup spends on one small on-demand action instead. Now behind this,
+// opened from the composer's dice button; same handlers/state, just
+// moved into Modal.jsx rather than always rendered.
+const [showDiceModal, setShowDiceModal] = useState(false)
 
 useEffect(() => {
 return () => {
@@ -541,12 +546,6 @@ return acc
 }, {})
 const myVote = votes.find((v) => v.voter_user_id === user?.id)?.option_key
 
-// Split so the Scene log (narration/GM lines/rolls) and Party chat
-// (player-to-player OOC chatter) can live in their own separate,
-// always-visible panels instead of one merged, tabbed feed.
-const narrationLog = log.filter((entry) => entry.type !== 'chat')
-const chatLog = log.filter((entry) => entry.type === 'chat')
-
 // Status rail derived state. Objective stands in for the oldest open
 // thread until there's a real "current objective" concept in the schema.
 // Clocks only show once something's actually moved (an idle 0/4 clock
@@ -700,16 +699,13 @@ useEffect(() => {
 if (sceneLogRef.current) sceneLogRef.current.scrollTop = sceneLogRef.current.scrollHeight
 }, [log.length])
 
-useEffect(() => {
-if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight
-}, [chatLog.length])
-
-// Shared by both panels so a roll or chat message renders identically
-// wherever it shows up.
-// AI-GM campaigns get one unified, chat-shaped feed (party messages +
-// AI narration + rolls, in order) right here on the table instead of
-// the two-panel Scene log / Party chat split -- the map, dice roller,
-// and everything else on this page stays put either way.
+// Every entry (narration, GM lines, rolls, and party chat) renders
+// through one shared feed now -- see the CENTER column below. This used
+// to be split into two permanent side-by-side panels (Scene log / Party
+// chat) for human-GM campaigns, with only AI-GM campaigns getting this
+// unified treatment; that split is exactly what read as "two different
+// windows" against the mockup's single conversation feed, so both GM
+// types now share the one feed AI-GM campaigns already had working.
 const renderChatBubble = (entry) => {
 if (entry.type === 'ai_gm') {
 return (
@@ -941,6 +937,12 @@ className="p-1 rounded border border-line-soft text-ink-faint cursor-not-allowed
 ))}
 </div>
 </div>
+{/* Clocks used to be their own stacked right-rail card, competing for
+the same vertical space as Party/Known details/Objective -- moved to
+an overlay on the map itself, since that's screen real estate the
+scene image already owns and the mockup treats a clock as something
+you glance at while looking at the scene, not a separate list. */}
+<div className="relative">
 <ZoneScene
 mapUrl={mapUrl}
 mapAccessError={mapAccessError}
@@ -948,6 +950,23 @@ party={party}
 monsters={monsters}
 litCharacterId={litCharacterId}
 />
+{activeClocks.length > 0 && (
+<div className="absolute top-2 right-2 max-w-[180px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-2.5">
+<p className="text-[10px] text-ink-dim mb-1.5 uppercase tracking-wide">Clocks</p>
+<div className="flex flex-col gap-1.5">
+{activeClocks.map((c) => (
+<div key={c.id}>
+<div className="flex items-center justify-between mb-1">
+<span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-ink' : 'text-ink-dim'}`}>{c.name}</span>
+<span className="text-[10px] text-ink-dim shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
+</div>
+<ProgressBar mode="segmented" segments={c.segments_total} filled={c.segments_filled} tone="amber" />
+</div>
+))}
+</div>
+</div>
+)}
+</div>
 <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-line-soft">
 <span className="text-xs text-ink-dim">Where to next?</span>
 <div className="flex gap-1.5">
@@ -968,6 +987,7 @@ myVote === o.key ? 'border-primary text-primary-text' : 'border-line text-ink'
 </div>
 )}
 
+<Modal open={showDiceModal} onClose={() => setShowDiceModal(false)} title="Dice & combat">
 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 <div className="bg-panel rounded-lg p-3">
 <style>{`
@@ -1184,14 +1204,17 @@ className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2
 </div>
 </div>
 </div>
+</Modal>
 
-{showLogPane && (gmType === 'ai' ? (
+{showLogPane && (
 <div className="bg-panel rounded-lg p-4">
-<p className="text-xs text-ink-dim mb-2">AI GM</p>
+<p className="text-xs text-ink-dim mb-2">{gmType === 'ai' ? 'AI GM' : 'Scene log'}</p>
 <div ref={sceneLogRef} className="min-h-[240px] max-h-[420px] overflow-y-auto flex flex-col gap-2.5 pr-1">
 {log.length === 0 && (
 <p className="text-xs text-ink-dim text-center mt-4">
-Nothing has happened yet. Say or do something below, then hit Continue when the party's ready.
+{gmType === 'ai'
+? "Nothing has happened yet. Say or do something below, then hit Continue when the party's ready."
+: 'Nothing has happened yet. Say or do something below.'}
 </p>
 )}
 {log.map((entry) => renderChatBubble(entry))}
@@ -1219,25 +1242,7 @@ className="text-[11px] border border-line rounded-md px-2 py-1 text-ink-faint cu
 )}
 </div>
 </div>
-) : (
-<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-<div className="bg-panel rounded-lg p-4">
-<p className="text-xs text-ink-dim mb-2">Scene log</p>
-<div className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
-{narrationLog.length === 0 && <p className="text-xs text-ink-dim">Nothing has happened yet.</p>}
-{narrationLog.map((entry) => <LogEntry key={entry.id} entry={entry} />)}
-</div>
-</div>
-
-<div className="bg-panel rounded-lg p-4">
-<p className="text-xs text-ink-dim mb-2">Party chat</p>
-<div ref={chatLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
-{chatLog.length === 0 && <p className="text-xs text-ink-dim">No messages yet -- say something below.</p>}
-{chatLog.map((entry) => <LogEntry key={entry.id} entry={entry} />)}
-</div>
-</div>
-</div>
-))}
+)}
 </div>
 
 {/* RIGHT RAIL: current scene / known details / objective / party */}
@@ -1274,22 +1279,9 @@ sceneMode === 'Combat' ? 'border-danger/60 text-danger-text bg-danger/10' : 'bor
 </div>
 )}
 
-{activeClocks.length > 0 && (
-<div className="bg-panel rounded-lg p-3">
-<p className="text-xs text-ink-dim mb-2">Clocks</p>
-<div className="flex flex-col gap-2">
-{activeClocks.map((c) => (
-<div key={c.id}>
-<div className="flex items-center justify-between mb-1">
-<span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-ink' : 'text-ink-dim'}`}>{c.name}</span>
-<span className="text-[10px] text-ink-dim shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
-</div>
-<ProgressBar mode="segmented" segments={c.segments_total} filled={c.segments_filled} tone="amber" />
-</div>
-))}
-</div>
-</div>
-)}
+{/* Clocks moved to a map overlay above (see the CENTER column's
+ZoneScene wrapper) so they no longer stack in this rail as their own
+card. */}
 
 <div className="bg-panel rounded-lg p-3">
 <p className="text-xs text-ink-dim mb-2">Party</p>
@@ -1346,7 +1338,7 @@ className="mt-1.5 w-full text-[11px] border border-danger/60 text-danger-text ro
 </div>
 
 <Footer>
-<div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_220px] gap-3 items-center">
+<div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto_220px] gap-3 items-center">
 <input
 value={message}
 onChange={(e) => setMessage(e.target.value)}
@@ -1354,6 +1346,13 @@ onKeyDown={(e) => e.key === 'Enter' && (gmType === 'ai' ? sendAndAskAiGm() : sen
 placeholder="Say or do something"
 className="min-w-0 bg-panel border border-line rounded-md px-3 py-2 text-sm text-white"
 />
+<button
+onClick={() => setShowDiceModal(true)}
+title="Roll dice / Attack / Stabilize"
+className="text-sm border border-line rounded-md px-3 py-2 text-ink hover:bg-panel2"
+>
+<Dices size={15} />
+</button>
 <button
 disabled
 title="Voice input isn't wired up yet -- placeholder"
