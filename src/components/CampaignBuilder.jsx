@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AlertCircle, Check, ChevronLeft, ChevronRight, Crown, Bot, X as XIcon } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import ToggleSwitch from './ui/ToggleSwitch.jsx'
+import Footer from './ui/Footer.jsx'
 
 function randomJoinCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no 0/O/1/I ambiguity
@@ -447,7 +448,7 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-line-soft px-6 py-3">
+      <Footer className="px-6 py-3">
         <div className="max-w-5xl mx-auto grid grid-cols-[1fr_260px] gap-4">
           <div className="flex items-center justify-between">
             <button
@@ -479,7 +480,7 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
           </div>
           <div className="hidden md:block" />
         </div>
-      </div>
+      </Footer>
     </div>
   )
 }

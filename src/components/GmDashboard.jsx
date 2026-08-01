@@ -3,6 +3,7 @@ import { Eye, EyeOff, Plus, Upload, Dices, SkipForward, Settings, ScrollText, Bo
 
 import ZoneScene from './ZoneScene.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
+import Footer from './ui/Footer.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { campaignMapPath, useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 import { abilityModifier } from '../game/rules/character.js'
@@ -991,7 +992,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-line-soft">
+      <Footer>
         <div className="max-w-6xl mx-auto w-full px-6 pt-2.5 flex items-center gap-1.5">
           <button
             onClick={() => setComposeMode('public')}
@@ -1039,7 +1040,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             {composeMode === 'private' ? 'Save note' : 'Send to players'}
           </button>
         </div>
-      </div>
+      </Footer>
     </div>
   )
 }

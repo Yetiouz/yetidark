@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Dices, AlertCircle, User, Upload, Check, X as XIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import Footer from './ui/Footer.jsx'
 import {
   SHADOWDARK_RULESET,
   abilityModifier,
@@ -1328,7 +1329,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-line-soft px-6 py-3">
+      <Footer className="px-6 py-3">
         <div className="max-w-5xl mx-auto grid grid-cols-[1fr_260px] gap-4">
           <div className="flex items-center justify-between">
             <button
@@ -1361,7 +1362,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
           </div>
           <div className="hidden md:block" />
         </div>
-      </div>
+      </Footer>
     </div>
   )
 }
