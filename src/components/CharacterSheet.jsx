@@ -416,9 +416,8 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       </div>
       {avatarError && <p className="text-xs text-danger-text mb-3">{avatarError}</p>}
 
-      <h2 className="text-sm font-semibold text-ink uppercase tracking-wide border-b border-line-soft pb-2 mb-4">Overview</h2>
-
       <div className="max-w-2xl mx-auto">
+      <h2 className="text-sm font-semibold text-ink uppercase tracking-wide border-b border-line-soft pb-2 mb-4">Overview</h2>
       <div className="grid grid-cols-6 gap-1.5 mb-4">
         {STAT_KEYS.map((k) => (
           <div key={k} className="bg-panel rounded-md p-1.5 text-center">
@@ -741,9 +740,8 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         )
       })()}
 
-      <h2 className="text-sm font-semibold text-ink uppercase tracking-wide border-b border-line-soft pb-2 mb-4 mt-8">Abilities</h2>
-
       <div className="max-w-2xl mx-auto">
+      <h2 className="text-sm font-semibold text-ink uppercase tracking-wide border-b border-line-soft pb-2 mb-4 mt-8">Abilities</h2>
       <div className="bg-panel rounded-lg p-4 mb-4">
         <p className="text-xs text-ink-dim mb-2">Talents</p>
         {talents.length === 0 && <p className="text-xs text-ink-faint">None yet.</p>}
@@ -942,9 +940,8 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       </div>
       </div>
 
-      <h2 className="text-sm font-semibold text-ink uppercase tracking-wide border-b border-line-soft pb-2 mb-4 mt-8">Notes</h2>
-
-        <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto">
+        <h2 className="text-sm font-semibold text-ink uppercase tracking-wide border-b border-line-soft pb-2 mb-4 mt-8">Notes</h2>
         <div className="bg-panel rounded-lg p-4 text-xs text-ink-faint">
           Notes aren't wired up yet -- this section is reserved for freeform character notes once that's built.
         </div>
