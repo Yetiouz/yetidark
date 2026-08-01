@@ -18,12 +18,6 @@ import { campaignMapPath, useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 import { abilityModifier } from '../game/rules/character.js'
 import { useCampaignSession, useProfileDisplayName } from '../lib/useCampaignSession.js'
 
-const GM_TABS = [
-{ key: 'scene', label: 'Scene' },
-{ key: 'map', label: 'Map' },
-{ key: 'encounter', label: 'Encounter' },
-]
-
 // Mirrors GameTable.jsx's minute formatting -- kept local here rather
 // than shared since this is the only other screen that needs it.
 function formatMinutes(totalMin) {
@@ -92,6 +86,18 @@ return source.remaining_minutes
 // placement was also brought as close to the player page's rail layout as
 // the content allows: Party now sits in the right rail, last, the same
 // position it holds on the player page, instead of the left rail.
+//
+// The Scene/Map/Encounter tab switcher is gone, per direct user feedback --
+// the user has a bigger map redesign planned later, and for now just wants
+// the Map and Active encounter cards always visible and stacked (same
+// tabs-to-one-page precedent as the Character Sheet) rather than gated
+// behind a tab. The Map card's Preview player view / Secrets / Light / Fog
+// controls are now small icon-only toggles instead of labelled buttons, per
+// direct request ("no need for big buttons"). Per-character/monster zone
+// assignment (Close/Near/Far) is no longer an always-visible button list
+// below the map -- it's a right-click context menu on each token now (see
+// ZoneScene.jsx's onSetZone), which is GM-only (GameTable.jsx never passes
+// onSetZone, so players still get the browser's normal right-click menu).
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -107,7 +113,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [selectedEntity, setSelectedEntity] = useState(null) // { type: 'character' | 'monster', id, name }
   const [monsterDraft, setMonsterDraft] = useState('')
   const [message, setMessage] = useState('')
-  const [gmTab, setGmTab] = useState('map') // 'scene' | 'map' | 'encounter' -- pure view toggle, no new data
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [composeMode, setComposeMode] = useState('public') // 'public' -> scene_log, 'private' -> gm_notes
   const [sessionActive, setSessionActive] = useState(false)
@@ -303,13 +308,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     await supabase.from('turn_order').upsert({ campaign_id: campaignId, order_list: orderList }, { onConflict: 'campaign_id' })
   }
 
-  // Mockup's "Start encounter" -- the real action is still rolling
-  // initiative (there's no separate "encounter start" flag), plus jumping
-  // the center tabs over to Encounter so the GM lands where the fight
-  // actually needs managing.
+  // Mockup's "Start encounter" -- the real action is rolling initiative
+  // (there's no separate "encounter start" flag). Used to also jump the
+  // center tabs over to Encounter, but the Scene/Map/Encounter tab switcher
+  // is gone now (see the Map/Active encounter cards below), so there's
+  // nowhere left to jump to -- both are always visible.
   const startEncounter = async () => {
     await rollInitiative()
-    setGmTab('encounter')
   }
 
   const advanceTurn = async () => {
@@ -552,20 +557,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto w-full px-6 pb-4">
-          <div className="flex items-center gap-1.5 mb-3">
-            {GM_TABS.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setGmTab(t.key)}
-                className={`text-xs px-3 py-1.5 rounded-md border ${
-                  gmTab === t.key ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink hover:bg-panel2'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start">
             {/* LEFT RAIL: scene controls, quick tables -- party status now
                 lives in the right rail, in the same position as
@@ -606,90 +597,118 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               </Card>
             </div>
 
-            {/* CENTER: scene / map / encounter tabs + log */}
+            {/* CENTER: map, active encounter, scene log -- all always visible now */}
             <div className="flex flex-col gap-3 min-w-0">
-              {gmTab === 'map' && (
-                <Card
-                  title="Map"
-                  titleRight={
-                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                      {onSwitchToPlayerView && (
-                        <Button variant="primary" icon={Eye} onClick={onSwitchToPlayerView}>Preview player view</Button>
-                      )}
-                      <Button icon={EyeOff} disabled title="Secrets isn't wired up yet -- placeholder">Secrets</Button>
-                      <Button icon={Sun} disabled title="Light isn't wired up yet -- placeholder">Light</Button>
-                      <Button icon={CloudFog} disabled title="Fog isn't wired up yet -- placeholder">Fog</Button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => uploadMap(e.target.files?.[0])}
-                      />
-                      <Button icon={Upload} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                        {uploading ? 'Uploading...' : campaignMapPath(mapInfo) ? 'Replace map image' : 'Upload map image'}
-                      </Button>
-                    </div>
-                  }
-                >
-                  {(uploadError || mapAccessError) && (
-                    <p className="text-xs text-danger-text mb-2">{uploadError || mapAccessError}</p>
-                  )}
-                  {/* Clocks overlaid on the scene image itself, matching
-                      GameTable.jsx's player-page treatment, instead of a
-                      separate "Clocks & threats" list card -- only shown on
-                      the Map tab, same as the player page only ever shows
-                      the map with clocks on it. */}
-                  <div className="relative">
-                    <ZoneScene
-                      mapUrl={mapUrl}
-                      mapAccessError={mapAccessError}
-                      party={party}
-                      monsters={encounter}
-                      litCharacterId={lightSources.find((s) => s.lit)?.character_id || null}
-                      onSelectToken={(id, type, name) => selectEntity(type, id, name)}
-                      selectedTokenId={selectedEntity?.id || null}
-                    />
-                    {activeClocks.length > 0 && (
-                      <div className="absolute top-2 right-2 max-w-[180px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-2.5">
-                        <p className="text-[10px] text-ink-dim mb-1.5 uppercase tracking-wide">Clocks</p>
-                        <div className="flex flex-col gap-1.5">
-                          {activeClocks.map((c) => (
-                            <div key={c.id}>
-                              <div className="flex items-center justify-between mb-1">
-                                <span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-ink' : 'text-ink-dim'}`}>{c.name}</span>
-                                <span className="text-[10px] text-ink-dim shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
-                              </div>
-                              <ProgressBar mode="segmented" segments={c.segments_total} filled={c.segments_filled} tone="amber" />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+              {/* Map and Active encounter used to be Scene/Map/Encounter tabs
+                  (pick one, see it, lose the others); the tab switcher is
+                  gone now, per direct user feedback, so both are just always
+                  visible and stacked, same as Character Sheet's tabs-to-
+                  one-page precedent. A bigger map redesign is planned later
+                  -- this is the interim shape, not the final one. */}
+              <Card
+                title="Map"
+                titleRight={
+                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                    {onSwitchToPlayerView && (
+                      <Button variant="primary" icon={Eye} iconOnly onClick={onSwitchToPlayerView} title="Preview player view" />
                     )}
+                    <Button icon={EyeOff} iconOnly disabled title="Secrets isn't wired up yet -- placeholder" />
+                    <Button icon={Sun} iconOnly disabled title="Light isn't wired up yet -- placeholder" />
+                    <Button icon={CloudFog} iconOnly disabled title="Fog isn't wired up yet -- placeholder" />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => uploadMap(e.target.files?.[0])}
+                    />
+                    <Button icon={Upload} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                      {uploading ? 'Uploading...' : campaignMapPath(mapInfo) ? 'Replace map image' : 'Upload map image'}
+                    </Button>
                   </div>
-                  <p className="text-[11px] text-ink-dim mt-2 mb-2">
-                    Set each character or monster's zone -- Close, Near, or Far from the party.
-                  </p>
-                  <div className="flex flex-col gap-1.5">
-                    {party.map((p) => (
-                      <div key={p.id} className="flex items-center gap-1 text-[11px]">
-                        <span className="text-ink w-24 truncate">{p.name}</span>
-                        {['close', 'near', 'far'].map((z) => (
-                          <button
-                            key={z}
-                            onClick={() => setCharacterZone(p.id, z)}
-                            className={`text-[10px] px-1.5 py-0.5 rounded border capitalize ${
-                              (p.zone || 'near') === z ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink-dim'
-                            }`}
-                          >
-                            {z}
-                          </button>
+                }
+              >
+                {(uploadError || mapAccessError) && (
+                  <p className="text-xs text-danger-text mb-2">{uploadError || mapAccessError}</p>
+                )}
+                {/* Clocks overlaid on the scene image itself, matching
+                    GameTable.jsx's player-page treatment, instead of a
+                    separate "Clocks & threats" list card. Zone assignment
+                    (Close/Near/Far) is now a right-click menu on each token
+                    -- see ZoneScene.jsx's onSetZone -- replacing the old
+                    always-visible per-character/monster button list below
+                    the map. */}
+                <div className="relative">
+                  <ZoneScene
+                    mapUrl={mapUrl}
+                    mapAccessError={mapAccessError}
+                    party={party}
+                    monsters={encounter}
+                    litCharacterId={lightSources.find((s) => s.lit)?.character_id || null}
+                    onSelectToken={(id, type, name) => selectEntity(type, id, name)}
+                    selectedTokenId={selectedEntity?.id || null}
+                    onSetZone={(type, id, zone) => (type === 'character' ? setCharacterZone(id, zone) : setMonsterZone(id, zone))}
+                  />
+                  {activeClocks.length > 0 && (
+                    <div className="absolute top-2 right-2 max-w-[180px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-2.5">
+                      <p className="text-[10px] text-ink-dim mb-1.5 uppercase tracking-wide">Clocks</p>
+                      <div className="flex flex-col gap-1.5">
+                        {activeClocks.map((c) => (
+                          <div key={c.id}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-ink' : 'text-ink-dim'}`}>{c.name}</span>
+                              <span className="text-[10px] text-ink-dim shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
+                            </div>
+                            <ProgressBar mode="segmented" segments={c.segments_total} filled={c.segments_filled} tone="amber" />
+                          </div>
                         ))}
                       </div>
-                    ))}
-                    {encounter.map((m) => (
-                      <div key={m.id} className="flex items-center gap-1 text-[11px]">
-                        <span className="text-ink w-24 truncate">{m.name}</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[11px] text-ink-dim mt-2">
+                  Right-click a token on the map to set its zone -- Close, Near, or Far from the party.
+                </p>
+              </Card>
+
+              <Card
+                title="Active encounter"
+                titleRight={
+                  <div className="flex gap-1.5">
+                    <input
+                      value={monsterDraft}
+                      onChange={(e) => setMonsterDraft(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addMonster()}
+                      placeholder="Monster name"
+                      className="text-xs bg-bg border border-line rounded-md px-2 py-1 w-32 text-white"
+                    />
+                    <Button icon={Plus} onClick={addMonster}>Add</Button>
+                  </div>
+                }
+              >
+                <div className="flex flex-col gap-1.5">
+                  {encounter.length === 0 && <p className="text-xs text-ink-dim">No monsters yet -- add one above.</p>}
+                  {encounter.map((m) => (
+                    <div
+                      key={m.id}
+                      className={`flex flex-col gap-1 text-xs p-2 bg-panel2/60 rounded-md border ${
+                        m.hidden ? 'border-danger/60' : 'border-line'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-white">{m.name}</span>
+                          <span className="text-ink-dim">ac {m.ac}</span>
+                          {m.hidden && <Badge tone="purple">Hidden</Badge>}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => adjustHp(m, -1)} className="px-1.5 border border-line rounded text-ink">-</button>
+                          <span className="min-w-[44px] text-center text-ink">{m.hp} / {m.max_hp} hp</span>
+                          <button onClick={() => adjustHp(m, 1)} className="px-1.5 border border-line rounded text-ink">+</button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-ink-dim mr-0.5">Zone</span>
                         {['close', 'near', 'far'].map((z) => (
                           <button
                             key={z}
@@ -702,72 +721,10 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                           </button>
                         ))}
                       </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {gmTab === 'encounter' && (
-                <Card
-                  title="Active encounter"
-                  titleRight={
-                    <div className="flex gap-1.5">
-                      <input
-                        value={monsterDraft}
-                        onChange={(e) => setMonsterDraft(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && addMonster()}
-                        placeholder="Monster name"
-                        className="text-xs bg-bg border border-line rounded-md px-2 py-1 w-32 text-white"
-                      />
-                      <Button icon={Plus} onClick={addMonster}>Add</Button>
                     </div>
-                  }
-                >
-                  <div className="flex flex-col gap-1.5">
-                    {encounter.length === 0 && <p className="text-xs text-ink-dim">No monsters yet -- add one above.</p>}
-                    {encounter.map((m) => (
-                      <div
-                        key={m.id}
-                        className={`flex flex-col gap-1 text-xs p-2 bg-panel2/60 rounded-md border ${
-                          m.hidden ? 'border-danger/60' : 'border-line'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-white">{m.name}</span>
-                            <span className="text-ink-dim">ac {m.ac}</span>
-                            {m.hidden && <Badge tone="purple">Hidden</Badge>}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <button onClick={() => adjustHp(m, -1)} className="px-1.5 border border-line rounded text-ink">-</button>
-                            <span className="min-w-[44px] text-center text-ink">{m.hp} / {m.max_hp} hp</span>
-                            <button onClick={() => adjustHp(m, 1)} className="px-1.5 border border-line rounded text-ink">+</button>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-ink-dim mr-0.5">Zone</span>
-                          {['close', 'near', 'far'].map((z) => (
-                            <button
-                              key={z}
-                              onClick={() => setMonsterZone(m.id, z)}
-                              className={`text-[10px] px-1.5 py-0.5 rounded border capitalize ${
-                                (m.zone || 'near') === z ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink-dim'
-                              }`}
-                            >
-                              {z}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* The 'scene' tab intentionally renders no extra panel here --
-                  it just hides the Map/Encounter panel above so the Scene
-                  log below (always visible) gets the full-width view
-                  instead of a redundant second copy of the same feed. */}
+                  ))}
+                </div>
+              </Card>
 
               <Card title="Scene log">
                 <div ref={sceneLogRef} className="h-[260px] overflow-y-auto flex flex-col gap-2 text-sm pr-1">
