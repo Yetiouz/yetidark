@@ -18,6 +18,7 @@ import { getCampaignEntryBlockReason } from '../app/campaignEntry.js'
 import Badge from './ui/Badge.jsx'
 import Button from './ui/Button.jsx'
 import Card from './ui/Card.jsx'
+import ProgressBar from './ui/ProgressBar.jsx'
 
 // Paraphrased labels for the Modes of Play chips -- same keys as
 // CampaignSettings.jsx's MODES_OF_PLAY, just the short label without the
@@ -344,12 +345,7 @@ export default function CampaignLobby({
             <p className="text-[11px] text-ink-faint mb-1.5">
               {checksComplete} of {checks.length} checks complete
             </p>
-            <div className="h-1.5 bg-panel2 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-positive rounded-full transition-all"
-                style={{ width: `${(checksComplete / checks.length) * 100}%` }}
-              />
-            </div>
+            <ProgressBar value={checksComplete} max={checks.length} tone="green" />
           </Card>
 
           <Card title="Invite players">

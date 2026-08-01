@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2, Flame, HelpCircle, Swords, Backpack, Sparkles, Package, Mic, ZoomIn, ZoomOut, Sun, ShieldCheck } from 'lucide-react'
 import ZoneScene from './ZoneScene.jsx'
 import Row from './ui/Row.jsx'
+import ProgressBar from './ui/ProgressBar.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { flatDieNotation } from '../lib/dice.js'
 import { useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
@@ -1450,14 +1451,7 @@ sceneMode === 'Combat' ? 'border-danger/60 text-danger-text bg-danger/10' : 'bor
 <span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-ink' : 'text-ink-dim'}`}>{c.name}</span>
 <span className="text-[10px] text-ink-dim shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
 </div>
-<div className="flex gap-0.5">
-{Array.from({ length: c.segments_total }).map((_, i) => (
-<span
-key={i}
-className={`h-1.5 flex-1 rounded-sm ${i < c.segments_filled ? 'bg-primary' : 'bg-panel2'}`}
-/>
-))}
-</div>
+<ProgressBar mode="segmented" segments={c.segments_total} filled={c.segments_filled} tone="amber" />
 </div>
 ))}
 </div>
@@ -1488,9 +1482,7 @@ className="w-full text-left disabled:cursor-default"
 </div>
 <span className="text-[11px] text-ink-dim shrink-0">{p.hp}/{p.max_hp}</span>
 </div>
-<div className="h-1 rounded-full bg-danger/40 overflow-hidden">
-<div className={`h-full ${hpBarColor(p.hp, p.max_hp)}`} style={{ width: `${p.max_hp ? (p.hp / p.max_hp) * 100 : 0}%` }} />
-</div>
+<ProgressBar value={p.hp} max={p.max_hp} barClassName={hpBarColor(p.hp, p.max_hp)} trackBg="bg-danger/40" heightClassName="h-1" />
 </button>
 {p.status && p.status !== 'alive' && (
 <span className={`inline-block mt-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
