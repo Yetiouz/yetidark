@@ -170,12 +170,12 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
     await supabase.from(table).delete().eq('id', id)
   }
 
-  const inputCls = 'text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white'
+  const inputCls = 'text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink'
 
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-6">
-        <p className="text-xs text-neutral-500">Loading tracker…</p>
+        <p className="text-xs text-ink-faint">Loading tracker…</p>
       </div>
     )
   }
@@ -183,13 +183,13 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
   return (
     <div className="max-w-2xl mx-auto p-6">
       {onBack && (
-        <button onClick={onBack} className="text-xs text-neutral-400 hover:text-neutral-200 flex items-center gap-1 mb-3">
+        <button onClick={onBack} className="text-xs text-ink-dim hover:text-ink flex items-center gap-1 mb-3">
           <ArrowLeft size={13} /> Back
         </button>
       )}
 
-      <h1 className="text-white text-lg font-medium mb-1">{campaignName}</h1>
-      <p className="text-xs text-neutral-400 mb-4">NPCs, factions, and treasure the party has encountered</p>
+      <h1 className="text-ink text-lg font-medium mb-1">{campaignName}</h1>
+      <p className="text-xs text-ink-dim mb-4">NPCs, factions, and treasure the party has encountered</p>
 
       <div className="flex gap-2 mb-4">
         {TABS.map((t) => (
@@ -197,7 +197,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
             key={t.key}
             onClick={() => switchTab(t.key)}
             className={`flex-1 text-xs py-1.5 rounded-md border flex items-center justify-center gap-1.5 ${
-              tab === t.key ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300'
+              tab === t.key ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim'
             }`}
           >
             <t.icon size={13} /> {t.label}
@@ -209,7 +209,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
         <div className="mb-3">
           <button
             onClick={() => setShowAdd((s) => !s)}
-            className="text-xs border border-neutral-700 rounded-md px-2.5 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
+            className="text-xs border border-line rounded-md px-2.5 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2"
           >
             <Plus size={13} /> Add {TABS.find((t) => t.key === tab)?.label.replace(/s$/, '')}
           </button>
@@ -217,7 +217,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
       )}
 
       {isGm && showAdd && tab === 'npcs' && (
-        <div className="mb-4 bg-neutral-900 border border-neutral-800 rounded-xl p-3 grid grid-cols-2 gap-2">
+        <div className="mb-4 bg-panel border border-line-soft rounded-xl p-3 grid grid-cols-2 gap-2">
           <input className={inputCls} placeholder="Name" value={npcDraft.name} onChange={(e) => setNpcDraft({ ...npcDraft, name: e.target.value })} />
           <input className={inputCls} placeholder="Ancestry" value={npcDraft.ancestry} onChange={(e) => setNpcDraft({ ...npcDraft, ancestry: e.target.value })} />
           <input className={inputCls} placeholder="Role/Occupation" value={npcDraft.role} onChange={(e) => setNpcDraft({ ...npcDraft, role: e.target.value })} />
@@ -228,14 +228,14 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
             {['Alive', 'Dead', 'Missing', 'Unknown'].map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <input className={inputCls} placeholder="Notes" value={npcDraft.notes} onChange={(e) => setNpcDraft({ ...npcDraft, notes: e.target.value })} />
-          <button onClick={addNpc} disabled={saving || !npcDraft.name.trim()} className="col-span-2 text-xs border border-neutral-700 rounded-md py-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50">
+          <button onClick={addNpc} disabled={saving || !npcDraft.name.trim()} className="col-span-2 text-xs border border-line rounded-md py-1.5 text-ink hover:bg-panel2 disabled:opacity-50">
             {saving ? 'Saving...' : 'Save NPC'}
           </button>
         </div>
       )}
 
       {isGm && showAdd && tab === 'factions' && (
-        <div className="mb-4 bg-neutral-900 border border-neutral-800 rounded-xl p-3 grid grid-cols-2 gap-2">
+        <div className="mb-4 bg-panel border border-line-soft rounded-xl p-3 grid grid-cols-2 gap-2">
           <input className={inputCls} placeholder="Faction name" value={factionDraft.name} onChange={(e) => setFactionDraft({ ...factionDraft, name: e.target.value })} />
           <input className={inputCls} placeholder="Type" value={factionDraft.type} onChange={(e) => setFactionDraft({ ...factionDraft, type: e.target.value })} />
           <input className={inputCls} placeholder="Leader" value={factionDraft.leader} onChange={(e) => setFactionDraft({ ...factionDraft, leader: e.target.value })} />
@@ -244,14 +244,14 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
           <input className={inputCls} placeholder="Disposition to party" value={factionDraft.disposition} onChange={(e) => setFactionDraft({ ...factionDraft, disposition: e.target.value })} />
           <input className={inputCls} placeholder="Current status / clock" value={factionDraft.status_clock} onChange={(e) => setFactionDraft({ ...factionDraft, status_clock: e.target.value })} />
           <input className={inputCls} placeholder="Notes" value={factionDraft.notes} onChange={(e) => setFactionDraft({ ...factionDraft, notes: e.target.value })} />
-          <button onClick={addFaction} disabled={saving || !factionDraft.name.trim()} className="col-span-2 text-xs border border-neutral-700 rounded-md py-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50">
+          <button onClick={addFaction} disabled={saving || !factionDraft.name.trim()} className="col-span-2 text-xs border border-line rounded-md py-1.5 text-ink hover:bg-panel2 disabled:opacity-50">
             {saving ? 'Saving...' : 'Save faction'}
           </button>
         </div>
       )}
 
       {isGm && showAdd && tab === 'treasure' && (
-        <div className="mb-4 bg-neutral-900 border border-neutral-800 rounded-xl p-3 grid grid-cols-2 gap-2">
+        <div className="mb-4 bg-panel border border-line-soft rounded-xl p-3 grid grid-cols-2 gap-2">
           <input className={inputCls} type="number" placeholder="Session #" value={treasureDraft.session_number} onChange={(e) => setTreasureDraft({ ...treasureDraft, session_number: e.target.value })} />
           <input className={inputCls} placeholder="Item / coin" value={treasureDraft.item} onChange={(e) => setTreasureDraft({ ...treasureDraft, item: e.target.value })} />
           <input className={inputCls} placeholder="Type" value={treasureDraft.type} onChange={(e) => setTreasureDraft({ ...treasureDraft, type: e.target.value })} />
@@ -264,7 +264,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
             <option value="no">Not identified</option>
           </select>
           <input className={inputCls} placeholder="Notes" value={treasureDraft.notes} onChange={(e) => setTreasureDraft({ ...treasureDraft, notes: e.target.value })} />
-          <button onClick={addTreasure} disabled={saving || !treasureDraft.item.trim()} className="col-span-2 text-xs border border-neutral-700 rounded-md py-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50">
+          <button onClick={addTreasure} disabled={saving || !treasureDraft.item.trim()} className="col-span-2 text-xs border border-line rounded-md py-1.5 text-ink hover:bg-panel2 disabled:opacity-50">
             {saving ? 'Saving...' : 'Save item'}
           </button>
         </div>
@@ -272,28 +272,28 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
 
       {tab === 'npcs' && (
         <div className="flex flex-col gap-1.5">
-          {npcs.length === 0 && <p className="text-xs text-neutral-500">No NPCs logged yet.</p>}
+          {npcs.length === 0 && <p className="text-xs text-ink-faint">No NPCs logged yet.</p>}
           {npcs.map((n) => (
-            <div key={n.id} className="bg-neutral-900 border border-neutral-800 rounded-lg p-3">
+            <div key={n.id} className="bg-panel border border-line-soft rounded-lg p-3">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-sm text-white font-medium">
+                <p className="text-sm text-ink font-medium">
                   {n.name}
-                  {n.ancestry && <span className="text-neutral-500 font-normal"> &middot; {n.ancestry}</span>}
+                  {n.ancestry && <span className="text-ink-faint font-normal"> &middot; {n.ancestry}</span>}
                 </p>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400">{n.status}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-panel2 text-ink-dim">{n.status}</span>
                   {isGm && (
-                    <button onClick={() => deleteRow('campaign_npcs', n.id)} className="text-neutral-500 hover:text-red-400 p-0.5">
+                    <button onClick={() => deleteRow('campaign_npcs', n.id)} className="text-ink-faint hover:text-danger-text p-0.5">
                       <Trash2 size={12} />
                     </button>
                   )}
                 </div>
               </div>
-              <p className="text-xs text-neutral-400">
+              <p className="text-xs text-ink-dim">
                 {[n.role, n.location, n.alignment].filter(Boolean).join(' · ')}
               </p>
-              {n.attitude && <p className="text-xs text-neutral-500 mt-0.5">Attitude: {n.attitude}</p>}
-              {isGm && npcSecrets[n.id]?.notes && <p className="text-xs text-neutral-500 mt-1">{npcSecrets[n.id].notes}</p>}
+              {n.attitude && <p className="text-xs text-ink-faint mt-0.5">Attitude: {n.attitude}</p>}
+              {isGm && npcSecrets[n.id]?.notes && <p className="text-xs text-ink-faint mt-1">{npcSecrets[n.id].notes}</p>}
             </div>
           ))}
         </div>
@@ -301,29 +301,29 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
 
       {tab === 'factions' && (
         <div className="flex flex-col gap-1.5">
-          {factions.length === 0 && <p className="text-xs text-neutral-500">No factions logged yet.</p>}
+          {factions.length === 0 && <p className="text-xs text-ink-faint">No factions logged yet.</p>}
           {factions.map((f) => (
-            <div key={f.id} className="bg-neutral-900 border border-neutral-800 rounded-lg p-3">
+            <div key={f.id} className="bg-panel border border-line-soft rounded-lg p-3">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-sm text-white font-medium">
+                <p className="text-sm text-ink font-medium">
                   {f.name}
-                  {f.type && <span className="text-neutral-500 font-normal"> &middot; {f.type}</span>}
+                  {f.type && <span className="text-ink-faint font-normal"> &middot; {f.type}</span>}
                 </p>
                 <div className="flex items-center gap-1.5">
-                  {f.disposition && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400">{f.disposition}</span>}
+                  {f.disposition && <span className="text-[10px] px-1.5 py-0.5 rounded bg-panel2 text-ink-dim">{f.disposition}</span>}
                   {isGm && (
-                    <button onClick={() => deleteRow('campaign_factions', f.id)} className="text-neutral-500 hover:text-red-400 p-0.5">
+                    <button onClick={() => deleteRow('campaign_factions', f.id)} className="text-ink-faint hover:text-danger-text p-0.5">
                       <Trash2 size={12} />
                     </button>
                   )}
                 </div>
               </div>
-              <p className="text-xs text-neutral-400">
+              <p className="text-xs text-ink-dim">
                 {[f.leader && `Led by ${f.leader}`, f.territory].filter(Boolean).join(' · ')}
               </p>
-              {isGm && factionSecrets[f.id]?.goal && <p className="text-xs text-neutral-500 mt-0.5">Goal: {factionSecrets[f.id].goal}</p>}
-              {f.status_clock && <p className="text-xs text-neutral-500 mt-0.5">Status: {f.status_clock}</p>}
-              {isGm && factionSecrets[f.id]?.notes && <p className="text-xs text-neutral-500 mt-1">{factionSecrets[f.id].notes}</p>}
+              {isGm && factionSecrets[f.id]?.goal && <p className="text-xs text-ink-faint mt-0.5">Goal: {factionSecrets[f.id].goal}</p>}
+              {f.status_clock && <p className="text-xs text-ink-faint mt-0.5">Status: {f.status_clock}</p>}
+              {isGm && factionSecrets[f.id]?.notes && <p className="text-xs text-ink-faint mt-1">{factionSecrets[f.id].notes}</p>}
             </div>
           ))}
         </div>
@@ -331,29 +331,29 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
 
       {tab === 'treasure' && (
         <div className="flex flex-col gap-1.5">
-          {treasure.length === 0 && <p className="text-xs text-neutral-500">No treasure logged yet.</p>}
+          {treasure.length === 0 && <p className="text-xs text-ink-faint">No treasure logged yet.</p>}
           {treasure.map((t) => (
-            <div key={t.id} className="bg-neutral-900 border border-neutral-800 rounded-lg p-3">
+            <div key={t.id} className="bg-panel border border-line-soft rounded-lg p-3">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-sm text-white font-medium">
+                <p className="text-sm text-ink font-medium">
                   {t.item}
-                  {t.qty_value && <span className="text-neutral-500 font-normal"> &middot; {t.qty_value}</span>}
+                  {t.qty_value && <span className="text-ink-faint font-normal"> &middot; {t.qty_value}</span>}
                 </p>
                 <div className="flex items-center gap-1.5">
-                  {t.session_number != null && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400">Session {t.session_number}</span>}
-                  {t.identified === true && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">Identified</span>}
-                  {t.identified === false && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400">Unidentified</span>}
+                  {t.session_number != null && <span className="text-[10px] px-1.5 py-0.5 rounded bg-panel2 text-ink-dim">Session {t.session_number}</span>}
+                  {t.identified === true && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-bg text-primary-text">Identified</span>}
+                  {t.identified === false && <span className="text-[10px] px-1.5 py-0.5 rounded bg-panel2 text-ink-dim">Unidentified</span>}
                   {isGm && (
-                    <button onClick={() => deleteRow('campaign_treasure', t.id)} className="text-neutral-500 hover:text-red-400 p-0.5">
+                    <button onClick={() => deleteRow('campaign_treasure', t.id)} className="text-ink-faint hover:text-danger-text p-0.5">
                       <Trash2 size={12} />
                     </button>
                   )}
                 </div>
               </div>
-              <p className="text-xs text-neutral-400">
+              <p className="text-xs text-ink-dim">
                 {[t.type, t.found_at && `Found at ${t.found_at}`, t.held_by && `Held by ${t.held_by}`].filter(Boolean).join(' · ')}
               </p>
-              {isGm && treasureSecrets[t.id]?.notes && <p className="text-xs text-neutral-500 mt-1">{treasureSecrets[t.id].notes}</p>}
+              {isGm && treasureSecrets[t.id]?.notes && <p className="text-xs text-ink-faint mt-1">{treasureSecrets[t.id].notes}</p>}
             </div>
           ))}
         </div>
