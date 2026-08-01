@@ -496,7 +496,19 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                       disabled={!onOpenCharacterSheet}
                       className="flex items-center justify-between text-[11px] text-left disabled:cursor-default hover:text-white"
                     >
-                      <span className="text-ink truncate">{p.name}</span>
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        {p.avatar_url ? (
+                          <img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-line shrink-0" />
+                        ) : (
+                          <div
+                            className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-medium text-white shrink-0"
+                            style={{ backgroundColor: p.color || '#3f3f46' }}
+                          >
+                            {p.name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                        )}
+                        <span className="text-ink truncate">{p.name}</span>
+                      </span>
                       <span className="text-ink-dim shrink-0 ml-1.5">{p.hp}/{p.max_hp} &middot; AC {p.ac}</span>
                     </button>
                   ))}
