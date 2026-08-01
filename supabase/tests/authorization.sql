@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(152);
+select plan(154);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -432,11 +432,23 @@ select throws_ok(
     values ('rules', '00000000-0000-0000-0000-000000000002/fake.pdf', '00000000-0000-0000-0000-000000000002')$$,
   '42501', null, 'non-GM cannot upload a rules file'
 );
-select lives_ok(
+select throws_ok(
   $$update characters
     set hp = 4
     where id = '40000000-0000-0000-0000-000000000001'$$,
-  'character owner can update their character inside its campaign'
+  '42501', null, 'character owner cannot directly write authoritative character state (hp) -- must go through adjust_character_resource'
+);
+select lives_ok(
+  $$update characters
+    set zone = 'far'
+    where id = '40000000-0000-0000-0000-000000000001'$$,
+  'character owner can move their own character''s zone directly'
+);
+select lives_ok(
+  $$update characters
+    set avatar_url = 'https://example.test/avatar.png'
+    where id = '40000000-0000-0000-0000-000000000001'$$,
+  'character owner can update their own avatar directly'
 );
 select throws_ok(
   $$update characters

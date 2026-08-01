@@ -1,0 +1,50 @@
+-- Close the write-path hole flagged in the reality-check audit
+-- (delve-path-forward.md, "Structural debt #4 -- two write paths for the
+-- same state"): the "owners and gm can update characters" row-level
+-- policy (migration 021) still lets a character owner or GM UPDATE any
+-- column on `characters`, including hp/xp/coin/level/stats/ac/status/
+-- death_timer -- state that the campaign event ledger and the combat
+-- commands (adjust_character_resource, resolve_attack_roll,
+-- resolve_stabilize_check, resolve_dying_turn, resolve_morale_check) are
+-- now the authoritative, ledgered path for. Any direct client UPDATE to
+-- those columns bypasses the ledger entirely and silently desyncs it from
+-- reality. That was a latent risk when the audit was written; combat
+-- shipping in migrations 032-034 (already wired into GameTable.jsx and
+-- GmDashboard.jsx) makes it a live one, since those commands write the
+-- same columns a stray direct update could now corrupt mid-fight.
+--
+-- Fix: narrow the table-level UPDATE grant (from migration
+-- 017_authorization_hardening's blanket
+-- `grant ... update ... on all tables in schema public to authenticated`)
+-- down to exactly the columns the app still writes directly today. Grepping
+-- src/ for every `.update()` call against the characters table turns up
+-- exactly two: GmDashboard.jsx's GM-driven zone move (Close/Near/Far
+-- positioning, cosmetic to the combat state machine) and the avatar_url
+-- upload in CharacterBuilder.jsx / CharacterSheet.jsx. Nothing else --
+-- name, ancestry, class, alignment, background, color, hp, max_hp, xp,
+-- coin, level, stats, ac, is_active, status, death_timer,
+-- rules_version, creation_rolls -- is ever set outside of INSERT-time
+-- character creation or one of the SECURITY DEFINER command functions.
+--
+-- This is column-level privilege, layered on top of the existing
+-- row-level policy, not a replacement for it: the RLS policy still governs
+-- *which rows* a user can touch; this governs *which columns* of an
+-- allowed row a direct client write can touch. The SECURITY DEFINER
+-- command functions (owned by the migration-running role, not
+-- `authenticated`) are unaffected -- they already bypass both RLS and
+-- grants on the underlying table, exactly like every other authoritative
+-- command in this schema, so hp/xp/coin/status/death_timer changes made
+-- through the app's UI keep working unchanged.
+--
+-- Deliberately not touching INSERT: character creation already goes
+-- through the atomic_character_creation command (migration 029), so the
+-- blanket INSERT grant on characters is not part of this hole.
+--
+-- color is left out of the writable set even though it's cosmetic, same
+-- as hp etc: nothing in the app writes it directly today (it's set once
+-- at creation via the same 8-color backfill/default as everyone else), so
+-- there's nothing live to preserve. Add it to the grant in a follow-up
+-- migration if a "customize my token color" feature is ever built.
+
+revoke update on characters from authenticated;
+grant update (avatar_url, zone) on characters to authenticated;
