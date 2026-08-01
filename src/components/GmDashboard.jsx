@@ -106,7 +106,12 @@ return source.remaining_minutes
 // row of icon-only buttons living in the header itself, next to the
 // Torch/Mode/Danger/etc status cards, same icon-only convention the Map
 // card's Preview/Secrets/Light/Fog toggles already use. The left rail now
-// holds Quick tables only.
+// holds Quick tables only. A compact "active encounter" status bar (whose
+// turn it is, live monster count) now sits to the right of those icons in
+// the same row, per direct follow-up feedback -- it's a glance-able
+// summary only, not a replacement for the full Active encounter card
+// (monster list, HP controls, add-monster input), which stays in the
+// center column below.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -567,7 +572,11 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       {/* Scene controls -- used to be a Row list (first its own left-rail
           card, then folded into the Active encounter card), now a
           horizontal icon-button strip sitting in the header next to the
-          Torch/Mode/Danger/etc status cards, per direct user feedback. */}
+          Torch/Mode/Danger/etc status cards, per direct user feedback. A
+          compact "active encounter" status bar sits to the right of the
+          icons (ml-auto), per direct follow-up feedback -- it's just a
+          glance-able summary (whose turn, monster count), not the full
+          monster-list card, which stays put in the center column below. */}
       <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 flex items-center gap-1.5 flex-wrap">
         <Button icon={SkipForward} iconOnly onClick={advanceTurn} disabled={turnOrder.length === 0} title="Advance round" />
         <Button
@@ -588,6 +597,21 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             title="Reveal hidden monster"
           />
         )}
+        <div className="ml-auto flex items-center gap-1.5 text-xs bg-panel border border-line-soft rounded-lg px-3 py-1.5">
+          <Swords size={12} className={turnOrder.length > 0 ? 'text-danger-text' : 'text-ink-faint'} />
+          {turnOrder.length > 0 ? (
+            <>
+              <span className="text-ink font-medium">{actingEntry ? `${actingEntry.name}'s turn` : 'In combat'}</span>
+              {encounter.length > 0 && (
+                <span className="text-ink-dim">&middot; {encounter.length} monster{encounter.length === 1 ? '' : 's'}</span>
+              )}
+            </>
+          ) : encounter.length > 0 ? (
+            <span className="text-ink-dim">{encounter.length} monster{encounter.length === 1 ? '' : 's'} ready</span>
+          ) : (
+            <span className="text-ink-dim">No active encounter</span>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
