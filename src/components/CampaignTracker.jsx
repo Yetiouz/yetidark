@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, Trash2, Users, Flag, Gem } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import Tabs from './ui/Tabs.jsx'
+import Badge from './ui/Badge.jsx'
 
 // NPCs / Factions / Treasure, ported from tracker.xlsx. "PC Roster" and
 // "Session Index" from that workbook aren't here -- they duplicate the
@@ -12,10 +14,17 @@ import { supabase } from '../lib/supabaseClient.js'
 // every add/edit/delete writes straight through, no local draft state to
 // guard against realtime overwrites.
 const TABS = [
-  { key: 'npcs', label: 'NPCs', icon: Users },
-  { key: 'factions', label: 'Factions', icon: Flag },
-  { key: 'treasure', label: 'Treasure', icon: Gem },
+  { key: 'npcs', label: 'NPCs' },
+  { key: 'factions', label: 'Factions' },
+  { key: 'treasure', label: 'Treasure' },
 ]
+
+// Alive/Dead/Missing/Unknown maps onto the Section 1.1 semantic colors
+// (green = positive/alive, red = danger, amber = needs-attention) instead
+// of the flat neutral pill this screen used before -- the color system's
+// own rule ("green's job is positive/alive/complete"), just not applied
+// here yet.
+const NPC_STATUS_TONE = { Alive: 'green', Dead: 'red', Missing: 'amber', Unknown: 'neutral' }
 
 const emptyNpc = { name: '', ancestry: '', role: '', location: '', alignment: '', attitude: '', status: 'Alive', notes: '' }
 const emptyFaction = { name: '', type: '', leader: '', territory: '', goal: '', disposition: '', status_clock: '', notes: '' }
@@ -191,19 +200,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
       <h1 className="text-ink text-lg font-medium mb-1">{campaignName}</h1>
       <p className="text-xs text-ink-dim mb-4">NPCs, factions, and treasure the party has encountered</p>
 
-      <div className="flex gap-2 mb-4">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => switchTab(t.key)}
-            className={`flex-1 text-xs py-1.5 rounded-md border flex items-center justify-center gap-1.5 ${
-              tab === t.key ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim'
-            }`}
-          >
-            <t.icon size={13} /> {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={TABS} activeKey={tab} onChange={switchTab} />
 
       {isGm && (
         <div className="mb-3">
@@ -281,7 +278,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                   {n.ancestry && <span className="text-ink-faint font-normal"> &middot; {n.ancestry}</span>}
                 </p>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-panel2 text-ink-dim">{n.status}</span>
+                  <Badge tone={NPC_STATUS_TONE[n.status] || 'neutral'}>{n.status}</Badge>
                   {isGm && (
                     <button onClick={() => deleteRow('campaign_npcs', n.id)} className="text-ink-faint hover:text-danger-text p-0.5">
                       <Trash2 size={12} />
@@ -310,7 +307,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                   {f.type && <span className="text-ink-faint font-normal"> &middot; {f.type}</span>}
                 </p>
                 <div className="flex items-center gap-1.5">
-                  {f.disposition && <span className="text-[10px] px-1.5 py-0.5 rounded bg-panel2 text-ink-dim">{f.disposition}</span>}
+                  {f.disposition && <Badge tone="neutral">{f.disposition}</Badge>}
                   {isGm && (
                     <button onClick={() => deleteRow('campaign_factions', f.id)} className="text-ink-faint hover:text-danger-text p-0.5">
                       <Trash2 size={12} />
@@ -340,9 +337,9 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                   {t.qty_value && <span className="text-ink-faint font-normal"> &middot; {t.qty_value}</span>}
                 </p>
                 <div className="flex items-center gap-1.5">
-                  {t.session_number != null && <span className="text-[10px] px-1.5 py-0.5 rounded bg-panel2 text-ink-dim">Session {t.session_number}</span>}
-                  {t.identified === true && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-bg text-primary-text">Identified</span>}
-                  {t.identified === false && <span className="text-[10px] px-1.5 py-0.5 rounded bg-panel2 text-ink-dim">Unidentified</span>}
+                  {t.session_number != null && <Badge tone="neutral">Session {t.session_number}</Badge>}
+                  {t.identified === true && <Badge tone="green">Identified</Badge>}
+                  {t.identified === false && <Badge tone="neutral">Unidentified</Badge>}
                   {isGm && (
                     <button onClick={() => deleteRow('campaign_treasure', t.id)} className="text-ink-faint hover:text-danger-text p-0.5">
                       <Trash2 size={12} />
