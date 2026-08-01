@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
-import { Eye, EyeOff, Plus, Upload, Dices, SkipForward, Flame, AlertTriangle, RotateCw, Timer, Sun, CloudFog, Target, Mic, Paperclip, Megaphone, Lock } from 'lucide-react'
+import {
+  Eye, EyeOff, Plus, Upload, Dices, SkipForward, Flame, AlertTriangle, RotateCw, Timer, Sun, CloudFog,
+  Target, Mic, Paperclip, Megaphone, Lock, Pause, Play, HelpCircle, Swords, Shuffle, Gauge, Users, Gem,
+} from 'lucide-react'
 
 import ZoneScene from './ZoneScene.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
+import Card from './ui/Card.jsx'
+import Badge from './ui/Badge.jsx'
+import Button from './ui/Button.jsx'
+import Row from './ui/Row.jsx'
 import Footer from './ui/Footer.jsx'
 import LogEntry from './LogEntry.jsx'
 import CampaignToolbar from './CampaignToolbar.jsx'
@@ -36,27 +43,37 @@ return Math.max(0, source.remaining_minutes - elapsed)
 return source.remaining_minutes
 }
 
+// Rebuilt to match the delve-gm-dashboard-visual mockup's actual structure
+// (status strip of individual bordered cards, 3-column body, shared
+// ui/ components as the implementation vocabulary) rather than the prior
+// hand-styled-everywhere version -- same standing directive as the
+// Character Sheet's Gear rebuild: the artifact's layout wins, built with
+// Card/Badge/Button/Row/ProgressBar.
+//
 // Everything here is real Supabase data, synced live: the encounter
-// tracker, GM notes, turn order, the scene log, and the zone map (upload
-// a scene image, then set each character/monster's Close/Near/Far zone).
-//
-// Initiative rolls go through the same authoritative server command as
-// player app rolls and are persisted with their scene-log entries in one
-// transaction.
-//
-// Layout: three-column shell (party/scene-controls rail / scene+log /
-// GM notes rail) matching the delve-ui-reference gm-session mockup,
-// inside the same fixed-viewport header/scroll/composer frame as before.
+// tracker, GM notes, turn order, the scene log, the zone map, and (new in
+// this pass) the campaign's session_active toggle -- the real backend
+// behind the mockup's "Pause torch" control (it's session-wide, pausing
+// every light source's burn-down and not just one torch, so the button is
+// labeled "Pause session" / "Resume session" rather than the mockup's
+// literal wording, to stay accurate to what it actually does).
 //
 // Danger level, crawling-round tracking, the next-encounter-check
-// countdown, the per-entity (trap/statue) selected inspector, and
-// Secrets/Light/Fog map toggles have no schema behind them yet. Per
-// explicit direction, those stay as visible placeholder UI (dimmed,
-// disabled, honest empty states) rather than being omitted, so the
-// layout reads the way the mockup does -- they're slots waiting on real
-// mechanics, not real features yet. "Quick tables" are real dice-engine
-// shortcuts (a flat roll with a label), not lookup tables Delve doesn't
-// have data for. Clocks & threats and Preview player view are real.
+// countdown, a per-entity trap stat block, and the map's Secrets/Light/Fog/
+// Reveal-area toggles have no schema behind them yet -- per explicit
+// direction (AskUserQuestion, picked "add honest placeholder cards"),
+// those stay as visible placeholder UI (dimmed, disabled, honest empty
+// states) rather than being omitted, matching the artifact's shape without
+// fabricating data. "Quick tables" are real dice-engine shortcuts (a flat
+// roll with a label), not lookup tables Delve doesn't have data for.
+// Clocks & threats, the Encounter sidebar list, and Preview player view
+// are all real.
+//
+// The mockup's composer also has an unlabeled hex/die icon whose function
+// isn't identifiable from the mockup alone -- left out rather than guessed
+// at. The book icon is real: it's the same "Ask a rule" -> Rules Library
+// link the Player Table composer already has (onOpenLibrary), just not
+// previously wired up here.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -75,8 +92,9 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [gmTab, setGmTab] = useState('map') // 'scene' | 'map' | 'encounter' -- pure view toggle, no new data
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [composeMode, setComposeMode] = useState('public') // 'public' -> scene_log, 'private' -> gm_notes
+  const [sessionActive, setSessionActive] = useState(false)
+  const [togglingSession, setTogglingSession] = useState(false)
   const sceneLogRef = useRef(null)
-  const chatLogRef = useRef(null)
 
   // Only matters while a torch is actually burning, but a cheap 1s
   // interval the whole time this screen is open is simplest.
@@ -101,11 +119,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const fileInputRef = useRef(null)
   const { url: mapUrl, error: mapAccessError } = useCampaignMapUrl(mapInfo)
 
-  // Second channel for the two tables this screen reads/writes very
+  // Second channel for the tables this screen reads/writes very
   // differently from the player table: encounter_monsters (full read/write
-  // here vs. GameTable's read-only subset) and gm_notes (all notes,
-  // revealed or not, including entity_type/entity_id -- GameTable only
-  // ever sees revealed ones). Everything else lives in useCampaignSession.
+  // here vs. GameTable's read-only subset), gm_notes (all notes, revealed
+  // or not, including entity_type/entity_id -- GameTable only ever sees
+  // revealed ones), and campaigns.session_active (the real "pause" state
+  // behind the mockup's torch-pause control). Everything else lives in
+  // useCampaignSession.
   useEffect(() => {
     if (!campaignId) return
     let cancelled = false
@@ -123,6 +143,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setNotes(data || []) })
+
+    supabase
+      .from('campaigns')
+      .select('session_active')
+      .eq('id', campaignId)
+      .maybeSingle()
+      .then(({ data }) => { if (!cancelled) setSessionActive(data?.session_active || false) })
 
     const channel = supabase
       .channel(`gm-dashboard-extra-${campaignId}`)
@@ -143,6 +170,11 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
           else if (payload.eventType === 'UPDATE') setNotes((list) => list.map((n) => (n.id === payload.new.id ? payload.new : n)))
         }
       )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
+        (payload) => setSessionActive(payload.new.session_active)
+      )
       .subscribe()
 
     return () => {
@@ -160,6 +192,15 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const revealMonster = async (id) => {
     setEncounter((list) => list.map((m) => (m.id === id ? { ...m, hidden: false } : m)))
     await supabase.from('encounter_monsters').update({ hidden: false }).eq('id', id)
+  }
+
+  // Selected panel's Hidden/Visible badge toggle -- same direct GM-only
+  // write path adjustHp/revealMonster above already use.
+  const toggleMonsterHidden = async (monster) => {
+    if (!monster) return
+    const nextHidden = !monster.hidden
+    setEncounter((list) => list.map((m) => (m.id === monster.id ? { ...m, hidden: nextHidden } : m)))
+    await supabase.from('encounter_monsters').update({ hidden: nextHidden }).eq('id', monster.id)
   }
 
   const addMonster = async () => {
@@ -244,6 +285,15 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     await supabase.from('turn_order').upsert({ campaign_id: campaignId, order_list: orderList }, { onConflict: 'campaign_id' })
   }
 
+  // Mockup's "Start encounter" -- the real action is still rolling
+  // initiative (there's no separate "encounter start" flag), plus jumping
+  // the center tabs over to Encounter so the GM lands where the fight
+  // actually needs managing.
+  const startEncounter = async () => {
+    await rollInitiative()
+    setGmTab('encounter')
+  }
+
   const advanceTurn = async () => {
     if (!campaignId || turnOrder.length === 0) return
     const rotated = [...turnOrder.slice(1), turnOrder[0]].map((t, i) => ({ ...t, status: i === 0 ? 'acting' : 'waiting' }))
@@ -316,6 +366,22 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     setQuickRolling(false)
   }
 
+  // Real backend behind the mockup's "Pause torch" -- session_active is
+  // campaign-wide (every light source's burn-down freezes, not just one
+  // torch), same toggle Campaign Lobby's Start/End session and Campaign
+  // Log's own pause control already use.
+  const toggleSession = async () => {
+    if (togglingSession || !campaignId) return
+    setTogglingSession(true)
+    const nextActive = !sessionActive
+    const { error } = await supabase.rpc('set_campaign_session_active', {
+      p_campaign_id: campaignId,
+      p_active: nextActive,
+    })
+    if (!error) setSessionActive(nextActive)
+    setTogglingSession(false)
+  }
+
   const uploadMap = async (file) => {
     if (!file || !campaignId) return
     setUploading(true)
@@ -369,11 +435,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     }
   }
 
-  // Split the same way the player table does: Scene log is narration/GM
-  // lines/rolls, Party chat is the players' own OOC conversation.
-  const narrationLog = log.filter((entry) => entry.type !== 'chat')
-  const chatLog = log.filter((entry) => entry.type === 'chat')
-
   // "Combat" vs "Exploration" is derived, not stored -- see the same
   // comment in GameTable.jsx. A non-empty turn order is the honest
   // stand-in rather than a fabricated Danger/Mode field.
@@ -390,21 +451,19 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     .sort((a, b) => (b.segments_filled / b.segments_total) - (a.segments_filled / a.segments_total))
     .slice(0, 4)
 
-  useEffect(() => {
-    if (sceneLogRef.current) sceneLogRef.current.scrollTop = sceneLogRef.current.scrollHeight
-  }, [narrationLog.length])
+  const selectedMonster = selectedEntity?.type === 'monster' ? encounter.find((m) => m.id === selectedEntity.id) : null
 
   useEffect(() => {
-    if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight
-  }, [chatLog.length])
+    if (sceneLogRef.current) sceneLogRef.current.scrollTop = sceneLogRef.current.scrollHeight
+  }, [log.length])
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pt-6 pb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <p className="text-white font-medium">{campaignName}</p>
-          <span className="text-xs px-2 py-0.5 rounded bg-ai/20 text-ai-text">GM view</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-positive/20 text-positive-text border border-positive/40">Live now</span>
+          <Badge tone="purple">GM view</Badge>
+          <Badge tone="green">Live now</Badge>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="flex items-center -space-x-1.5 mr-1">
@@ -425,12 +484,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             onOpenTracker={onOpenTracker}
             onOpenSettings={onOpenSettings}
             after={onSwitchToPlayerView && (
-              <button
-                onClick={onSwitchToPlayerView}
-                className="text-xs border border-line rounded-md px-2.5 py-1 flex items-center gap-1.5 text-ink hover:bg-panel2"
-              >
-                <Eye size={14} /> Switch to player view
-              </button>
+              <Button icon={Eye} onClick={onSwitchToPlayerView}>Switch to player view</Button>
             )}
           />
         </div>
@@ -438,12 +492,14 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
       <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
         <div className={`rounded-lg px-3 py-2 border ${litTorch ? 'border-warning/60 bg-warning/5' : 'bg-panel border-line-soft'}`}>
-          <p className="text-[10px] tracking-wide text-ink-dim mb-0.5 flex items-center gap-1"><Flame size={10} /> TORCH</p>
+          <p className="text-[10px] tracking-wide text-ink-dim mb-0.5 flex items-center gap-1">
+            <Flame size={10} /> TORCH{litTorch ? ` — ${(party.find((p) => p.id === litTorch.character_id)?.name || '').toUpperCase()}` : ''}
+          </p>
           {litTorch ? (
-            <p className="text-sm font-semibold text-warning-text">
-              {formatMinutes(litTorch.remaining)}
-              <span className="text-ink-dim font-normal"> · {party.find((p) => p.id === litTorch.character_id)?.name || '—'}</span>
-            </p>
+            <>
+              <p className="text-sm font-semibold text-warning-text">{formatMinutes(litTorch.remaining)}</p>
+              <ProgressBar value={litTorch.remaining} max={litTorch.total_minutes} tone="amber" heightClassName="h-1" className="mt-1.5" />
+            </>
           ) : (
             <p className="text-sm text-ink-dim">Unlit</p>
           )}
@@ -485,8 +541,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
           <div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start">
             {/* LEFT RAIL: party glance, scene controls, quick tables */}
             <div className="flex flex-col gap-3">
-              <div className="bg-panel rounded-lg p-3">
-                <p className="text-xs text-ink-dim mb-2">Party</p>
+              <Card title="Party">
                 {party.length === 0 && <p className="text-[11px] text-ink-dim">No characters yet.</p>}
                 <div className="flex flex-col gap-1.5">
                   {party.map((p) => (
@@ -494,112 +549,99 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                       key={p.id}
                       onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
                       disabled={!onOpenCharacterSheet}
-                      className="flex items-center justify-between text-[11px] text-left disabled:cursor-default hover:text-white"
+                      className="w-full text-left border border-line rounded-lg px-2.5 py-2 hover:bg-panel2 disabled:cursor-default disabled:hover:bg-transparent"
                     >
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        {p.avatar_url ? (
-                          <img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-line shrink-0" />
+                      <div className="flex items-center justify-between gap-1.5 mb-1">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          {p.avatar_url ? (
+                            <img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-line shrink-0" />
+                          ) : (
+                            <div
+                              className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-medium text-white shrink-0"
+                              style={{ backgroundColor: p.color || '#3f3f46' }}
+                            >
+                              {p.name?.[0]?.toUpperCase() || '?'}
+                            </div>
+                          )}
+                          <span className="text-xs font-medium text-white truncate">{p.name}</span>
+                        </span>
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${p.status === 'dying' ? 'bg-danger' : 'bg-positive'}`}
+                            title={p.status === 'dying' ? 'Dying' : 'Alive'}
+                          />
+                          <Eye size={11} className="text-ink-faint" />
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-ink-dim">
+                        {p.status === 'dying' ? (
+                          <span className="text-danger-text">Dying ({p.death_timer ?? '?'})</span>
                         ) : (
-                          <div
-                            className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-medium text-white shrink-0"
-                            style={{ backgroundColor: p.color || '#3f3f46' }}
-                          >
-                            {p.name?.[0]?.toUpperCase() || '?'}
-                          </div>
+                          `${p.hp}/${p.max_hp} HP`
                         )}
-                        <span className="text-ink truncate">{p.name}</span>
-                      </span>
-                      <span className="text-ink-dim shrink-0 ml-1.5">{p.hp}/{p.max_hp} &middot; AC {p.ac}</span>
+                        {' '}&middot; AC {p.ac}
+                      </p>
                     </button>
                   ))}
                 </div>
-              </div>
+              </Card>
 
-              <div className="bg-panel rounded-lg p-3">
-                <p className="text-xs text-ink-dim mb-2">Scene controls</p>
+              <Card title="Scene controls">
                 <div className="flex flex-col gap-1.5">
-                  <button onClick={advanceTurn} disabled={turnOrder.length === 0} className="flex items-center gap-1.5 text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 disabled:opacity-50 text-left">
-                    <SkipForward size={12} className="text-ink-dim shrink-0" /> Advance round
-                  </button>
-                  <button onClick={requestRoll} disabled={requestingRoll} className="flex items-center gap-1.5 text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 disabled:opacity-50 text-left">
-                    <Dices size={12} className="text-ink-dim shrink-0" /> Request a roll
-                  </button>
-                  <button onClick={rollInitiative} className="flex items-center gap-1.5 text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 text-left">
-                    <Dices size={12} className="text-ink-dim shrink-0" /> Roll initiative
-                  </button>
-                  <button onClick={moraleCheck} disabled={moraleChecking || encounter.length === 0} className="flex items-center gap-1.5 text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 disabled:opacity-50 text-left">
-                    <Dices size={12} className="text-ink-dim shrink-0" /> {moraleChecking ? 'Rolling…' : 'Morale check'}
-                  </button>
+                  <Row icon={SkipForward} label="Advance round" onClick={advanceTurn} disabled={turnOrder.length === 0} />
+                  <Row
+                    icon={sessionActive ? Pause : Play}
+                    label={togglingSession ? 'Working…' : sessionActive ? 'Pause session' : 'Resume session'}
+                    onClick={toggleSession}
+                    disabled={togglingSession}
+                    title="Pausing stops torches and other timers from counting down for the whole table"
+                  />
+                  <Row icon={Dices} label="Request a roll" onClick={requestRoll} disabled={requestingRoll} />
+                  <Row icon={Swords} label="Start encounter" onClick={startEncounter} />
+                  <Row icon={EyeOff} label="Reveal area" disabled title="Fog-of-war / area reveal isn't built yet -- placeholder" />
                   {encounter.some((m) => m.hidden) && (
-                    <button
+                    <Row
+                      icon={Eye}
+                      label="Reveal hidden monster"
                       onClick={() => encounter.filter((m) => m.hidden).forEach((m) => revealMonster(m.id))}
-                      className="flex items-center gap-1.5 text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 text-left"
-                    >
-                      <Eye size={12} className="text-ink-dim shrink-0" /> Reveal hidden monster
-                    </button>
+                    />
                   )}
                 </div>
-              </div>
+              </Card>
 
-              <div className="bg-panel rounded-lg p-3">
-                <p className="text-xs text-ink-dim mb-2">Quick tables</p>
+              <Card title="Quick tables">
                 <div className="flex flex-col gap-1.5">
-                  <button onClick={() => rollQuickTable('Random encounter check', '1d6')} disabled={quickRolling} className="text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 disabled:opacity-50 text-left">
-                    Random encounter
-                  </button>
-                  <button onClick={() => rollQuickTable('Reaction roll', '2d6')} disabled={quickRolling} className="text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 disabled:opacity-50 text-left">
-                    Reaction
-                  </button>
-                  <button onClick={() => rollQuickTable('Treasure roll', '1d100')} disabled={quickRolling} className="text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 disabled:opacity-50 text-left">
-                    Treasure
-                  </button>
+                  <Row icon={Shuffle} label="Random encounter" onClick={() => rollQuickTable('Random encounter check', '1d6')} disabled={quickRolling} />
+                  <Row icon={Users} label="Reaction" onClick={() => rollQuickTable('Reaction roll', '2d6')} disabled={quickRolling} />
+                  <Row icon={Gauge} label={moraleChecking ? 'Rolling…' : 'Morale'} onClick={moraleCheck} disabled={moraleChecking || encounter.length === 0} />
+                  <Row icon={Gem} label="Treasure" onClick={() => rollQuickTable('Treasure roll', '1d100')} disabled={quickRolling} />
                 </div>
-              </div>
+              </Card>
 
               {turnOrder.length > 0 && (
-                <div className="bg-panel rounded-lg p-3">
-                  <p className="text-xs text-ink-dim mb-1.5">Turn order</p>
+                <Card title="Turn order">
                   <div className="flex flex-wrap gap-1.5">
                     {turnOrder.map((t, i) => (
-                      <span
-                        key={t.id || i}
-                        className={`text-[11px] px-2 py-0.5 rounded-full ${
-                          t.status === 'acting' ? 'bg-primary/20 text-primary-text' : 'bg-panel2 text-ink-dim'
-                        }`}
-                      >
-                        {t.name}
-                      </span>
+                      <Badge key={t.id || i} tone={t.status === 'acting' ? 'blue' : 'neutral'}>{t.name}</Badge>
                     ))}
                   </div>
-                </div>
+                </Card>
               )}
             </div>
 
             {/* CENTER: scene / map / encounter tabs + log */}
             <div className="flex flex-col gap-3 min-w-0">
               {gmTab === 'map' && (
-                <div className="bg-panel rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2.5 flex-wrap gap-2">
-                    <p className="text-xs text-ink-dim">Map</p>
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                <Card
+                  title="Map"
+                  titleRight={
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       {onSwitchToPlayerView && (
-                        <button
-                          onClick={onSwitchToPlayerView}
-                          className="text-xs border border-primary/40 bg-primary/10 rounded-md px-2 py-1 flex items-center gap-1.5 text-primary-text hover:bg-primary/20"
-                        >
-                          <Eye size={13} /> Preview player view
-                        </button>
+                        <Button variant="primary" icon={Eye} onClick={onSwitchToPlayerView}>Preview player view</Button>
                       )}
-                      {[{ Icon: EyeOff, label: 'Secrets' }, { Icon: Sun, label: 'Light' }, { Icon: CloudFog, label: 'Fog' }].map(({ Icon, label }) => (
-                        <button
-                          key={label}
-                          disabled
-                          title={`${label} isn't wired up yet -- placeholder`}
-                          className="text-xs border border-line-soft rounded-md px-2 py-1 flex items-center gap-1.5 text-ink-faint cursor-not-allowed"
-                        >
-                          <Icon size={13} /> {label}
-                        </button>
-                      ))}
+                      <Button icon={EyeOff} disabled title="Secrets isn't wired up yet -- placeholder">Secrets</Button>
+                      <Button icon={Sun} disabled title="Light isn't wired up yet -- placeholder">Light</Button>
+                      <Button icon={CloudFog} disabled title="Fog isn't wired up yet -- placeholder">Fog</Button>
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -607,15 +649,12 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         className="hidden"
                         onChange={(e) => uploadMap(e.target.files?.[0])}
                       />
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploading}
-                        className="text-xs border border-line rounded-md px-2 py-1 flex items-center gap-1.5 text-ink hover:bg-panel2 disabled:opacity-50"
-                      >
-                        <Upload size={13} /> {uploading ? 'Uploading...' : campaignMapPath(mapInfo) ? 'Replace map image' : 'Upload map image'}
-                      </button>
+                      <Button icon={Upload} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                        {uploading ? 'Uploading...' : campaignMapPath(mapInfo) ? 'Replace map image' : 'Upload map image'}
+                      </Button>
                     </div>
-                  </div>
+                  }
+                >
                   {(uploadError || mapAccessError) && (
                     <p className="text-xs text-danger-text mb-2">{uploadError || mapAccessError}</p>
                   )}
@@ -665,13 +704,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                       </div>
                     ))}
                   </div>
-                </div>
+                </Card>
               )}
 
               {gmTab === 'encounter' && (
-                <div className="bg-panel rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <p className="text-xs text-ink-dim">Active encounter</p>
+                <Card
+                  title="Active encounter"
+                  titleRight={
                     <div className="flex gap-1.5">
                       <input
                         value={monsterDraft}
@@ -680,12 +719,10 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         placeholder="Monster name"
                         className="text-xs bg-bg border border-line rounded-md px-2 py-1 w-32 text-white"
                       />
-                      <button onClick={addMonster} className="text-xs border border-line rounded-md px-2 py-1 flex items-center gap-1 text-ink hover:bg-panel2">
-                        <Plus size={13} /> Add
-                      </button>
+                      <Button icon={Plus} onClick={addMonster}>Add</Button>
                     </div>
-                  </div>
-
+                  }
+                >
                   <div className="flex flex-col gap-1.5">
                     {encounter.length === 0 && <p className="text-xs text-ink-dim">No monsters yet -- add one above.</p>}
                     {encounter.map((m) => (
@@ -696,9 +733,10 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <div>
+                          <div className="flex items-center gap-1.5">
                             <span className="font-medium text-white">{m.name}</span>
-                            <span className="text-ink-dim"> &middot; ac {m.ac}{m.hidden ? ' · hidden' : ''}</span>
+                            <span className="text-ink-dim">ac {m.ac}</span>
+                            {m.hidden && <Badge tone="purple">Hidden</Badge>}
                           </div>
                           <div className="flex items-center gap-1.5">
                             <button onClick={() => adjustHp(m, -1)} className="px-1.5 border border-line rounded text-ink">-</button>
@@ -723,49 +761,44 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                       </div>
                     ))}
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* The 'scene' tab intentionally renders no extra panel here --
                   it just hides the Map/Encounter panel above so the Scene
-                  log / Party chat grid below (always visible) gets the
-                  full-width view instead of a redundant second copy of the
-                  same narration feed. */}
+                  log below (always visible) gets the full-width view
+                  instead of a redundant second copy of the same feed. */}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="bg-panel rounded-lg p-4">
-                  <p className="text-xs text-ink-dim mb-2">Scene log</p>
-                  <div ref={sceneLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2 text-sm pr-1">
-                    {narrationLog.length === 0 && <p className="text-xs text-ink-dim">No messages yet -- narrate something below.</p>}
-                    {narrationLog.map((entry) => <LogEntry as="p" key={entry.id} entry={entry} />)}
-                  </div>
+              <Card title="Scene log">
+                <div ref={sceneLogRef} className="h-[260px] overflow-y-auto flex flex-col gap-2 text-sm pr-1">
+                  {log.length === 0 && <p className="text-xs text-ink-dim">No messages yet -- narrate something below.</p>}
+                  {log.map((entry) => <LogEntry as="p" key={entry.id} entry={entry} />)}
                 </div>
-
-                <div className="bg-panel rounded-lg p-4">
-                  <p className="text-xs text-ink-dim mb-2">Party chat</p>
-                  <div ref={chatLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2 text-sm pr-1">
-                    {chatLog.length === 0 && <p className="text-xs text-ink-dim">Nothing from the players yet.</p>}
-                    {chatLog.map((entry) => <LogEntry as="p" key={entry.id} entry={entry} />)}
-                  </div>
-                </div>
-              </div>
+              </Card>
             </div>
 
-            {/* RIGHT RAIL: selected entity / clocks & threats / GM notes */}
+            {/* RIGHT RAIL: selected entity / trap placeholder / encounter / clocks / GM notes */}
             <div className="flex flex-col gap-3">
-              <div className="bg-panel rounded-lg p-3">
-                <p className="text-xs text-ink-dim mb-2 flex items-center gap-1"><Target size={11} className="text-ink-dim" /> Selected</p>
+              <Card
+                title="Selected"
+                titleRight={selectedEntity && (
+                  <div className="flex items-center gap-2">
+                    {selectedMonster && (
+                      <button onClick={() => toggleMonsterHidden(selectedMonster)} title="Toggle hidden/visible">
+                        <Badge tone={selectedMonster.hidden ? 'purple' : 'green'}>{selectedMonster.hidden ? 'Hidden' : 'Visible'}</Badge>
+                      </button>
+                    )}
+                    <button onClick={() => setSelectedEntity(null)} className="text-[10px] text-ink-dim hover:text-ink shrink-0">
+                      Clear
+                    </button>
+                  </div>
+                )}
+              >
                 {selectedEntity ? (
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-white font-medium truncate">{selectedEntity.name}</span>
-                      <button
-                        onClick={() => setSelectedEntity(null)}
-                        className="text-[10px] text-ink-dim hover:text-ink shrink-0 ml-1.5"
-                      >
-                        Clear
-                      </button>
-                    </div>
+                    <span className="text-sm text-white font-medium truncate flex items-center gap-1.5">
+                      <Target size={12} className="text-ink-dim" /> {selectedEntity.name}
+                    </span>
                     <div className="flex flex-col gap-1.5">
                       {notes.filter((n) => n.entity_type === selectedEntity.type && n.entity_id === selectedEntity.id).length === 0 && (
                         <p className="text-[11px] text-ink-dim">No notes on {selectedEntity.name} yet.</p>
@@ -776,12 +809,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                           <div key={n.id} className="text-xs p-2 bg-panel2/60 rounded-md">
                             <p className={`mb-1.5 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
                             {!n.revealed && (
-                              <button
-                                onClick={() => revealNote(n.id)}
-                                className="text-[11px] px-2 py-0.5 border border-line rounded text-ink hover:bg-panel2"
-                              >
-                                Reveal to party
-                              </button>
+                              <Button onClick={() => revealNote(n.id)} className="text-[11px] px-2 py-1">Reveal to party</Button>
                             )}
                           </div>
                         ))}
@@ -794,19 +822,40 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         placeholder={`Note on ${selectedEntity.name}`}
                         className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
                       />
-                      <button onClick={addEntityNote} className="text-xs border border-line rounded-md px-2 py-1 flex items-center gap-1 text-ink hover:bg-panel2">
-                        <Plus size={13} />
-                      </button>
+                      <Button icon={Plus} iconOnly onClick={addEntityNote} title="Add note" />
                     </div>
                   </div>
                 ) : (
                   <p className="text-[11px] text-ink-dim">Click a token on the map to inspect it and see notes tied to it. Traps and other map features aren't selectable yet -- character and monster tokens only.</p>
                 )}
-              </div>
+              </Card>
+
+              <Card title="Trap details">
+                <p className="text-[11px] text-ink-dim flex items-start gap-1.5">
+                  <AlertTriangle size={12} className="text-ink-faint shrink-0 mt-0.5" />
+                  Trap and hazard tracking isn't built yet -- once traps become selectable map objects, trigger/attack/damage details will show here instead of this placeholder.
+                </p>
+              </Card>
+
+              {encounter.length > 0 && (
+                <Card title="Encounter">
+                  <div className="flex flex-col gap-1.5">
+                    {encounter.map((m) => (
+                      <Row
+                        key={m.id}
+                        icon={m.hidden ? EyeOff : undefined}
+                        label={m.name}
+                        right={<span className="text-[11px] text-ink-dim">{m.hp}/{m.max_hp} HP</span>}
+                        onClick={() => selectEntity('monster', m.id, m.name)}
+                        selected={selectedEntity?.type === 'monster' && selectedEntity?.id === m.id}
+                      />
+                    ))}
+                  </div>
+                </Card>
+              )}
 
               {activeClocks.length > 0 && (
-                <div className="bg-panel rounded-lg p-3">
-                  <p className="text-xs text-ink-dim mb-2">Clocks &amp; threats</p>
+                <Card title="Clocks & threats">
                   <div className="flex flex-col gap-2">
                     {activeClocks.map((c) => (
                       <div key={c.id}>
@@ -818,23 +867,17 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                       </div>
                     ))}
                   </div>
-                </div>
+                </Card>
               )}
 
-              <div className="bg-panel rounded-lg p-3">
-                <p className="text-xs text-ink-dim mb-2">GM notes (private, general)</p>
+              <Card title="GM notes (private, general)">
                 <div className="flex flex-col gap-1.5">
                   {notes.filter((n) => !n.entity_type).length === 0 && <p className="text-xs text-ink-dim">No general notes yet -- notes on a specific character or monster show in Selected above once you click their token.</p>}
                   {notes.filter((n) => !n.entity_type).map((n) => (
                     <div key={n.id} className="text-xs p-2 bg-panel2/60 rounded-md">
                       <p className={`mb-1.5 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
                       {!n.revealed && (
-                        <button
-                          onClick={() => revealNote(n.id)}
-                          className="text-[11px] px-2 py-0.5 border border-line rounded text-ink hover:bg-panel2"
-                        >
-                          Reveal to party
-                        </button>
+                        <Button onClick={() => revealNote(n.id)} className="text-[11px] px-2 py-1">Reveal to party</Button>
                       )}
                     </div>
                   ))}
@@ -847,11 +890,9 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     placeholder="New note"
                     className="flex-1 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
                   />
-                  <button onClick={addNote} className="text-xs border border-line rounded-md px-2 py-1 flex items-center gap-1 text-ink hover:bg-panel2">
-                    <Plus size={13} />
-                  </button>
+                  <Button icon={Plus} iconOnly onClick={addNote} title="Add note" />
                 </div>
-              </div>
+              </Card>
             </div>
           </div>
         </div>
@@ -876,7 +917,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             <Lock size={11} /> Private note
           </button>
         </div>
-        <div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_180px] gap-3 items-center">
+        <div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto_180px] gap-3 items-center">
           <input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -884,26 +925,10 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             placeholder={composeMode === 'private' ? 'Note only you can see' : 'Narrate something to the party'}
             className="min-w-0 bg-panel border border-line rounded-md px-3 py-2 text-sm text-white"
           />
-          <button
-            disabled
-            title="Voice input isn't wired up yet -- placeholder"
-            className="text-sm border border-line-soft rounded-md px-3 py-2 text-ink-faint cursor-not-allowed"
-          >
-            <Mic size={15} />
-          </button>
-          <button
-            disabled
-            title="Attachments aren't wired up yet -- placeholder"
-            className="text-sm border border-line-soft rounded-md px-3 py-2 text-ink-faint cursor-not-allowed"
-          >
-            <Paperclip size={15} />
-          </button>
-          <button
-            onClick={sendMessage}
-            className="text-sm border border-line rounded-md px-3.5 py-2 flex items-center justify-center text-ink hover:bg-panel2"
-          >
-            {composeMode === 'private' ? 'Save note' : 'Send to players'}
-          </button>
+          <Button iconOnly icon={Mic} disabled title="Voice input isn't wired up yet -- placeholder" />
+          {onOpenLibrary && <Button icon={HelpCircle} onClick={onOpenLibrary}>Ask a rule</Button>}
+          <Button iconOnly icon={Paperclip} disabled title="Attachments aren't wired up yet -- placeholder" />
+          <Button onClick={sendMessage}>{composeMode === 'private' ? 'Save note' : 'Send to players'}</Button>
         </div>
       </Footer>
     </div>
