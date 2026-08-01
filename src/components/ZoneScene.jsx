@@ -63,7 +63,7 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
   return (
     <div>
       {mapAccessError && <p className="text-xs text-danger-text mb-2">{mapAccessError}</p>}
-      <div className="relative w-full rounded-lg overflow-hidden bg-bg border border-line-soft" style={{ aspectRatio: '16 / 10' }}>
+      <div className="relative w-full rounded-lg overflow-hidden bg-bg border border-line-soft" style={{ aspectRatio: '16 / 7' }}>
         {mapUrl ? (
           <img src={mapUrl} alt={sceneLabel || 'Scene'} className="absolute inset-0 w-full h-full object-cover opacity-80" />
         ) : (
