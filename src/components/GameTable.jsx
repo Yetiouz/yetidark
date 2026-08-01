@@ -807,8 +807,8 @@ GM view
 </div>
 )}
 
-<div className="flex-1 overflow-y-auto">
-<div className="max-w-6xl mx-auto w-full px-6 pb-4">
+<div className="flex-1 overflow-y-auto md:overflow-hidden md:min-h-0">
+<div className="max-w-6xl mx-auto w-full px-6 pb-4 md:h-full md:flex md:flex-col md:min-h-0">
 {gmType === 'ai' && aiTurnError && (
 <div className="mb-3 flex items-start gap-2 text-danger-text text-xs bg-danger/10 border border-danger/20 rounded-md px-3 py-2">
 <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
@@ -816,9 +816,16 @@ GM view
 </div>
 )}
 
-<div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start">
+{/* Below md, this is a normal stacked grid and the outer page scrolls --
+cramming three independently-tall columns into one screen height only
+makes sense once there's room for them side by side. At md+, the row
+is height-locked to whatever's left below the header/HP bar so nothing
+here forces the whole page to scroll; each column scrolls internally
+instead (see md:overflow-y-auto below), and the CENTER column further
+splits 2:1 between the map and the Scene log per explicit user request. */}
+<div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start md:items-stretch md:flex-1 md:min-h-0 md:grid-rows-[1fr]">
 {/* LEFT RAIL: my character */}
-<div className="flex flex-col gap-3">
+<div className="flex flex-col gap-3 md:h-full md:min-h-0 md:overflow-y-auto">
 {myCharacter ? (
 <>
 <div className="bg-panel border border-line-soft rounded-lg p-3">
@@ -896,10 +903,13 @@ t.status === 'acting' ? 'bg-primary/20 text-primary-text font-medium' : 'text-in
 </div>
 </div>
 
-{/* CENTER: scene + log + composer helpers */}
-<div className="flex flex-col gap-3 min-w-0">
+{/* CENTER: scene + log + composer helpers. At md+, the map and Scene
+log cards split the column 2:1 (flex-[2] / flex-1) per explicit user
+request, so together they always exactly fill this column's height
+rather than however tall their content happens to be. */}
+<div className="flex flex-col gap-3 min-w-0 md:h-full md:min-h-0">
 {showMapPane && (
-<div className="bg-panel rounded-lg p-4">
+<div className="bg-panel rounded-lg p-4 md:flex-[2] md:min-h-0 md:flex md:flex-col">
 <div className="flex items-center justify-between mb-2.5">
 <span className="text-xs text-ink-dim">Scene</span>
 <div className="flex items-center gap-1">
@@ -920,7 +930,7 @@ the same vertical space as Party/Known details/Objective -- moved to
 an overlay on the map itself, since that's screen real estate the
 scene image already owns and the mockup treats a clock as something
 you glance at while looking at the scene, not a separate list. */}
-<div className="relative">
+<div className="relative md:flex-1 md:min-h-0">
 <ZoneScene
 mapUrl={mapUrl}
 mapAccessError={mapAccessError}
@@ -1185,9 +1195,9 @@ className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2
 </Modal>
 
 {showLogPane && (
-<div className="bg-panel rounded-lg p-4">
+<div className="bg-panel rounded-lg p-4 md:flex-1 md:min-h-0 md:flex md:flex-col">
 <p className="text-xs text-ink-dim mb-2">{gmType === 'ai' ? 'AI GM' : 'Scene log'}</p>
-<div ref={sceneLogRef} className="min-h-[160px] max-h-[280px] overflow-y-auto flex flex-col gap-2.5 pr-1">
+<div ref={sceneLogRef} className="min-h-[160px] max-h-[280px] md:min-h-0 md:max-h-none md:flex-1 overflow-y-auto flex flex-col gap-2.5 pr-1">
 {log.length === 0 && (
 <p className="text-xs text-ink-dim text-center mt-4">
 {gmType === 'ai'
@@ -1224,7 +1234,7 @@ className="text-[11px] border border-line rounded-md px-2 py-1 text-ink-faint cu
 </div>
 
 {/* RIGHT RAIL: current scene / known details / objective / party */}
-<div className="flex flex-col gap-3">
+<div className="flex flex-col gap-3 md:h-full md:min-h-0 md:overflow-y-auto">
 <div className="bg-panel rounded-lg p-3">
 <p className="text-xs text-ink-dim mb-1.5">Current scene</p>
 <span className={`inline-block text-xs px-2 py-1 rounded-md border ${
