@@ -58,6 +58,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [encounter, setEncounter] = useState([])
   const [notes, setNotes] = useState([])
   const [noteDraft, setNoteDraft] = useState('')
+  const [entityNoteDraft, setEntityNoteDraft] = useState('')
+  // Whatever's currently selected on the map -- a party token or a monster
+  // token. Drives the "Selected" rail panel below: persistent notes attach
+  // to this entity instead of sitting in one flat list, per the confirmed
+  // design decision. Traps/features aren't real entities yet (no table for
+  // them), so selection is character/monster only for now.
+  const [selectedEntity, setSelectedEntity] = useState(null) // { type: 'character' | 'monster', id, name }
   const [monsterDraft, setMonsterDraft] = useState('')
   const [party, setParty] = useState([])
   const [turnOrder, setTurnOrder] = useState([])
@@ -110,7 +117,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('gm_notes')
-      .select('id, text, revealed')
+      .select('id, text, revealed, entity_type, entity_id')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setNotes(data || []) })
@@ -254,10 +261,32 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     await supabase.from('gm_notes').update({ revealed: true }).eq('id', id)
   }
 
+  // General notes (the panel further down) are always untagged, regardless
+  // of what's selected on the map -- entity-tagged notes only come from the
+  // Selected panel's own composer (addEntityNote below), so the two inputs
+  // don't both silently tag notes to whatever token happens to be selected.
   const addNote = async () => {
     if (!noteDraft.trim() || !campaignId) return
     await supabase.from('gm_notes').insert({ campaign_id: campaignId, text: noteDraft.trim() })
     setNoteDraft('')
+  }
+
+  const addEntityNote = async () => {
+    if (!entityNoteDraft.trim() || !campaignId || !selectedEntity) return
+    await supabase.from('gm_notes').insert({
+      campaign_id: campaignId,
+      text: entityNoteDraft.trim(),
+      entity_type: selectedEntity.type,
+      entity_id: selectedEntity.id,
+    })
+    setEntityNoteDraft('')
+  }
+
+  // Clicking a token on the map (or in the Selected panel's own list)
+  // selects it; clicking the same one again clears the selection, same
+  // toggle pattern as the zone buttons elsewhere on this screen.
+  const selectEntity = (type, id, name) => {
+    setSelectedEntity((current) => (current?.type === type && current?.id === id ? null : { type, id, name }))
   }
 
   // Shadowdark initiative: highest 1d20+DEX starts. Rolls for every party
@@ -729,6 +758,8 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     party={party}
                     monsters={encounter}
                     litCharacterId={lightSources.find((s) => s.lit)?.character_id || null}
+                    onSelectToken={(id, type, name) => selectEntity(type, id, name)}
+                    selectedTokenId={selectedEntity?.id || null}
                   />
                   <p className="text-[11px] text-ink-dim mt-2 mb-2">
                     Set each character or monster's zone -- Close, Near, or Far from the party.
@@ -857,7 +888,53 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             <div className="flex flex-col gap-3">
               <div className="bg-panel rounded-lg p-3">
                 <p className="text-xs text-ink-dim mb-2 flex items-center gap-1"><Target size={11} className="text-ink-dim" /> Selected</p>
-                <p className="text-[11px] text-ink-dim">No token selected. Clicking a token to inspect it (traps, statues, notes tied to that entity) is a planned feature.</p>
+                {selectedEntity ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white font-medium truncate">{selectedEntity.name}</span>
+                      <button
+                        onClick={() => setSelectedEntity(null)}
+                        className="text-[10px] text-ink-dim hover:text-ink shrink-0 ml-1.5"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      {notes.filter((n) => n.entity_type === selectedEntity.type && n.entity_id === selectedEntity.id).length === 0 && (
+                        <p className="text-[11px] text-ink-dim">No notes on {selectedEntity.name} yet.</p>
+                      )}
+                      {notes
+                        .filter((n) => n.entity_type === selectedEntity.type && n.entity_id === selectedEntity.id)
+                        .map((n) => (
+                          <div key={n.id} className="text-xs p-2 bg-panel2/60 rounded-md">
+                            <p className={`mb-1.5 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
+                            {!n.revealed && (
+                              <button
+                                onClick={() => revealNote(n.id)}
+                                className="text-[11px] px-2 py-0.5 border border-line rounded text-ink hover:bg-panel2"
+                              >
+                                Reveal to party
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <input
+                        value={entityNoteDraft}
+                        onChange={(e) => setEntityNoteDraft(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && addEntityNote()}
+                        placeholder={`Note on ${selectedEntity.name}`}
+                        className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
+                      />
+                      <button onClick={addEntityNote} className="text-xs border border-line rounded-md px-2 py-1 flex items-center gap-1 text-ink hover:bg-panel2">
+                        <Plus size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-ink-dim">Click a token on the map to inspect it and see notes tied to it. Traps and other map features aren't selectable yet -- character and monster tokens only.</p>
+                )}
               </div>
 
               {activeClocks.length > 0 && (
@@ -885,10 +962,10 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               )}
 
               <div className="bg-panel rounded-lg p-3">
-                <p className="text-xs text-ink-dim mb-2">GM notes (private)</p>
+                <p className="text-xs text-ink-dim mb-2">GM notes (private, general)</p>
                 <div className="flex flex-col gap-1.5">
-                  {notes.length === 0 && <p className="text-xs text-ink-dim">No notes yet.</p>}
-                  {notes.map((n) => (
+                  {notes.filter((n) => !n.entity_type).length === 0 && <p className="text-xs text-ink-dim">No general notes yet -- notes on a specific character or monster show in Selected above once you click their token.</p>}
+                  {notes.filter((n) => !n.entity_type).map((n) => (
                     <div key={n.id} className="text-xs p-2 bg-panel2/60 rounded-md">
                       <p className={`mb-1.5 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
                       {!n.revealed && (

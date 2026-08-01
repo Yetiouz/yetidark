@@ -36,10 +36,15 @@ function groupByZone(tokens) {
 // Shadowdark ancestry has darkvision and "who's lit" is gameplay-critical,
 // not decorative -- it should move with the torchbearer, not sit fixed on
 // the room.
-export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = [], monsters = [], litCharacterId }) {
+//
+// onSelectToken(id, type, name), if passed, makes every token clickable --
+// this is the map-selection half of the GM notes "contextual inspector"
+// design decision (see GmDashboard.jsx's selectedEntity). Omit it (the
+// player table does) and tokens render exactly as before, not clickable.
+export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = [], monsters = [], litCharacterId, onSelectToken, selectedTokenId }) {
   const tokens = [
-    ...party.map((p) => ({ id: p.id, name: p.name, color: p.color || '#3b82f6', zone: p.zone || 'near' })),
-    ...monsters.map((m) => ({ id: m.id, name: m.name, color: '#737373', zone: m.zone || 'near' })),
+    ...party.map((p) => ({ id: p.id, name: p.name, color: p.color || '#3b82f6', zone: p.zone || 'near', type: 'character' })),
+    ...monsters.map((m) => ({ id: m.id, name: m.name, color: '#737373', zone: m.zone || 'near', type: 'monster' })),
   ]
   const grouped = groupByZone(tokens)
 
@@ -91,18 +96,34 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
         <span className="absolute text-[10px] text-ink-dim pointer-events-none" style={{ left: '50%', top: `${50 - ZONE_RADIUS_PCT.close}%`, transform: 'translate(-50%, -140%)' }}>Close</span>
         <span className="absolute text-[10px] text-ink-faint pointer-events-none" style={{ left: '50%', top: `${50 - ZONE_RADIUS_PCT.near}%`, transform: 'translate(-50%, -140%)' }}>Near</span>
 
-        {positioned.map((t) => (
-          <div key={t.id} className="absolute flex flex-col items-center gap-0.5" style={{ left: `${t.x}%`, top: `${t.y}%`, transform: 'translate(-50%, -50%)' }}>
-            <div
-              className="relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium"
-              style={{ background: `${t.color}33`, border: `2px solid ${t.color}`, color: t.color }}
+        {positioned.map((t) => {
+          const selected = selectedTokenId === t.id
+          const clickable = Boolean(onSelectToken)
+          return (
+            <button
+              key={t.id}
+              type="button"
+              disabled={!clickable}
+              onClick={() => clickable && onSelectToken(t.id, t.type, t.name)}
+              className={`absolute flex flex-col items-center gap-0.5 bg-transparent border-0 p-0 ${clickable ? 'cursor-pointer' : 'cursor-default'}`}
+              style={{ left: `${t.x}%`, top: `${t.y}%`, transform: 'translate(-50%, -50%)' }}
             >
-              {t.name?.[0]?.toUpperCase() || '?'}
-              {litCharacterId === t.id && <Flame size={9} className="absolute -top-1.5 -right-1.5" style={{ color: '#f5a524' }} />}
-            </div>
-            <span className="text-[9px] text-ink-dim whitespace-nowrap">{t.name}</span>
-          </div>
-        ))}
+              <div
+                className="relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium"
+                style={{
+                  background: `${t.color}33`,
+                  border: selected ? '2px solid #3b82f6' : `2px solid ${t.color}`,
+                  boxShadow: selected ? '0 0 0 2px rgba(59,130,246,0.5)' : 'none',
+                  color: t.color,
+                }}
+              >
+                {t.name?.[0]?.toUpperCase() || '?'}
+                {litCharacterId === t.id && <Flame size={9} className="absolute -top-1.5 -right-1.5" style={{ color: '#f5a524' }} />}
+              </div>
+              <span className={`text-[9px] whitespace-nowrap ${selected ? 'text-primary-text font-medium' : 'text-ink-dim'}`}>{t.name}</span>
+            </button>
+          )
+        })}
 
         {sceneLabel && (
           <div className="absolute top-2 left-2 bg-black/40 rounded px-2 py-1">
