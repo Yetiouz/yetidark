@@ -214,7 +214,7 @@ export default function CampaignLobby({
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto p-6">
-        <p className="text-xs text-neutral-500">Loading lobby...</p>
+        <p className="text-xs text-ink-faint">Loading lobby...</p>
       </div>
     )
   }
@@ -222,7 +222,7 @@ export default function CampaignLobby({
   if (error || !campaign) {
     return (
       <div className="max-w-5xl mx-auto p-6">
-        <p className="text-sm text-red-400">{error || 'Campaign not found.'}</p>
+        <p className="text-sm text-danger-text">{error || 'Campaign not found.'}</p>
       </div>
     )
   }
@@ -231,8 +231,8 @@ export default function CampaignLobby({
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-white text-xl font-semibold">{campaign.name}</h1>
-          <p className="text-sm text-neutral-400">
+          <h1 className="text-ink text-xl font-semibold">{campaign.name}</h1>
+          <p className="text-sm text-ink-dim">
             {campaign.system} &middot;{' '}
             {campaign.session_active
               ? `Session ${campaign.session_number} is live`
@@ -242,7 +242,7 @@ export default function CampaignLobby({
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={onOpenSettings}
-            className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
+            className="text-sm border border-line rounded-md px-3 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2"
           >
             <Settings size={14} /> Campaign settings
           </button>
@@ -250,13 +250,13 @@ export default function CampaignLobby({
             <button
               onClick={startSession}
               disabled={starting || !!blockReason}
-              className="text-sm bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-800 disabled:text-neutral-500 rounded-md px-4 py-1.5 flex items-center gap-1.5 text-white font-medium"
+              className="text-sm bg-primary hover:bg-primary/90 disabled:bg-panel2 disabled:text-ink-faint rounded-md px-4 py-1.5 flex items-center gap-1.5 text-ink font-medium"
             >
               <Rocket size={14} />
               {starting ? 'Starting...' : campaign.session_active ? 'Enter session' : 'Start session'}
             </button>
             {blockReason && (
-              <div className="absolute right-0 top-full mt-1.5 whitespace-nowrap text-xs bg-neutral-800 border border-neutral-700 rounded-md px-2.5 py-1.5 text-neutral-300 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+              <div className="absolute right-0 top-full mt-1.5 whitespace-nowrap text-xs bg-panel2 border border-line rounded-md px-2.5 py-1.5 text-ink-dim opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
                 {blockReason}
               </div>
             )}
@@ -264,48 +264,48 @@ export default function CampaignLobby({
         </div>
       </div>
 
-      {startError && <p className="text-xs text-red-400 mb-4">{startError}</p>}
+      {startError && <p className="text-xs text-danger-text mb-4">{startError}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
-          <p className="text-sm font-medium text-white mb-3">
+        <div className="bg-panel border border-line-soft rounded-xl p-4">
+          <p className="text-sm font-medium text-ink mb-3">
             Players &middot; {members.length} / {maxPlayers}
           </p>
 
           <div className="flex flex-col gap-3">
             {members.map((m) => (
-              <div key={m.userId} className="border border-neutral-800 rounded-lg p-3">
+              <div key={m.userId} className="border border-line-soft rounded-lg p-3">
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-medium text-blue-300">
+                    <div className="w-7 h-7 rounded-full bg-primary-bg flex items-center justify-center text-xs font-medium text-primary-text">
                       {m.displayName[0].toUpperCase()}
                     </div>
-                    <p className="text-sm text-white">{m.displayName}</p>
+                    <p className="text-sm text-ink">{m.displayName}</p>
                     {m.role === 'gm' && (
-                      <span className="text-[11px] text-neutral-400 flex items-center gap-1">
+                      <span className="text-[11px] text-ink-dim flex items-center gap-1">
                         <Crown size={12} /> GM
                       </span>
                     )}
                   </div>
                   {m.character ? (
-                    <span className="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-400">Ready</span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-positive-bg text-positive-text">Ready</span>
                   ) : (
-                    <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">Needs character</span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-warning-bg text-warning-text">Needs character</span>
                   )}
                 </div>
 
                 {m.character ? (
-                  <div className="flex items-center justify-between bg-neutral-950 rounded-md px-3 py-2 mt-1.5">
+                  <div className="flex items-center justify-between bg-bg rounded-md px-3 py-2 mt-1.5">
                     <div>
-                      <p className="text-sm text-white">{m.character.name}</p>
-                      <p className="text-xs text-neutral-400">
+                      <p className="text-sm text-ink">{m.character.name}</p>
+                      <p className="text-xs text-ink-dim">
                         Level {m.character.level} &middot; {m.character.ancestry} {m.character.class} &middot; HP{' '}
                         {m.character.hp} &middot; AC {m.character.ac}
                       </p>
                     </div>
                     <button
                       onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(m.character.id)}
-                      className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-200 hover:bg-neutral-800 shrink-0"
+                      className="text-xs border border-line rounded-md px-2.5 py-1 text-ink hover:bg-panel2 shrink-0"
                     >
                       View character
                     </button>
@@ -314,13 +314,13 @@ export default function CampaignLobby({
                   <div className="flex gap-2 mt-1.5">
                     <button
                       onClick={onCreateCharacter}
-                      className="flex-1 text-sm bg-blue-600 hover:bg-blue-500 rounded-md py-1.5 text-white font-medium"
+                      className="flex-1 text-sm bg-primary hover:bg-primary/90 rounded-md py-1.5 text-ink font-medium"
                     >
                       Create character
                     </button>
                     <button
                       onClick={onChooseCharacter}
-                      className="flex-1 text-sm border border-neutral-700 rounded-md py-1.5 text-neutral-200 hover:bg-neutral-800"
+                      className="flex-1 text-sm border border-line rounded-md py-1.5 text-ink hover:bg-panel2"
                     >
                       Choose existing
                     </button>
@@ -332,68 +332,68 @@ export default function CampaignLobby({
 
           <button
             onClick={inviteAnotherPlayer}
-            className="w-full mt-3 text-sm border border-dashed border-neutral-700 rounded-lg py-2.5 flex items-center justify-center gap-1.5 text-neutral-300 hover:bg-neutral-800"
+            className="w-full mt-3 text-sm border border-dashed border-line rounded-lg py-2.5 flex items-center justify-center gap-1.5 text-ink-dim hover:bg-panel2"
           >
             <UserPlus size={14} /> {copiedInvite ? 'Join code copied' : 'Invite another player'}
           </button>
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
-            <p className="text-sm font-medium text-white mb-3">Ready to begin?</p>
+          <div className="bg-panel border border-line-soft rounded-xl p-4">
+            <p className="text-sm font-medium text-ink mb-3">Ready to begin?</p>
             <div className="flex flex-col gap-2 mb-3">
               {checks.map((c) => (
                 <div key={c.key} className="flex items-start gap-2 text-xs">
                   {c.done ? (
-                    <CheckCircle2 size={14} className="text-green-400 mt-0.5 shrink-0" />
+                    <CheckCircle2 size={14} className="text-positive-text mt-0.5 shrink-0" />
                   ) : (
-                    <AlertTriangle size={14} className="text-amber-400 mt-0.5 shrink-0" />
+                    <AlertTriangle size={14} className="text-warning-text mt-0.5 shrink-0" />
                   )}
                   <div>
-                    <p className={c.done ? 'text-neutral-200' : 'text-amber-300'}>{c.label}</p>
-                    {c.detail && <p className="text-neutral-500 mt-0.5">{c.detail}</p>}
+                    <p className={c.done ? 'text-ink' : 'text-warning-text'}>{c.label}</p>
+                    {c.detail && <p className="text-ink-faint mt-0.5">{c.detail}</p>}
                   </div>
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-neutral-500 mb-1.5">
+            <p className="text-[11px] text-ink-faint mb-1.5">
               {checksComplete} of {checks.length} checks complete
             </p>
-            <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-panel2 rounded-full overflow-hidden">
               <div
-                className="h-full bg-green-500 rounded-full transition-all"
+                className="h-full bg-positive rounded-full transition-all"
                 style={{ width: `${(checksComplete / checks.length) * 100}%` }}
               />
             </div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
-            <p className="text-sm font-medium text-white mb-3">Invite players</p>
+          <div className="bg-panel border border-line-soft rounded-xl p-4">
+            <p className="text-sm font-medium text-ink mb-3">Invite players</p>
             <div className="flex items-center justify-between text-xs mb-2.5">
-              <span className="text-neutral-400 flex items-center gap-1.5">
+              <span className="text-ink-dim flex items-center gap-1.5">
                 <Key size={13} /> Join code
               </span>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-white tracking-wide">{campaign.join_code}</span>
+                <span className="font-mono text-ink tracking-wide">{campaign.join_code}</span>
                 <button
                   onClick={copyJoinCode}
-                  className="text-[11px] px-2 py-0.5 border border-neutral-700 rounded text-neutral-300 hover:bg-neutral-800 flex items-center gap-1"
+                  className="text-[11px] px-2 py-0.5 border border-line rounded text-ink-dim hover:bg-panel2 flex items-center gap-1"
                 >
                   {copiedCode ? <Check size={11} /> : <Copy size={11} />} {copiedCode ? 'Copied' : 'Copy'}
                 </button>
               </div>
             </div>
             <div className="flex items-center justify-between text-xs mb-3">
-              <span className="text-neutral-400">Campaign access</span>
-              <span className="text-neutral-200">{campaign.is_public ? 'Public' : 'Private'}</span>
+              <span className="text-ink-dim">Campaign access</span>
+              <span className="text-ink">{campaign.is_public ? 'Public' : 'Private'}</span>
             </div>
             <button
               onClick={copyInviteLink}
-              className="w-full text-sm border border-neutral-700 rounded-md py-2 flex items-center justify-center gap-1.5 text-neutral-100 hover:bg-neutral-800"
+              className="w-full text-sm border border-line rounded-md py-2 flex items-center justify-center gap-1.5 text-ink hover:bg-panel2"
             >
               <Copy size={13} /> {copiedLink ? 'Link copied' : 'Copy invite link'}
             </button>
-            <p className="text-[11px] text-neutral-500 mt-2">
+            <p className="text-[11px] text-ink-faint mt-2">
               {campaign.is_public
                 ? 'Anyone with the link can join directly.'
                 : campaign.join_password_hash
@@ -402,17 +402,17 @@ export default function CampaignLobby({
             </p>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
-            <p className="text-sm font-medium text-white mb-3">Campaign rules</p>
+          <div className="bg-panel border border-line-soft rounded-xl p-4">
+            <p className="text-sm font-medium text-ink mb-3">Campaign rules</p>
             <div className="flex flex-col gap-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-neutral-400">GM</span>
+                <span className="text-ink-dim">GM</span>
                 {campaign.gm_type === 'ai' ? (
-                  <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 flex items-center gap-1">
+                  <span className="px-2 py-0.5 rounded bg-ai-bg text-ai-text flex items-center gap-1">
                     <Bot size={11} /> AI GM
                   </span>
                 ) : (
-                  <span className="text-neutral-200 flex items-center gap-1">
+                  <span className="text-ink flex items-center gap-1">
                     <Crown size={11} /> Human GM
                   </span>
                 )}
@@ -420,55 +420,55 @@ export default function CampaignLobby({
               {campaign.gm_type === 'ai' && (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-neutral-400">Tone</span>
-                    <span className="text-neutral-200">{TONE_LABELS[campaign.ai_gm_tone] || 'Balanced'}</span>
+                    <span className="text-ink-dim">Tone</span>
+                    <span className="text-ink">{TONE_LABELS[campaign.ai_gm_tone] || 'Balanced'}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-neutral-400">Rules</span>
-                    <span className="text-neutral-200">{RULES_STYLE_LABELS[campaign.ai_gm_rules_style] || 'Guided'}</span>
+                    <span className="text-ink-dim">Rules</span>
+                    <span className="text-ink">{RULES_STYLE_LABELS[campaign.ai_gm_rules_style] || 'Guided'}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-neutral-400">Lethality</span>
-                    <span className="text-neutral-200">{campaign.ai_gm_lethality ?? 50}/100</span>
+                    <span className="text-ink-dim">Lethality</span>
+                    <span className="text-ink">{campaign.ai_gm_lethality ?? 50}/100</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-neutral-400">Autonomy</span>
-                    <span className="text-neutral-200">{AUTONOMY_LABELS[campaign.ai_gm_autonomy] || AUTONOMY_LABELS.ask_major}</span>
+                    <span className="text-ink-dim">Autonomy</span>
+                    <span className="text-ink">{AUTONOMY_LABELS[campaign.ai_gm_autonomy] || AUTONOMY_LABELS.ask_major}</span>
                   </div>
                 </>
               )}
               <div className="flex items-center justify-between">
-                <span className="text-neutral-400">Starting level</span>
-                <span className="text-neutral-200">{campaign.starting_level ?? 1}</span>
+                <span className="text-ink-dim">Starting level</span>
+                <span className="text-ink">{campaign.starting_level ?? 1}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-neutral-400">Players</span>
-                <span className="text-neutral-200">
+                <span className="text-ink-dim">Players</span>
+                <span className="text-ink">
                   {minPlayers}&ndash;{maxPlayers}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-neutral-400">House rules</span>
-                <span className="text-neutral-200">{campaign.house_rules?.trim() ? 'Set' : 'None set'}</span>
+                <span className="text-ink-dim">House rules</span>
+                <span className="text-ink">{campaign.house_rules?.trim() ? 'Set' : 'None set'}</span>
               </div>
               <div>
-                <span className="text-neutral-400 block mb-1">Modes of play</span>
+                <span className="text-ink-dim block mb-1">Modes of play</span>
                 {campaign.modes_of_play?.length ? (
                   <div className="flex flex-wrap gap-1">
                     {campaign.modes_of_play.map((k) => (
-                      <span key={k} className="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300">
+                      <span key={k} className="px-1.5 py-0.5 rounded bg-panel2 text-ink-dim">
                         {MODE_LABELS[k] || k}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <span className="text-neutral-500">None active</span>
+                  <span className="text-ink-faint">None active</span>
                 )}
               </div>
             </div>
             <button
               onClick={onOpenSettings}
-              className="text-xs text-blue-400 hover:text-blue-300 mt-3"
+              className="text-xs text-primary-text hover:text-primary-text mt-3"
             >
               View all rules &amp; house rules
             </button>

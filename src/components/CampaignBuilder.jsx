@@ -147,58 +147,58 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
             onClick={() => setStep(i)}
             className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] border shrink-0 ${
               i < step
-                ? 'bg-green-500/20 border-green-500 text-green-400'
+                ? 'bg-positive-bg border-positive text-positive-text'
                 : i === step
-                  ? 'bg-blue-500 border-blue-500 text-white'
-                  : 'border-neutral-700 text-neutral-500'
+                  ? 'bg-primary border-primary text-ink'
+                  : 'border-line text-ink-faint'
             }`}
           >
             {i < step ? <Check size={12} /> : i + 1}
           </button>
-          <span className={`text-xs whitespace-nowrap ${i === step ? 'text-white' : 'text-neutral-500'}`}>{label}</span>
-          {i < STEPS.length - 1 && <span className="w-5 h-px bg-neutral-800 shrink-0" />}
+          <span className={`text-xs whitespace-nowrap ${i === step ? 'text-ink' : 'text-ink-faint'}`}>{label}</span>
+          {i < STEPS.length - 1 && <span className="w-5 h-px bg-panel2 shrink-0" />}
         </div>
       ))}
     </div>
   )
 
   const sidebar = (
-    <div className="bg-neutral-900 rounded-lg p-4 h-fit md:sticky md:top-6">
-      <p className="text-xs text-neutral-400 mb-1">Campaign preview</p>
-      <p className="text-white text-base font-medium mb-3">{name.trim() || 'Untitled campaign'}</p>
-      <div className="flex flex-col gap-1.5 text-[11px] pb-3 mb-3 border-b border-neutral-800">
+    <div className="bg-panel rounded-lg p-4 h-fit md:sticky md:top-6">
+      <p className="text-xs text-ink-dim mb-1">Campaign preview</p>
+      <p className="text-ink text-base font-medium mb-3">{name.trim() || 'Untitled campaign'}</p>
+      <div className="flex flex-col gap-1.5 text-[11px] pb-3 mb-3 border-b border-line-soft">
         <div className="flex justify-between">
-          <span className="text-neutral-500">System</span>
-          <span className="text-neutral-200">Shadowdark</span>
+          <span className="text-ink-faint">System</span>
+          <span className="text-ink">Shadowdark</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-neutral-500">Game Master</span>
-          <span className="text-neutral-200">{gmType === 'ai' ? 'AI GM' : 'Human GM'}</span>
+          <span className="text-ink-faint">Game Master</span>
+          <span className="text-ink">{gmType === 'ai' ? 'AI GM' : 'Human GM'}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-neutral-500">Access</span>
-          <span className="text-neutral-200">{isPublic ? 'Public' : 'Private'}</span>
+          <span className="text-ink-faint">Access</span>
+          <span className="text-ink">{isPublic ? 'Public' : 'Private'}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-neutral-500">Starting level</span>
-          <span className="text-neutral-200">{startingLevel}</span>
+          <span className="text-ink-faint">Starting level</span>
+          <span className="text-ink">{startingLevel}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-neutral-500">Players</span>
-          <span className="text-neutral-200">{minPlayers}–{maxPlayers}</span>
+          <span className="text-ink-faint">Players</span>
+          <span className="text-ink">{minPlayers}–{maxPlayers}</span>
         </div>
       </div>
-      <p className="text-[11px] text-neutral-600">Nothing is created until you finish the review step.</p>
+      <p className="text-[11px] text-ink-faint">Nothing is created until you finish the review step.</p>
     </div>
   )
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-neutral-800 px-6 py-3.5 flex items-center justify-between gap-4">
-        <h1 className="text-white font-medium shrink-0">Create a campaign</h1>
+      <div className="shrink-0 border-b border-line-soft px-6 py-3.5 flex items-center justify-between gap-4">
+        <h1 className="text-ink font-medium shrink-0">Create a campaign</h1>
         {stepper}
         {onCancel && (
-          <button onClick={onCancel} className="text-neutral-400 hover:text-white shrink-0">
+          <button onClick={onCancel} className="text-ink-dim hover:text-ink shrink-0">
             <XIcon size={18} />
           </button>
         )}
@@ -206,25 +206,25 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-5xl mx-auto p-6 grid grid-cols-1 md:grid-cols-[1fr_260px] gap-4">
-          <div className="bg-neutral-900 rounded-lg p-5 min-h-[420px]">
+          <div className="bg-panel rounded-lg p-5 min-h-[420px]">
             {step === 0 && (
               <div>
-                <h2 className="text-white text-sm font-medium mb-3">Basics</h2>
-                <p className="text-[11px] text-neutral-400 mb-1">Campaign name</p>
+                <h2 className="text-ink text-sm font-medium mb-3">Basics</h2>
+                <p className="text-[11px] text-ink-dim mb-1">Campaign name</p>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. The Lost Citadel"
-                  className="w-full bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white mb-4"
+                  className="w-full bg-bg border border-line rounded-md px-3 py-2 text-sm text-ink mb-4"
                 />
 
                 <div className="grid grid-cols-3 gap-2.5 mb-4">
                   <div>
-                    <p className="text-[11px] text-neutral-400 mb-1">Starting level</p>
+                    <p className="text-[11px] text-ink-dim mb-1">Starting level</p>
                     <select
                       value={startingLevel}
                       onChange={(e) => setStartingLevel(parseInt(e.target.value, 10))}
-                      className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
+                      className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
                     >
                       {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                         <option key={n} value={n}>{n}</option>
@@ -232,33 +232,33 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
                     </select>
                   </div>
                   <div>
-                    <p className="text-[11px] text-neutral-400 mb-1">Min players</p>
+                    <p className="text-[11px] text-ink-dim mb-1">Min players</p>
                     <input
                       type="number"
                       min={1}
                       value={minPlayers}
                       onChange={(e) => setMinPlayers(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                      className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
+                      className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
                     />
                   </div>
                   <div>
-                    <p className="text-[11px] text-neutral-400 mb-1">Max players</p>
+                    <p className="text-[11px] text-ink-dim mb-1">Max players</p>
                     <input
                       type="number"
                       min={minPlayers}
                       value={maxPlayers}
                       onChange={(e) => setMaxPlayers(Math.max(minPlayers, parseInt(e.target.value, 10) || minPlayers))}
-                      className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
+                      className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
                     />
                   </div>
                 </div>
 
-                <p className="text-[11px] text-neutral-400 mb-1.5">Access</p>
+                <p className="text-[11px] text-ink-dim mb-1.5">Access</p>
                 <div className="grid grid-cols-2 gap-1.5 mb-2">
                   <button
                     onClick={() => setIsPublic(true)}
                     className={`text-xs py-1.5 rounded-md border ${
-                      isPublic ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+                      isPublic ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim hover:bg-panel2'
                     }`}
                   >
                     Public
@@ -266,7 +266,7 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
                   <button
                     onClick={() => setIsPublic(false)}
                     className={`text-xs py-1.5 rounded-md border ${
-                      !isPublic ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+                      !isPublic ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim hover:bg-panel2'
                     }`}
                   >
                     Private
@@ -278,10 +278,10 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Password to join"
-                    className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2.5 py-1.5 text-white"
+                    className="w-full text-xs bg-bg border border-line rounded-md px-2.5 py-1.5 text-ink"
                   />
                 )}
-                <p className="text-[11px] text-neutral-500 mt-2">
+                <p className="text-[11px] text-ink-faint mt-2">
                   {isPublic
                     ? 'Anyone can find and request to join from the public campaign list.'
                     : 'Only people with the join code and password can join.'}
@@ -291,37 +291,37 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
 
             {step === 1 && (
               <div>
-                <h2 className="text-white text-sm font-medium mb-1">Who will run the game?</h2>
-                <p className="text-xs text-neutral-500 mb-3">
+                <h2 className="text-ink text-sm font-medium mb-1">Who will run the game?</h2>
+                <p className="text-xs text-ink-faint mb-3">
                   Choose a human Game Master or let Delve run the campaign with AI.
                 </p>
                 <div className="grid grid-cols-2 gap-2.5 mb-4">
                   <button
                     onClick={() => setGmType('human')}
                     className={`text-left p-4 rounded-lg border ${
-                      gmType === 'human' ? 'border-blue-500 bg-neutral-800' : 'border-neutral-700 hover:bg-neutral-800/50'
+                      gmType === 'human' ? 'border-primary bg-panel2' : 'border-line hover:bg-panel2/50'
                     }`}
                   >
-                    <Crown size={18} className="text-neutral-400 mb-2" />
-                    <p className="text-sm text-white mb-1">Human GM</p>
-                    <p className="text-[11px] text-neutral-500">A person prepares the adventure, controls the world, and makes rulings.</p>
+                    <Crown size={18} className="text-ink-dim mb-2" />
+                    <p className="text-sm text-ink mb-1">Human GM</p>
+                    <p className="text-[11px] text-ink-faint">A person prepares the adventure, controls the world, and makes rulings.</p>
                   </button>
                   <button
                     onClick={() => setGmType('ai')}
                     className={`text-left p-4 rounded-lg border ${
-                      gmType === 'ai' ? 'border-blue-500 bg-neutral-800' : 'border-neutral-700 hover:bg-neutral-800/50'
+                      gmType === 'ai' ? 'border-primary bg-panel2' : 'border-line hover:bg-panel2/50'
                     }`}
                   >
-                    <Bot size={18} className="text-neutral-400 mb-2" />
-                    <p className="text-sm text-white mb-1">AI GM</p>
-                    <p className="text-[11px] text-neutral-500">Delve narrates the world, runs encounters, and maintains campaign state.</p>
+                    <Bot size={18} className="text-ink-dim mb-2" />
+                    <p className="text-sm text-ink mb-1">AI GM</p>
+                    <p className="text-[11px] text-ink-faint">Delve narrates the world, runs encounters, and maintains campaign state.</p>
                   </button>
                 </div>
 
                 {gmType === 'ai' && (
-                  <div className="border-t border-neutral-800 pt-3">
-                    <p className="text-xs text-neutral-400 mb-2">AI GM preferences</p>
-                    <p className="text-[11px] text-neutral-500 mb-1">Tone</p>
+                  <div className="border-t border-line-soft pt-3">
+                    <p className="text-xs text-ink-dim mb-2">AI GM preferences</p>
+                    <p className="text-[11px] text-ink-faint mb-1">Tone</p>
                     <div className="grid grid-cols-3 gap-1.5 mb-2.5">
                       {TONES.map((t) => (
                         <button
@@ -329,14 +329,14 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
                           onClick={() => setAiTone(t.key)}
                           title={t.description}
                           className={`text-xs py-1.5 rounded-md border ${
-                            aiTone === t.key ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+                            aiTone === t.key ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim hover:bg-panel2'
                           }`}
                         >
                           {t.label}
                         </button>
                       ))}
                     </div>
-                    <p className="text-[11px] text-neutral-500 mb-1">Rules style</p>
+                    <p className="text-[11px] text-ink-faint mb-1">Rules style</p>
                     <div className="grid grid-cols-3 gap-1.5 mb-2.5">
                       {RULES_STYLES.map((r) => (
                         <button
@@ -344,14 +344,14 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
                           onClick={() => setAiRulesStyle(r.key)}
                           title={r.description}
                           className={`text-xs py-1.5 rounded-md border ${
-                            aiRulesStyle === r.key ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+                            aiRulesStyle === r.key ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim hover:bg-panel2'
                           }`}
                         >
                           {r.label}
                         </button>
                       ))}
                     </div>
-                    <p className="text-[11px] text-neutral-500 mb-1">
+                    <p className="text-[11px] text-ink-faint mb-1">
                       Lethality &middot; {aiLethality < 34 ? 'Forgiving' : aiLethality < 67 ? 'Balanced' : 'Rules as written'}
                     </p>
                     <input
@@ -362,14 +362,14 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
                       onChange={(e) => setAiLethality(parseInt(e.target.value, 10))}
                       className="w-full mb-2.5"
                     />
-                    <p className="text-[11px] text-neutral-500 mb-1">Autonomy</p>
+                    <p className="text-[11px] text-ink-faint mb-1">Autonomy</p>
                     <div className="flex flex-col gap-1.5">
                       {AUTONOMY.map((a) => (
                         <button
                           key={a.key}
                           onClick={() => setAiAutonomy(a.key)}
                           className={`text-left text-xs py-1.5 px-2.5 rounded-md border ${
-                            aiAutonomy === a.key ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+                            aiAutonomy === a.key ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim hover:bg-panel2'
                           }`}
                         >
                           {a.label}
@@ -383,8 +383,8 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
 
             {step === 2 && (
               <div>
-                <h2 className="text-white text-sm font-medium mb-3">Rules</h2>
-                <p className="text-xs text-neutral-400 mb-2">Modes of play</p>
+                <h2 className="text-ink text-sm font-medium mb-3">Rules</h2>
+                <p className="text-xs text-ink-dim mb-2">Modes of play</p>
                 <div className="flex flex-col gap-1.5 mb-4">
                   {MODES_OF_PLAY.map((mode) => (
                     <label key={mode.key} className="flex items-start gap-2 text-xs">
@@ -395,46 +395,46 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
                         className="mt-0.5"
                       />
                       <span>
-                        <span className={`font-medium ${modes.includes(mode.key) ? 'text-white' : 'text-neutral-500'}`}>{mode.label}</span>
-                        <span className="text-neutral-500"> -- {mode.description}</span>
+                        <span className={`font-medium ${modes.includes(mode.key) ? 'text-ink' : 'text-ink-faint'}`}>{mode.label}</span>
+                        <span className="text-ink-faint"> -- {mode.description}</span>
                       </span>
                     </label>
                   ))}
                 </div>
-                <p className="text-xs text-neutral-400 mb-1.5">House rules (optional)</p>
+                <p className="text-xs text-ink-dim mb-1.5">House rules (optional)</p>
                 <textarea
                   value={houseRules}
                   onChange={(e) => setHouseRules(e.target.value)}
                   placeholder="Anything the table has agreed on beyond the core rules..."
                   rows={5}
-                  className="w-full text-sm bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-white resize-y"
+                  className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-ink resize-y"
                 />
               </div>
             )}
 
             {step === 3 && (
               <div>
-                <h2 className="text-white text-sm font-medium mb-3">Review</h2>
-                <div className="bg-neutral-950 rounded-md px-3.5 py-3 mb-3">
-                  <p className="text-sm font-medium text-white">{name.trim() || 'Untitled campaign'}</p>
-                  <p className="text-[11px] text-neutral-400 mt-0.5">
+                <h2 className="text-ink text-sm font-medium mb-3">Review</h2>
+                <div className="bg-bg rounded-md px-3.5 py-3 mb-3">
+                  <p className="text-sm font-medium text-ink">{name.trim() || 'Untitled campaign'}</p>
+                  <p className="text-[11px] text-ink-dim mt-0.5">
                     Shadowdark &middot; {gmType === 'ai' ? 'AI GM' : 'Human GM'} &middot; {isPublic ? 'Public' : 'Private'}
                   </p>
-                  <p className="text-[11px] text-neutral-400 mt-0.5">
+                  <p className="text-[11px] text-ink-dim mt-0.5">
                     Starting level {startingLevel} &middot; {minPlayers}–{maxPlayers} players
                   </p>
                   {gmType === 'ai' && (
-                    <p className="text-[11px] text-neutral-500 mt-0.5">
+                    <p className="text-[11px] text-ink-faint mt-0.5">
                       {TONES.find((t) => t.key === aiTone)?.label}, {RULES_STYLES.find((r) => r.key === aiRulesStyle)?.label} rules,{' '}
                       {AUTONOMY.find((a) => a.key === aiAutonomy)?.label.toLowerCase()}
                     </p>
                   )}
                   {modes.length > 0 && (
-                    <p className="text-[11px] text-neutral-500 mt-0.5">Modes: {modes.join(', ')}</p>
+                    <p className="text-[11px] text-ink-faint mt-0.5">Modes: {modes.join(', ')}</p>
                   )}
                 </div>
                 {error && (
-                  <div className="flex items-center gap-1.5 text-red-400">
+                  <div className="flex items-center gap-1.5 text-danger-text">
                     <AlertCircle size={12} />
                     <p className="text-[11px]">{error}</p>
                   </div>
@@ -447,23 +447,23 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-neutral-800 px-6 py-3">
+      <div className="shrink-0 border-t border-line-soft px-6 py-3">
         <div className="max-w-5xl mx-auto grid grid-cols-[1fr_260px] gap-4">
           <div className="flex items-center justify-between">
             <button
               onClick={goBack}
               disabled={step === 0}
-              className="text-sm border border-neutral-700 rounded-md px-3 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="text-sm border border-line rounded-md px-3 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <ChevronLeft size={14} /> Back
             </button>
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-ink-faint">
               Step {step + 1} of {STEPS.length} &middot; {STEPS[step]}
             </span>
             {step < STEPS.length - 1 ? (
               <button
                 onClick={goNext}
-                className="text-sm bg-blue-500 hover:bg-blue-400 text-white rounded-md px-3.5 py-1.5 flex items-center gap-1.5"
+                className="text-sm bg-primary hover:bg-primary/90 text-ink rounded-md px-3.5 py-1.5 flex items-center gap-1.5"
               >
                 Continue <ChevronRight size={14} />
               </button>
@@ -471,7 +471,7 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
               <button
                 onClick={create}
                 disabled={saving}
-                className="text-sm bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white rounded-md px-3.5 py-1.5"
+                className="text-sm bg-primary hover:bg-primary/90 disabled:opacity-50 text-ink rounded-md px-3.5 py-1.5"
               >
                 {saving ? 'Creating...' : 'Create campaign'}
               </button>
