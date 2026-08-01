@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield, Package, Check } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import Tabs from './ui/Tabs.jsx'
+import Row from './ui/Row.jsx'
+import Badge from './ui/Badge.jsx'
+import Card from './ui/Card.jsx'
+import Button from './ui/Button.jsx'
+import ProgressBar from './ui/ProgressBar.jsx'
 import {
   abilityModifier,
   gearSlotCapacity,
@@ -484,28 +489,34 @@ export default function CharacterSheet({ characterId, session, onBack }) {
 
       {activeTab === 'gear' && (
       <div className="flex flex-col gap-3 mb-4">
-        {/* Stat-card row: Gear/Coin are read straight off the character;
+        {/* Stat-card row uses the exact recipe GameTable's own HP/AC/Gear/
+            Luck/Torch bar uses (bg-panel border-line-soft, tracking-wide
+            label, text-lg font-semibold value) -- this is "the base page"
+            the rest of the app should look like, so the numbers here
+            should look like they belong on the same table, not like a
+            different app. Gear/Coin are read straight off the character;
             Torches/Rations are derived from real carried gear (see
             torchCount/rationCount above) -- no invented "resource" rows.
             Party storage isn't here: there's no shared-inventory table, so
             rather than show a fake empty card, it's just left out. */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          <div className={`rounded-lg p-3 border ${gearFull ? 'bg-warning/10 border-warning/40' : 'bg-panel border-transparent'}`}>
-            <p className="text-[11px] text-ink-dim mb-1">Gear</p>
-            <p className={`text-sm ${gearFull ? 'text-warning-text' : 'text-ink'}`}>{usedSlots} / {maxSlots} slots</p>
-            {gearFull && <p className="text-[10px] text-warning-text mt-1">No free carried slots</p>}
+          <div className={`rounded-lg px-3 py-2 border ${gearFull ? 'border-warning/60 bg-warning/5' : 'bg-panel border-line-soft'}`}>
+            <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">GEAR</p>
+            <p className={`text-lg font-semibold ${gearFull ? 'text-warning-text' : 'text-white'}`}>
+              {usedSlots}<span className="text-ink-dim text-sm font-normal"> / {maxSlots}</span>
+            </p>
           </div>
-          <div className="bg-panel rounded-lg p-3">
-            <p className="text-[11px] text-ink-dim mb-1">Coin</p>
-            <p className="text-sm text-ink">{character.coin} gp</p>
+          <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
+            <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">COIN</p>
+            <p className="text-lg font-semibold text-white">{character.coin}<span className="text-ink-dim text-sm font-normal"> gp</span></p>
           </div>
-          <div className="bg-panel rounded-lg p-3">
-            <p className="text-[11px] text-ink-dim mb-1">Torches</p>
-            <p className="text-sm text-ink">{torchCount}</p>
+          <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
+            <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">TORCHES</p>
+            <p className="text-lg font-semibold text-white">{torchCount}</p>
           </div>
-          <div className="bg-panel rounded-lg p-3">
-            <p className="text-[11px] text-ink-dim mb-1">Rations</p>
-            <p className="text-sm text-ink">{rationCount}</p>
+          <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
+            <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">RATIONS</p>
+            <p className="text-lg font-semibold text-white">{rationCount}</p>
           </div>
         </div>
 
@@ -518,92 +529,109 @@ export default function CharacterSheet({ characterId, session, onBack }) {
               placeholder="Item name"
               className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
             />
-            <button onClick={addGear} className="text-xs border border-line rounded-md px-2.5 py-1.5 flex items-center gap-1 text-ink hover:bg-panel2 shrink-0">
-              <Plus size={13} /> Add
-            </button>
+            <Button icon={Plus} onClick={addGear} className="shrink-0">Add</Button>
           </div>
         )}
 
+        {/* Equipped/Carried use the same Row (icon chip + label + right-
+            aligned content) and Badge (pill tag) components GameTable's
+            Quick actions/Party rows already use -- same building blocks as
+            the base page, not a second, slightly-different set of card/row
+            styles invented just for this tab. */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <div className="bg-panel rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2.5">
-              <p className="text-xs text-ink-dim">Equipped</p>
-              <span className="text-[10px] text-positive-text">Equipped items free</span>
-            </div>
+          <Card
+            title="Equipped"
+            titleRight={
+              <span className="text-[10px] text-positive-text flex items-center gap-1">
+                <Check size={11} /> Equipped items free
+              </span>
+            }
+          >
             {equippedGear.length === 0 && <p className="text-xs text-ink-faint">Nothing equipped.</p>}
             <div className="flex flex-col gap-1.5">
               {equippedGear.map((item) => {
-                // Tags only reflect real columns -- base_ac/is_shield/
-                // dex_applies (from set_character_gear_equipped's own AC
-                // math). No damage-die/property tags: character_gear has
-                // no field for those yet, so weapons just get "Equipped"
-                // rather than a made-up combat stat.
+                // Icon and tag both reflect only real columns -- base_ac/
+                // is_shield/dex_applies (from set_character_gear_equipped's
+                // own AC math). There's no damage-die/property/weapon-type
+                // field on character_gear, so anything that isn't
+                // identifiably armor or a shield gets the same generic
+                // Package icon and an "Equipped" tag rather than a guessed
+                // icon or a made-up combat stat -- matches GameTable's own
+                // Quick Actions rail, which uses one generic icon for every
+                // equipped item for the same reason.
+                const isDefense = item.is_shield || item.base_ac != null
                 const tag = item.is_shield
                   ? '+2 AC'
                   : item.base_ac != null
                     ? `AC ${item.base_ac}${item.dex_applies ? ' + dex' : ''}`
                     : 'Equipped'
                 return (
-                  <div key={item.id} className="flex items-center justify-between text-xs p-2 bg-panel2/60 rounded-md border border-line">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="text-ink truncate">{item.name}</span>
-                      {item.quantity > 1 && <span className="text-ink-faint shrink-0">&times;{item.quantity}</span>}
-                      <span className="text-ink-faint shrink-0">{tag}</span>
-                    </div>
-                    {canEdit && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button onClick={() => toggleEquipped(item)} className="text-[11px] text-ink-faint hover:text-ink-dim">
-                          Unequip
-                        </button>
-                        <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text">
-                          <Trash2 size={13} />
-                        </button>
+                  <Row
+                    key={item.id}
+                    icon={isDefense ? Shield : Package}
+                    label={item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name}
+                    right={
+                      <div className="flex items-center gap-2">
+                        <Badge tone="blue">{tag}</Badge>
+                        {canEdit && (
+                          <>
+                            <button onClick={() => toggleEquipped(item)} className="text-[11px] text-ink-faint hover:text-ink-dim">
+                              Unequip
+                            </button>
+                            <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text">
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    }
+                  />
                 )
               })}
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-panel rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2.5">
-              <p className="text-xs text-ink-dim">Carried gear</p>
-              <span className={`text-[10px] ${gearFull ? 'text-warning-text' : 'text-ink-faint'}`}>{usedSlots} / {maxSlots}</span>
+          <Card title="Carried gear" titleRight={<Badge tone="neutral">{maxSlots} slots</Badge>}>
+            <div className="flex items-center gap-2 mb-3">
+              <ProgressBar
+                mode="segmented"
+                segments={Math.max(maxSlots, usedSlots, 1)}
+                filled={usedSlots}
+                tone={usedSlots > maxSlots ? 'red' : 'amber'}
+                className="flex-1"
+              />
+              <span className={`text-[10px] shrink-0 ${gearFull ? 'text-warning-text' : 'text-ink-faint'}`}>
+                {usedSlots} / {maxSlots}
+              </span>
             </div>
-            <div className="flex flex-wrap gap-1 mb-3">
-              {Array.from({ length: Math.max(maxSlots, usedSlots, 1) }).map((_, i) => (
-                <span
-                  key={i}
-                  className={`w-2 h-2 rounded-full ${i < usedSlots ? (usedSlots > maxSlots ? 'bg-danger' : 'bg-warning') : 'bg-panel2'}`}
+            {carriedGear.length === 0 && <p className="text-xs text-ink-faint">No carried gear.</p>}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {carriedGear.map((item) => (
+                <Row
+                  key={item.id}
+                  icon={Package}
+                  label={item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name}
+                  right={
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-ink-faint whitespace-nowrap">
+                        {item.slots * item.quantity} slot{item.slots * item.quantity === 1 ? '' : 's'}
+                      </span>
+                      {canEdit && (
+                        <>
+                          <button onClick={() => toggleEquipped(item)} className="text-[11px] text-ink-faint hover:text-ink-dim whitespace-nowrap">
+                            Equip
+                          </button>
+                          <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text">
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  }
                 />
               ))}
             </div>
-            {carriedGear.length === 0 && <p className="text-xs text-ink-faint">No carried gear.</p>}
-            <div className="flex flex-col gap-1.5">
-              {carriedGear.map((item) => (
-                <div key={item.id} className="flex items-center justify-between text-xs p-2 bg-panel2/60 rounded-md border border-line">
-                  <label className="flex items-center gap-2 flex-1 min-w-0">
-                    {canEdit ? (
-                      <input type="checkbox" checked={item.equipped} onChange={() => toggleEquipped(item)} />
-                    ) : (
-                      <span className="w-2 h-2 rounded-full inline-block bg-panel2 shrink-0" />
-                    )}
-                    <span className="text-ink truncate">{item.name}</span>
-                    {item.quantity > 1 && <span className="text-ink-faint shrink-0">&times;{item.quantity}</span>}
-                    <span className="text-ink-faint shrink-0">
-                      {item.slots} slot{Number(item.slots) === 1 ? '' : 's'}
-                    </span>
-                  </label>
-                  {canEdit && (
-                    <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text shrink-0">
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+          </Card>
         </div>
       </div>
       )}
