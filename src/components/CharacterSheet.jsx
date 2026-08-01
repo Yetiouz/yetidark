@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield, Package, Check } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield, Package, Check, Gem, Users, Filter, ArrowUpDown, Search } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import Tabs from './ui/Tabs.jsx'
 import Row from './ui/Row.jsx'
@@ -61,6 +61,10 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
+  const [sortMode, setSortMode] = useState('default')
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [filterQuery, setFilterQuery] = useState('')
+  const [addingGear, setAddingGear] = useState(false)
   const avatarInputRef = useRef(null)
 
   useEffect(() => {
@@ -487,154 +491,264 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       </div>
       )}
 
-      {activeTab === 'gear' && (
-      <div className="flex flex-col gap-3 mb-4">
-        {/* Stat-card row uses the exact recipe GameTable's own HP/AC/Gear/
-            Luck/Torch bar uses (bg-panel border-line-soft, tracking-wide
-            label, text-lg font-semibold value) -- this is "the base page"
-            the rest of the app should look like, so the numbers here
-            should look like they belong on the same table, not like a
-            different app. Gear/Coin are read straight off the character;
-            Torches/Rations are derived from real carried gear (see
-            torchCount/rationCount above) -- no invented "resource" rows.
-            Party storage isn't here: there's no shared-inventory table, so
-            rather than show a fake empty card, it's just left out. */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          <div className={`rounded-lg px-3 py-2 border ${gearFull ? 'border-warning/60 bg-warning/5' : 'bg-panel border-line-soft'}`}>
-            <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">GEAR</p>
-            <p className={`text-lg font-semibold ${gearFull ? 'text-warning-text' : 'text-white'}`}>
-              {usedSlots}<span className="text-ink-dim text-sm font-normal"> / {maxSlots}</span>
-            </p>
-          </div>
-          <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-            <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">COIN</p>
-            <p className="text-lg font-semibold text-white">{character.coin}<span className="text-ink-dim text-sm font-normal"> gp</span></p>
-          </div>
-          <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-            <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">TORCHES</p>
-            <p className="text-lg font-semibold text-white">{torchCount}</p>
-          </div>
-          <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-            <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">RATIONS</p>
-            <p className="text-lg font-semibold text-white">{rationCount}</p>
-          </div>
-        </div>
+      {activeTab === 'gear' && (() => {
+        // Sort/filter operate only on real, already-loaded columns (name,
+        // slots, quantity) -- no invented categorization. Filter narrows
+        // Carried gear by name; Sort cycles as-added / A-to-Z / most slots.
+        let visibleCarried = carriedGear
+        const q = filterQuery.trim().toLowerCase()
+        if (q) visibleCarried = visibleCarried.filter((item) => item.name.toLowerCase().includes(q))
+        if (sortMode === 'az') {
+          visibleCarried = [...visibleCarried].sort((a, b) => a.name.localeCompare(b.name))
+        } else if (sortMode === 'slots') {
+          visibleCarried = [...visibleCarried].sort((a, b) => b.slots * b.quantity - a.slots * a.quantity)
+        }
+        const sortLabel = sortMode === 'az' ? 'Sort: A to Z' : sortMode === 'slots' ? 'Sort: most slots' : 'Sort: as added'
+        const cycleSort = () => setSortMode((m) => (m === 'default' ? 'az' : m === 'az' ? 'slots' : 'default'))
 
-        {canEdit && (
-          <div className="flex gap-1.5">
-            <input
-              value={gearDraft}
-              onChange={(e) => setGearDraft(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addGear()}
-              placeholder="Item name"
-              className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
-            />
-            <Button icon={Plus} onClick={addGear} className="shrink-0">Add</Button>
+        return (
+        <div className="flex flex-col gap-3 mb-4">
+          {/* Stat-card row matches the artifact's five-card header layout
+              exactly, including a Party storage slot. Gear/Coin read
+              straight off the character; Torches/Rations are derived from
+              real carried gear (see torchCount/rationCount above) -- no
+              invented resource type. Party storage is genuinely not built:
+              checked every migration, there's no party_storage table, so
+              rather than show a fabricated slot count, the card is present
+              (matching the artifact's shape) but honestly says it isn't set
+              up yet -- same treatment as the Treasure/Party sidebar below. */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+            <div className={`rounded-lg px-3 py-2 border ${gearFull ? 'border-warning/60 bg-warning/5' : 'bg-panel border-line-soft'}`}>
+              <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">GEAR</p>
+              <p className={`text-lg font-semibold ${gearFull ? 'text-warning-text' : 'text-white'}`}>
+                {usedSlots}<span className="text-ink-dim text-sm font-normal"> / {maxSlots}</span>
+              </p>
+              {gearFull && (
+                <div className="mt-1.5 h-1 rounded-full bg-warning/20 overflow-hidden">
+                  <div className="h-full w-full bg-warning rounded-full" />
+                </div>
+              )}
+            </div>
+            <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
+              <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">COIN</p>
+              <p className="text-lg font-semibold text-white">{character.coin}<span className="text-ink-dim text-sm font-normal"> gp</span></p>
+            </div>
+            <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
+              <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">TORCHES</p>
+              <p className="text-lg font-semibold text-white">{torchCount}</p>
+            </div>
+            <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
+              <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">RATIONS</p>
+              <p className="text-lg font-semibold text-white">{rationCount}</p>
+            </div>
+            <div className="bg-panel border border-dashed border-line-soft rounded-lg px-3 py-2">
+              <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">PARTY STORAGE</p>
+              <p className="text-xs text-ink-faint mt-1.5">Not set up</p>
+            </div>
           </div>
-        )}
 
-        {/* Equipped/Carried use the same Row (icon chip + label + right-
-            aligned content) and Badge (pill tag) components GameTable's
-            Quick actions/Party rows already use -- same building blocks as
-            the base page, not a second, slightly-different set of card/row
-            styles invented just for this tab. */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <Card
-            title="Equipped"
-            titleRight={
-              <span className="text-[10px] text-positive-text flex items-center gap-1">
-                <Check size={11} /> Equipped items free
-              </span>
-            }
-          >
-            {equippedGear.length === 0 && <p className="text-xs text-ink-faint">Nothing equipped.</p>}
-            <div className="flex flex-col gap-1.5">
-              {equippedGear.map((item) => {
-                // Icon and tag both reflect only real columns -- base_ac/
-                // is_shield/dex_applies (from set_character_gear_equipped's
-                // own AC math). There's no damage-die/property/weapon-type
-                // field on character_gear, so anything that isn't
-                // identifiably armor or a shield gets the same generic
-                // Package icon and an "Equipped" tag rather than a guessed
-                // icon or a made-up combat stat -- matches GameTable's own
-                // Quick Actions rail, which uses one generic icon for every
-                // equipped item for the same reason.
-                const isDefense = item.is_shield || item.base_ac != null
-                const tag = item.is_shield
-                  ? '+2 AC'
-                  : item.base_ac != null
-                    ? `AC ${item.base_ac}${item.dex_applies ? ' + dex' : ''}`
-                    : 'Equipped'
-                return (
-                  <Row
-                    key={item.id}
-                    icon={isDefense ? Shield : Package}
-                    label={item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name}
-                    right={
-                      <div className="flex items-center gap-2">
-                        <Badge tone="blue">{tag}</Badge>
-                        {canEdit && (
-                          <>
-                            <button onClick={() => toggleEquipped(item)} className="text-[11px] text-ink-faint hover:text-ink-dim">
-                              Unequip
-                            </button>
-                            <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text">
-                              <Trash2 size={13} />
-                            </button>
-                          </>
-                        )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="lg:col-span-2 flex flex-col gap-3">
+              {/* Equipped renders as a tile grid (icon chip, name, tag row)
+                  matching the artifact's card layout, instead of the plain
+                  Row list used before. Tags reflect only real columns --
+                  base_ac/is_shield/dex_applies. There's still no damage-die
+                  /property/weapon-type field on character_gear, so weapon
+                  combat tags (the artifact's "1d8 Versatile") are left off
+                  rather than guessed -- same call as the Quick Actions rail
+                  on GameTable and the icon reasoning from PR #66/#72/#74. */}
+              <Card
+                title="Equipped"
+                titleRight={
+                  <span className="text-[10px] text-positive-text flex items-center gap-1">
+                    <Check size={11} /> Equipped items free
+                  </span>
+                }
+              >
+                {equippedGear.length === 0 && <p className="text-xs text-ink-faint">Nothing equipped.</p>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {equippedGear.map((item) => {
+                    const isDefense = item.is_shield || item.base_ac != null
+                    const tag = item.is_shield
+                      ? '+2 AC'
+                      : item.base_ac != null
+                        ? `AC ${item.base_ac}${item.dex_applies ? ' + dex' : ''}`
+                        : null
+                    return (
+                      <div key={item.id} className="bg-panel2/40 border border-line-soft rounded-lg p-2.5">
+                        <div className="flex items-start gap-2">
+                          <span className="w-7 h-7 rounded-md bg-panel2 flex items-center justify-center shrink-0">
+                            {isDefense ? <Shield size={13} className="text-ink-dim" /> : <Package size={13} className="text-ink-dim" />}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-xs text-ink font-medium truncate">
+                              {item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name}
+                            </p>
+                            <p className="text-[10px] text-ink-dim">Equipped</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                          {tag && <Badge tone="blue">{tag}</Badge>}
+                          {canEdit && (
+                            <>
+                              <button onClick={() => toggleEquipped(item)} className="text-[11px] text-ink-faint hover:text-ink-dim">
+                                Unequip
+                              </button>
+                              <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text ml-auto">
+                                <Trash2 size={12} />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    }
-                  />
-                )
-              })}
-            </div>
-          </Card>
+                    )
+                  })}
+                </div>
+              </Card>
 
-          <Card title="Carried gear" titleRight={<Badge tone="neutral">{maxSlots} slots</Badge>}>
-            <div className="flex items-center gap-2 mb-3">
-              <ProgressBar
-                mode="segmented"
-                segments={Math.max(maxSlots, usedSlots, 1)}
-                filled={usedSlots}
-                tone={usedSlots > maxSlots ? 'red' : 'amber'}
-                className="flex-1"
+              <Card title="Carried gear" titleRight={<Badge tone="neutral">{maxSlots} slots</Badge>}>
+                <div className="flex items-center gap-2 mb-3">
+                  <ProgressBar
+                    mode="segmented"
+                    segments={Math.max(maxSlots, usedSlots, 1)}
+                    filled={usedSlots}
+                    tone={usedSlots > maxSlots ? 'red' : 'amber'}
+                    className="flex-1"
+                  />
+                  <span className={`text-[10px] shrink-0 ${gearFull ? 'text-warning-text' : 'text-ink-faint'}`}>
+                    {usedSlots} / {maxSlots}
+                  </span>
+                </div>
+                {carriedGear.length === 0 && <p className="text-xs text-ink-faint">No carried gear.</p>}
+                {carriedGear.length > 0 && visibleCarried.length === 0 && (
+                  <p className="text-xs text-ink-faint">No items match &ldquo;{filterQuery.trim()}&rdquo;.</p>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {visibleCarried.map((item) => (
+                    <Row
+                      key={item.id}
+                      icon={Package}
+                      label={item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name}
+                      right={
+                        <div className="flex items-center gap-1.5">
+                          {/* notes is a real, existing character_gear column
+                              -- surfacing it as a tag (e.g. a GM-set "Cult
+                              marker") is honest, unlike a fabricated item
+                              category. Nothing currently writes it from the
+                              UI, so it's empty until that's added. */}
+                          {item.notes && <Badge tone="purple">{item.notes}</Badge>}
+                          <span className="text-[10px] text-ink-faint whitespace-nowrap">
+                            {item.slots * item.quantity} slot{item.slots * item.quantity === 1 ? '' : 's'}
+                          </span>
+                          {canEdit && (
+                            <>
+                              <button onClick={() => toggleEquipped(item)} className="text-[11px] text-ink-faint hover:text-ink-dim whitespace-nowrap">
+                                Equip
+                              </button>
+                              <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text">
+                                <Trash2 size={13} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      }
+                    />
+                  ))}
+                </div>
+              </Card>
+            </div>
+
+            {/* Treasure found and Party inventory match the artifact's
+                right-sidebar shape, but there's no campaign_treasure
+                hand-off/decision workflow and no party_storage table behind
+                either one -- checked all migrations. These are honest "not
+                set up" states (same empty-state discipline as the Rules
+                Library's distinct empty states), not filled-in mock data. */}
+            <div className="flex flex-col gap-3">
+              <Card title="Treasure found">
+                <div className="flex items-start gap-2.5">
+                  <span className="w-8 h-8 rounded-md bg-panel2 flex items-center justify-center shrink-0">
+                    <Gem size={14} className="text-ink-faint" />
+                  </span>
+                  <p className="text-xs text-ink-faint">
+                    Nothing is waiting on a decision right now. This card will show pending treasure finds here once the hand-off workflow is built.
+                  </p>
+                </div>
+              </Card>
+
+              <Card title="Party inventory">
+                <div className="flex items-start gap-2.5">
+                  <span className="w-8 h-8 rounded-md bg-panel2 flex items-center justify-center shrink-0">
+                    <Users size={14} className="text-ink-faint" />
+                  </span>
+                  <p className="text-xs text-ink-faint">
+                    Shared party storage isn't set up for this campaign yet -- gear stays on each character for now.
+                  </p>
+                </div>
+              </Card>
+            </div>
+          </div>
+
+          {canEdit && addingGear && (
+            <div className="flex gap-1.5">
+              <input
+                value={gearDraft}
+                onChange={(e) => setGearDraft(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (addGear(), setAddingGear(false))}
+                placeholder="Item name"
+                autoFocus
+                className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
               />
-              <span className={`text-[10px] shrink-0 ${gearFull ? 'text-warning-text' : 'text-ink-faint'}`}>
-                {usedSlots} / {maxSlots}
-              </span>
+              <Button icon={Plus} onClick={() => { addGear(); setAddingGear(false) }} className="shrink-0">
+                Add
+              </Button>
             </div>
-            {carriedGear.length === 0 && <p className="text-xs text-ink-faint">No carried gear.</p>}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-              {carriedGear.map((item) => (
-                <Row
-                  key={item.id}
-                  icon={Package}
-                  label={item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name}
-                  right={
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-ink-faint whitespace-nowrap">
-                        {item.slots * item.quantity} slot{item.slots * item.quantity === 1 ? '' : 's'}
-                      </span>
-                      {canEdit && (
-                        <>
-                          <button onClick={() => toggleEquipped(item)} className="text-[11px] text-ink-faint hover:text-ink-dim whitespace-nowrap">
-                            Equip
-                          </button>
-                          <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text">
-                            <Trash2 size={13} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  }
-                />
-              ))}
-            </div>
-          </Card>
+          )}
+
+          {/* Footer bar mirrors the artifact's bottom action row. Sort and
+              Filter are real, working operations over already-loaded data
+              (see visibleCarried above) -- not decorative buttons. */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-soft pt-3">
+            <p className="text-[11px] text-ink-faint flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-positive inline-block" />
+              Changes save automatically
+            </p>
+            {canEdit && (
+              <div className="flex items-center gap-1.5">
+                <Button variant="outline" icon={ArrowUpDown} tooltip={sortLabel} onClick={cycleSort}>
+                  Sort
+                </Button>
+                {filterOpen ? (
+                  <div className="flex items-center gap-1.5 bg-bg border border-line rounded-md pl-2 pr-1 h-8">
+                    <Search size={12} className="text-ink-faint shrink-0" />
+                    <input
+                      value={filterQuery}
+                      onChange={(e) => setFilterQuery(e.target.value)}
+                      placeholder="Filter carried gear"
+                      autoFocus
+                      className="text-xs bg-transparent text-ink w-28 focus:outline-none"
+                    />
+                    <button
+                      onClick={() => { setFilterOpen(false); setFilterQuery('') }}
+                      className="text-ink-faint hover:text-ink-dim text-xs px-1"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                ) : (
+                  <Button variant="outline" icon={Filter} onClick={() => setFilterOpen(true)}>
+                    Filter
+                  </Button>
+                )}
+                <Button icon={Plus} onClick={() => setAddingGear((v) => !v)}>
+                  Add item
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-      )}
+        )
+      })()}
 
       {activeTab === 'abilities' && (
       <div className="max-w-2xl mx-auto">
