@@ -14,11 +14,6 @@ import { useCampaignSession, useProfileDisplayName } from '../lib/useCampaignSes
 import { gearSlotCapacity, occupiedGearSlots } from '../game/rules/character.js'
 
 const dice = [20, 12, 10, 8, 6, 4]
-const VOTE_POLL_KEY = 'where-next'
-const VOTE_OPTIONS = [
-{ key: 'vault', label: 'Vault' },
-{ key: 'entry', label: 'Back to entry' },
-]
 // Auto-respond debounce: after any non-AI message lands in an AI-GM
 // campaign's scene log, wait this long with no further messages before
 // automatically asking the AI to take its turn. Batches near-simultaneous
@@ -56,8 +51,8 @@ return source.remaining_minutes
 
 // Everything here is real Supabase data now, synced live for the whole
 // table: the scene log, dice rolls (app-rolled and self-reported, tagged
-// per the honor-system design), the map, turn order, the "where to next?"
-// vote, and the party's HP/AC cards.
+// per the honor-system design), the map, turn order, and the party's
+// HP/AC cards.
 //
 // App dice rolling goes through the authoritative roll_campaign_dice
 // database command -- real notation (1d8+3), advantage/disadvantage on a
@@ -143,10 +138,9 @@ askAiGmRef.current?.()
 }
 
 // Shared with GmDashboard.jsx -- see useCampaignSession.js for exactly
-// which tables this covers and why (votes, campaign_threads,
-// encounter_monsters, and gm_notes stay local below instead, since
-// GameTable and GmDashboard read/write those very differently from each
-// other).
+// which tables this covers and why (campaign_threads, encounter_monsters,
+// and gm_notes stay local below instead, since GameTable and GmDashboard
+// read/write those very differently from each other).
 const {
 log, setLog,
 mapInfo,
@@ -155,7 +149,6 @@ party,
 clocks,
 lightSources,
 } = useCampaignSession(campaignId, { channelKey: 'game-table', onSceneLogInsert: handleSceneLogInsert })
-const [votes, setVotes] = useState([])
 const gmType = mapInfo?.gm_type || null // 'human' | 'ai'
 const [aiTurnPending, setAiTurnPending] = useState(false)
 const [aiTurnError, setAiTurnError] = useState(null)
@@ -211,25 +204,14 @@ supabase
 .then(({ data }) => setIsGm(data?.role === 'gm'))
 }, [user, campaignId])
 
-const reloadVotes = (campaignIdArg) => {
-supabase
-.from('votes')
-.select('option_key, voter_user_id')
-.eq('campaign_id', campaignIdArg)
-.eq('poll_key', VOTE_POLL_KEY)
-.then(({ data }) => setVotes(data || []))
-}
-
-// Everything useCampaignSession doesn't cover: votes, the open-thread
-// objective, the read-only monster overlay, and revealed GM notes. Its
-// own realtime channel, separate from the shared one above -- two
-// channels per screen instead of one, but each one's subscription list
-// matches exactly what this screen needs.
+// Everything useCampaignSession doesn't cover: the open-thread objective,
+// the read-only monster overlay, and revealed GM notes. Its own realtime
+// channel, separate from the shared one above -- two channels per screen
+// instead of one, but each one's subscription list matches exactly what
+// this screen needs.
 useEffect(() => {
 if (!campaignId) return
 let cancelled = false
-
-reloadVotes(campaignId)
 
 supabase
 .from('campaign_threads')
@@ -255,11 +237,6 @@ supabase
 
 const channel = supabase
 .channel(`game-table-extra-${campaignId}`)
-.on(
-'postgres_changes',
-{ event: '*', schema: 'public', table: 'votes', filter: `campaign_id=eq.${campaignId}` },
-() => reloadVotes(campaignId)
-)
 .on(
 'postgres_changes',
 { event: '*', schema: 'public', table: 'campaign_threads', filter: `campaign_id=eq.${campaignId}` },
@@ -515,29 +492,6 @@ await postToLog({ type: 'chat', text })
 }
 askAiGm()
 }
-
-const vote = async (optionKey) => {
-if (!campaignId || !user) return
-const option = VOTE_OPTIONS.find((o) => o.key === optionKey)
-await supabase
-.from('votes')
-.upsert(
-{
-campaign_id: campaignId,
-poll_key: VOTE_POLL_KEY,
-option_key: optionKey,
-option_label: option.label,
-voter_user_id: user.id,
-},
-{ onConflict: 'campaign_id,poll_key,voter_user_id' }
-)
-}
-
-const voteCounts = VOTE_OPTIONS.reduce((acc, o) => {
-acc[o.key] = votes.filter((v) => v.option_key === o.key).length
-return acc
-}, {})
-const myVote = votes.find((v) => v.voter_user_id === user?.id)?.option_key
 
 // Status rail derived state. Objective stands in for the oldest open
 // thread until there's a real "current objective" concept in the schema.
@@ -954,23 +908,6 @@ litCharacterId={litCharacterId}
 </div>
 </div>
 )}
-</div>
-<div className="flex items-center justify-between mt-3 pt-2.5 border-t border-line-soft">
-<span className="text-xs text-ink-dim">Where to next?</span>
-<div className="flex gap-1.5">
-{VOTE_OPTIONS.map((o) => (
-<button
-key={o.key}
-onClick={() => vote(o.key)}
-className={`text-xs border rounded-md px-2 py-1 flex items-center gap-1.5 hover:bg-panel2 ${
-myVote === o.key ? 'border-primary text-primary-text' : 'border-line text-ink'
-}`}
->
-{o.label}{' '}
-<span className="text-[10px] px-1.5 rounded-full bg-primary/20 text-primary-text">{voteCounts[o.key]}</span>
-</button>
-))}
-</div>
 </div>
 </div>
 )}
