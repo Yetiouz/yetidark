@@ -49,13 +49,13 @@ export default function SignIn() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-80 bg-neutral-900 border border-neutral-800 rounded-xl p-8">
+      <div className="w-80 bg-panel border border-line-soft rounded-xl p-8">
         <div className="flex flex-col items-center mb-6">
-          <div className="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center mb-2.5">
-            <Swords size={20} className="text-blue-400" />
+          <div className="w-9 h-9 rounded-lg bg-primary-bg flex items-center justify-center mb-2.5">
+            <Swords size={20} className="text-primary-text" />
           </div>
-          <span className="text-white font-medium">Delve</span>
-          <p className="text-xs text-neutral-400 mt-1">Sign in to join a campaign</p>
+          <span className="text-ink font-medium">Delve</span>
+          <p className="text-xs text-ink-dim mt-1">Sign in to join a campaign</p>
         </div>
 
         {!sent ? (
@@ -71,48 +71,48 @@ export default function SignIn() {
             </button>
 
             <div className="flex items-center gap-3 my-5">
-              <div className="h-px flex-1 bg-neutral-800" />
-              <span className="text-[11px] uppercase tracking-wider text-neutral-500">or email</span>
-              <div className="h-px flex-1 bg-neutral-800" />
+              <div className="h-px flex-1 bg-panel2" />
+              <span className="text-[11px] uppercase tracking-wider text-ink-faint">or email</span>
+              <div className="h-px flex-1 bg-panel2" />
             </div>
 
             <form onSubmit={submit}>
-              <label className="text-xs text-neutral-400 block mb-1.5">Email</label>
+              <label className="text-xs text-ink-dim block mb-1.5">Email</label>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@email.com"
-                className="w-full bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white mb-3"
+                className="w-full bg-bg border border-line rounded-md px-3 py-2 text-sm text-ink mb-3"
               />
               <button
                 type="submit"
                 disabled={sending || githubLoading}
-                className="w-full bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white text-sm rounded-md py-2"
+                className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-ink text-sm rounded-md py-2"
               >
                 {sending ? 'Sending...' : 'Send sign-in link'}
               </button>
             </form>
 
             {error && (
-              <div className="mt-3 flex items-start gap-2 text-red-400">
+              <div className="mt-3 flex items-start gap-2 text-danger-text">
                 <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
                 <p className="text-xs">{error}</p>
               </div>
             )}
-            <div className="mt-4 pt-3.5 border-t border-neutral-800 flex items-start gap-2">
-              <MailCheck size={15} className="text-green-500 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-neutral-400">
+            <div className="mt-4 pt-3.5 border-t border-line-soft flex items-start gap-2">
+              <MailCheck size={15} className="text-positive-text mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-ink-dim">
                 No password to remember — we'll email you a link that signs you in instantly.
               </p>
             </div>
           </>
         ) : (
           <div className="text-center">
-            <MailCheck size={28} className="text-green-500 mx-auto mb-3" />
-            <p className="text-sm text-white mb-1.5">Check your email</p>
-            <p className="text-xs text-neutral-400">
+            <MailCheck size={28} className="text-positive-text mx-auto mb-3" />
+            <p className="text-sm text-ink mb-1.5">Check your email</p>
+            <p className="text-xs text-ink-dim">
               We sent a sign-in link to {email}. Click it to come back here signed in.
             </p>
           </div>
