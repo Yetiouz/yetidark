@@ -61,9 +61,14 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
   const litPos = litCharacterId ? positioned.find((p) => p.id === litCharacterId) : null
 
   return (
-    <div>
+    // h-full on this root and the scene box below: percentage heights fall
+    // back to auto against an auto-sized ancestor (mobile, stacked layout),
+    // so the inline aspectRatio still governs there exactly as before; at
+    // md+ the caller's flex layout gives this a definite height to fill
+    // (see GameTable.jsx's map/log 2:1 split), and h-full picks that up.
+    <div className="h-full">
       {mapAccessError && <p className="text-xs text-danger-text mb-2">{mapAccessError}</p>}
-      <div className="relative w-full rounded-lg overflow-hidden bg-bg border border-line-soft" style={{ aspectRatio: '16 / 7' }}>
+      <div className="relative w-full h-full rounded-lg overflow-hidden bg-bg border border-line-soft" style={{ aspectRatio: '16 / 7' }}>
         {mapUrl ? (
           <img src={mapUrl} alt={sceneLabel || 'Scene'} className="absolute inset-0 w-full h-full object-cover opacity-80" />
         ) : (
