@@ -1,6 +1,25 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Plus, FileText, Link as LinkIcon, Trash2, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Plus, FileText, Link as LinkIcon, Trash2, ExternalLink, Search } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import Tabs from './ui/Tabs.jsx'
+
+// The design mockup for this screen (design-handoff-spec Section 4.11)
+// imagines a searchable database of individual rules/spells/talents, with
+// campaign house-rule overrides called out inline next to the official
+// text. That's not what exists: rules_documents is a shelf of whole
+// uploaded files or links, and house rules are one freeform text blob on
+// the campaign (CampaignSettings.jsx), not tied to any specific rule.
+// Building the mockup's real vision would mean transcribing the rulebook
+// and Cursed Scrolls into hundreds of structured, individually-searchable
+// entries -- a copyright problem for paid content, and a much bigger
+// project than this pass. What's built here instead is a real polish of
+// what actually exists: search and category filtering over the documents
+// themselves, not their contents.
+const CATEGORY_TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'file', label: 'Files' },
+  { key: 'link', label: 'Links' },
+]
 
 // Reference material (core rulebook, supplements, adventures) -- distinct
 // from CampaignSettings.jsx's House Rules box, which is the table's own
@@ -22,6 +41,8 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('all')
 
   const [showAdd, setShowAdd] = useState(false)
   const [addKind, setAddKind] = useState('file') // 'file' | 'link'
@@ -162,14 +183,22 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
 
   if (loading) {
     return (
-      <div className="max-w-xl mx-auto p-6">
+      <div className="max-w-2xl mx-auto p-6">
         <p className="text-xs text-ink-faint">Loading rules library…</p>
       </div>
     )
   }
 
+  const filteredDocs = docs.filter((doc) => {
+    if (category !== 'all' && doc.kind !== category) return false
+    const q = query.trim().toLowerCase()
+    if (!q) return true
+    return doc.title.toLowerCase().includes(q) || (doc.description || '').toLowerCase().includes(q)
+  })
+  const isFiltering = category !== 'all' || query.trim().length > 0
+
   return (
-    <div className="max-w-xl mx-auto p-6">
+    <div className="max-w-2xl mx-auto p-6">
       {onBack && (
         <button onClick={onBack} className="text-xs text-ink-dim hover:text-ink flex items-center gap-1 mb-3">
           <ArrowLeft size={13} /> Back
@@ -182,6 +211,21 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
       </p>
 
       {error && <p className="text-xs text-danger-text mb-3">{error}</p>}
+
+      {docs.length > 0 && (
+        <div className="mb-4">
+          <div className="relative mb-2.5">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search this library by title or description"
+              className="w-full text-xs bg-bg border border-line rounded-md pl-8 pr-3 py-2 text-ink"
+            />
+          </div>
+          <Tabs tabs={CATEGORY_TABS} activeKey={category} onChange={setCategory} />
+        </div>
+      )}
 
       {isGm && (
         <div className="mb-4">
@@ -276,7 +320,16 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
             {isGm ? 'No reference material yet -- add one above.' : 'The GM hasn\'t added any reference material yet.'}
           </p>
         )}
-        {docs.map((doc) => (
+        {docs.length > 0 && filteredDocs.length === 0 && (
+          <p className="text-xs text-ink-faint">
+            {isFiltering ? (
+              query.trim() ? <>No matches for &ldquo;{query.trim()}&rdquo;.</> : 'No results in this category.'
+            ) : (
+              'No reference material yet.'
+            )}
+          </p>
+        )}
+        {filteredDocs.map((doc) => (
           <div
             key={doc.id}
             className="flex items-center justify-between gap-2 bg-panel border border-line-soft rounded-lg p-3"
