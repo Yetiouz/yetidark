@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, Bot, Loader2, Flame, HelpCircle, Swords, Backpack, Sparkles, Package, Mic, ZoomIn, ZoomOut, Sun, ShieldCheck } from 'lucide-react'
 import ZoneScene from './ZoneScene.jsx'
+import Row from './ui/Row.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { flatDieNotation } from '../lib/dice.js'
 import { useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
@@ -1024,29 +1025,17 @@ sceneTab === t.key ? 'border-primary text-primary-text bg-primary/10' : 'border-
 <p className="text-[11px] text-ink-dim">No equipped gear yet.</p>
 )}
 {myGear.filter((g) => g.equipped).map((g) => (
-<button
-key={g.id}
-onClick={() => readyGear(g)}
-className="flex items-center gap-1.5 text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 text-left"
->
-<Swords size={12} className="text-ink-dim shrink-0" /> <span className="truncate">{g.name}</span>
-</button>
+<Row key={g.id} icon={Swords} label={g.name} onClick={() => readyGear(g)} />
 ))}
 {onOpenCharacterSheet && myCharacter && (
-<button
-onClick={() => onOpenCharacterSheet(myCharacter.id)}
-className="flex items-center gap-1.5 text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 text-left"
->
-<Backpack size={12} className="text-ink-dim shrink-0" /> Inspect character
-</button>
+<Row icon={Backpack} label="Inspect character" onClick={() => onOpenCharacterSheet(myCharacter.id)} />
 )}
-<button
+<Row
+icon={Package}
+label="Use item"
 disabled
 title="Item consumption isn't wired up yet -- placeholder slot"
-className="flex items-center gap-1.5 text-xs border border-line-soft rounded-md px-2 py-1.5 text-ink-faint text-left cursor-not-allowed"
->
-<Package size={12} className="text-ink-faint shrink-0" /> Use item
-</button>
+/>
 </div>
 </div>
 
