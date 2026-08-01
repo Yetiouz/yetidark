@@ -163,7 +163,7 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
   if (loading) {
     return (
       <div className="max-w-xl mx-auto p-6">
-        <p className="text-xs text-neutral-500">Loading rules library…</p>
+        <p className="text-xs text-ink-faint">Loading rules library…</p>
       </div>
     )
   }
@@ -171,17 +171,17 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
   return (
     <div className="max-w-xl mx-auto p-6">
       {onBack && (
-        <button onClick={onBack} className="text-xs text-neutral-400 hover:text-neutral-200 flex items-center gap-1 mb-3">
+        <button onClick={onBack} className="text-xs text-ink-dim hover:text-ink flex items-center gap-1 mb-3">
           <ArrowLeft size={13} /> Back
         </button>
       )}
 
-      <h1 className="text-white text-lg font-medium mb-1">{campaignName}</h1>
-      <p className="text-xs text-neutral-400 mb-4">
+      <h1 className="text-ink text-lg font-medium mb-1">{campaignName}</h1>
+      <p className="text-xs text-ink-dim mb-4">
         Rules library &middot; {system} &middot; shared across this GM's {system} campaigns
       </p>
 
-      {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+      {error && <p className="text-xs text-danger-text mb-3">{error}</p>}
 
       {isGm && (
         <div className="mb-4">
@@ -190,18 +190,18 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
               setShowAdd((s) => !s)
               resetAddForm()
             }}
-            className="text-xs border border-neutral-700 rounded-md px-2.5 py-1.5 flex items-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
+            className="text-xs border border-line rounded-md px-2.5 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2"
           >
             <Plus size={13} /> Add reference
           </button>
 
           {showAdd && (
-            <div className="mt-2.5 bg-neutral-900 border border-neutral-800 rounded-xl p-3 flex flex-col gap-2.5">
+            <div className="mt-2.5 bg-panel border border-line-soft rounded-xl p-3 flex flex-col gap-2.5">
               <div className="flex gap-2">
                 <button
                   onClick={() => setAddKind('file')}
                   className={`flex-1 text-xs py-1.5 rounded-md border ${
-                    addKind === 'file' ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300'
+                    addKind === 'file' ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim'
                   }`}
                 >
                   Upload file
@@ -209,13 +209,13 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
                 <button
                   onClick={() => setAddKind('link')}
                   className={`flex-1 text-xs py-1.5 rounded-md border ${
-                    addKind === 'link' ? 'bg-neutral-800 border-blue-500 text-white' : 'border-neutral-700 text-neutral-300'
+                    addKind === 'link' ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim'
                   }`}
                 >
                   Add link
                 </button>
               </div>
-              <p className="text-[11px] text-neutral-500">
+              <p className="text-[11px] text-ink-faint">
                 {addKind === 'file'
                   ? 'Only upload things you have the right to share with your table -- free/quickstart material, your own homebrew writeups, etc.'
                   : "For commercial material (core rulebook, paid supplements), link to where players can get their own copy instead of hosting it here."}
@@ -225,13 +225,13 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
                 value={titleDraft}
                 onChange={(e) => setTitleDraft(e.target.value)}
                 placeholder="Title (e.g. Shadowdark Quickstart Set)"
-                className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
+                className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
               />
               <input
                 value={descDraft}
                 onChange={(e) => setDescDraft(e.target.value)}
                 placeholder="Description (optional)"
-                className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
+                className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
               />
 
               {addKind === 'file' ? (
@@ -241,7 +241,7 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
                   accept=".pdf,.png,.jpg,.jpeg,.txt,.md"
                   onChange={(e) => addFileDoc(e.target.files?.[0])}
                   disabled={uploading || !titleDraft.trim()}
-                  className="text-xs text-neutral-300"
+                  className="text-xs text-ink-dim"
                 />
               ) : (
                 <div className="flex gap-2">
@@ -249,12 +249,12 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
                     value={urlDraft}
                     onChange={(e) => setUrlDraft(e.target.value)}
                     placeholder="https://..."
-                    className="flex-1 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-white"
+                    className="flex-1 text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
                   />
                   <button
                     onClick={addLinkDoc}
                     disabled={uploading || !titleDraft.trim() || !urlDraft.trim()}
-                    className="text-xs border border-neutral-700 rounded-md px-3 py-1.5 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+                    className="text-xs border border-line rounded-md px-3 py-1.5 text-ink hover:bg-panel2 disabled:opacity-50"
                   >
                     {uploading ? 'Saving...' : 'Save'}
                   </button>
@@ -262,9 +262,9 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
               )}
 
               {addKind === 'file' && !titleDraft.trim() && (
-                <p className="text-[11px] text-neutral-500">Enter a title above, then choose a file.</p>
+                <p className="text-[11px] text-ink-faint">Enter a title above, then choose a file.</p>
               )}
-              {addError && <p className="text-xs text-red-400">{addError}</p>}
+              {addError && <p className="text-xs text-danger-text">{addError}</p>}
             </div>
           )}
         </div>
@@ -272,36 +272,36 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
 
       <div className="flex flex-col gap-1.5">
         {docs.length === 0 && (
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-ink-faint">
             {isGm ? 'No reference material yet -- add one above.' : 'The GM hasn\'t added any reference material yet.'}
           </p>
         )}
         {docs.map((doc) => (
           <div
             key={doc.id}
-            className="flex items-center justify-between gap-2 bg-neutral-900 border border-neutral-800 rounded-lg p-3"
+            className="flex items-center justify-between gap-2 bg-panel border border-line-soft rounded-lg p-3"
           >
             <button onClick={() => openDoc(doc)} className="flex items-start gap-2.5 text-left flex-1 min-w-0">
-              <div className="w-7 h-7 rounded-md bg-neutral-800 flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-7 h-7 rounded-md bg-panel2 flex items-center justify-center shrink-0 mt-0.5">
                 {doc.kind === 'file' ? (
-                  <FileText size={14} className="text-neutral-400" />
+                  <FileText size={14} className="text-ink-dim" />
                 ) : (
-                  <LinkIcon size={14} className="text-neutral-400" />
+                  <LinkIcon size={14} className="text-ink-dim" />
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-sm text-white truncate flex items-center gap-1.5">
+                <p className="text-sm text-ink truncate flex items-center gap-1.5">
                   {doc.title}
-                  {doc.kind === 'link' && <ExternalLink size={11} className="text-neutral-500 shrink-0" />}
+                  {doc.kind === 'link' && <ExternalLink size={11} className="text-ink-faint shrink-0" />}
                 </p>
-                {doc.description && <p className="text-xs text-neutral-500 truncate">{doc.description}</p>}
+                {doc.description && <p className="text-xs text-ink-faint truncate">{doc.description}</p>}
               </div>
             </button>
             {isGm && (
               <button
                 onClick={() => deleteDoc(doc)}
                 title="Remove"
-                className="text-neutral-500 hover:text-red-400 shrink-0 p-1"
+                className="text-ink-faint hover:text-danger-text shrink-0 p-1"
               >
                 <Trash2 size={13} />
               </button>
