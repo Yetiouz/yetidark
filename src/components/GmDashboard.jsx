@@ -90,8 +90,8 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     mapInfo, setMapInfo,
     turnOrder, setTurnOrder,
     party, setParty,
-    clocks, setClocks,
-    lightSources, setLightSources,
+    clocks,
+    lightSources,
   } = useCampaignSession(campaignId, { channelKey: 'gm-dashboard' })
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)

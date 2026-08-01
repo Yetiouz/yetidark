@@ -151,11 +151,11 @@ askAiGmRef.current?.()
 // other).
 const {
 log, setLog,
-mapInfo, setMapInfo,
-turnOrder, setTurnOrder,
-party, setParty,
-clocks, setClocks,
-lightSources, setLightSources,
+mapInfo,
+turnOrder,
+party,
+clocks,
+lightSources,
 } = useCampaignSession(campaignId, { channelKey: 'game-table', onSceneLogInsert: handleSceneLogInsert })
 const [votes, setVotes] = useState([])
 const gmType = mapInfo?.gm_type || null // 'human' | 'ai'
