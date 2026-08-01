@@ -74,6 +74,24 @@ return source.remaining_minutes
 // at. The book icon is real: it's the same "Ask a rule" -> Rules Library
 // link the Player Table composer already has (onOpenLibrary), just not
 // previously wired up here.
+//
+// Brought into closer parity with GameTable.jsx (the player page) per
+// direct user feedback: the body wrapper's max-w-6xl/px-6 shell now matches
+// exactly (a misplaced px-6 on the outer scroll container instead of the
+// inner max-width box was pushing this screen's content ~24px out of
+// alignment with its own header/status strip above -- same bug class as the
+// Character Sheet's width fix). The standalone "Turn order" badge list is
+// gone; whose-turn-is-it is now shown the same way the player page shows
+// it -- a highlighted border + "Acting" badge on the acting party member,
+// with a small banner for a monster's turn -- both merged into the Party
+// card. Clocks moved off their own right-rail card and onto the map image
+// itself as an overlay, matching the player page's map exactly (the GM's
+// map still carries its own extra layers on top -- Secrets/Light/Fog
+// placeholders, map upload, zone assignment, Preview player view -- that's
+// the "different view levels" the GM needs that the player doesn't). Card
+// placement was also brought as close to the player page's rail layout as
+// the content allows: Party now sits in the right rail, last, the same
+// position it holds on the player page, instead of the left rail.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -453,6 +471,16 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
   const selectedMonster = selectedEntity?.type === 'monster' ? encounter.find((m) => m.id === selectedEntity.id) : null
 
+  // Turn indicator merged into the Party card below, matching GameTable.jsx's
+  // player-page treatment (an acting party member gets a highlighted border +
+  // "Acting" badge; when a monster is acting there's no party row to
+  // highlight, so that gets its own small banner in the card header instead).
+  // Per direct user feedback, the standalone "Turn order" list this replaced
+  // doesn't come back -- whose-turn-is-it now lives in exactly one place,
+  // same as the player page.
+  const actingEntry = turnOrder.find((t) => t.status === 'acting') || null
+  const actingIsMonster = actingEntry ? !party.some((p) => p.id === actingEntry.id) : false
+
   useEffect(() => {
     if (sceneLogRef.current) sceneLogRef.current.scrollTop = sceneLogRef.current.scrollHeight
   }, [log.length])
@@ -522,8 +550,8 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6">
-        <div className="max-w-6xl mx-auto w-full pb-4">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-6xl mx-auto w-full px-6 pb-4">
           <div className="flex items-center gap-1.5 mb-3">
             {GM_TABS.map((t) => (
               <button
@@ -539,53 +567,12 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start">
-            {/* LEFT RAIL: party glance, scene controls, quick tables */}
+            {/* LEFT RAIL: scene controls, quick tables -- party status now
+                lives in the right rail, in the same position as
+                GameTable.jsx's player-page Party card, per direct user
+                feedback that card placement should match the player page
+                as closely as possible. */}
             <div className="flex flex-col gap-3">
-              <Card title="Party">
-                {party.length === 0 && <p className="text-[11px] text-ink-dim">No characters yet.</p>}
-                <div className="flex flex-col gap-1.5">
-                  {party.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
-                      disabled={!onOpenCharacterSheet}
-                      className="w-full text-left border border-line rounded-lg px-2.5 py-2 hover:bg-panel2 disabled:cursor-default disabled:hover:bg-transparent"
-                    >
-                      <div className="flex items-center justify-between gap-1.5 mb-1">
-                        <span className="flex items-center gap-1.5 min-w-0">
-                          {p.avatar_url ? (
-                            <img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-line shrink-0" />
-                          ) : (
-                            <div
-                              className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-medium text-white shrink-0"
-                              style={{ backgroundColor: p.color || '#3f3f46' }}
-                            >
-                              {p.name?.[0]?.toUpperCase() || '?'}
-                            </div>
-                          )}
-                          <span className="text-xs font-medium text-white truncate">{p.name}</span>
-                        </span>
-                        <span className="flex items-center gap-1.5 shrink-0">
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${p.status === 'dying' ? 'bg-danger' : 'bg-positive'}`}
-                            title={p.status === 'dying' ? 'Dying' : 'Alive'}
-                          />
-                          <Eye size={11} className="text-ink-faint" />
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-ink-dim">
-                        {p.status === 'dying' ? (
-                          <span className="text-danger-text">Dying ({p.death_timer ?? '?'})</span>
-                        ) : (
-                          `${p.hp}/${p.max_hp} HP`
-                        )}
-                        {' '}&middot; AC {p.ac}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </Card>
-
               <Card title="Scene controls">
                 <div className="flex flex-col gap-1.5">
                   <Row icon={SkipForward} label="Advance round" onClick={advanceTurn} disabled={turnOrder.length === 0} />
@@ -617,16 +604,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   <Row icon={Gem} label="Treasure" onClick={() => rollQuickTable('Treasure roll', '1d100')} disabled={quickRolling} />
                 </div>
               </Card>
-
-              {turnOrder.length > 0 && (
-                <Card title="Turn order">
-                  <div className="flex flex-wrap gap-1.5">
-                    {turnOrder.map((t, i) => (
-                      <Badge key={t.id || i} tone={t.status === 'acting' ? 'blue' : 'neutral'}>{t.name}</Badge>
-                    ))}
-                  </div>
-                </Card>
-              )}
             </div>
 
             {/* CENTER: scene / map / encounter tabs + log */}
@@ -658,15 +635,38 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   {(uploadError || mapAccessError) && (
                     <p className="text-xs text-danger-text mb-2">{uploadError || mapAccessError}</p>
                   )}
-                  <ZoneScene
-                    mapUrl={mapUrl}
-                    mapAccessError={mapAccessError}
-                    party={party}
-                    monsters={encounter}
-                    litCharacterId={lightSources.find((s) => s.lit)?.character_id || null}
-                    onSelectToken={(id, type, name) => selectEntity(type, id, name)}
-                    selectedTokenId={selectedEntity?.id || null}
-                  />
+                  {/* Clocks overlaid on the scene image itself, matching
+                      GameTable.jsx's player-page treatment, instead of a
+                      separate "Clocks & threats" list card -- only shown on
+                      the Map tab, same as the player page only ever shows
+                      the map with clocks on it. */}
+                  <div className="relative">
+                    <ZoneScene
+                      mapUrl={mapUrl}
+                      mapAccessError={mapAccessError}
+                      party={party}
+                      monsters={encounter}
+                      litCharacterId={lightSources.find((s) => s.lit)?.character_id || null}
+                      onSelectToken={(id, type, name) => selectEntity(type, id, name)}
+                      selectedTokenId={selectedEntity?.id || null}
+                    />
+                    {activeClocks.length > 0 && (
+                      <div className="absolute top-2 right-2 max-w-[180px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-2.5">
+                        <p className="text-[10px] text-ink-dim mb-1.5 uppercase tracking-wide">Clocks</p>
+                        <div className="flex flex-col gap-1.5">
+                          {activeClocks.map((c) => (
+                            <div key={c.id}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-ink' : 'text-ink-dim'}`}>{c.name}</span>
+                                <span className="text-[10px] text-ink-dim shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
+                              </div>
+                              <ProgressBar mode="segmented" segments={c.segments_total} filled={c.segments_filled} tone="amber" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <p className="text-[11px] text-ink-dim mt-2 mb-2">
                     Set each character or monster's zone -- Close, Near, or Far from the party.
                   </p>
@@ -777,7 +777,9 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               </Card>
             </div>
 
-            {/* RIGHT RAIL: selected entity / trap placeholder / encounter / clocks / GM notes */}
+            {/* RIGHT RAIL: selected entity / trap placeholder / encounter /
+                GM notes / party -- Party sits last, same position it has in
+                GameTable.jsx's right rail. */}
             <div className="flex flex-col gap-3">
               <Card
                 title="Selected"
@@ -854,22 +856,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 </Card>
               )}
 
-              {activeClocks.length > 0 && (
-                <Card title="Clocks & threats">
-                  <div className="flex flex-col gap-2">
-                    {activeClocks.map((c) => (
-                      <div key={c.id}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-ink' : 'text-ink-dim'}`}>{c.name}</span>
-                          <span className="text-[10px] text-ink-dim shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
-                        </div>
-                        <ProgressBar mode="segmented" segments={c.segments_total} filled={c.segments_filled} tone="amber" />
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
               <Card title="GM notes (private, general)">
                 <div className="flex flex-col gap-1.5">
                   {notes.filter((n) => !n.entity_type).length === 0 && <p className="text-xs text-ink-dim">No general notes yet -- notes on a specific character or monster show in Selected above once you click their token.</p>}
@@ -891,6 +877,66 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     className="flex-1 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
                   />
                   <Button icon={Plus} iconOnly onClick={addNote} title="Add note" />
+                </div>
+              </Card>
+
+              <Card
+                title="Party"
+                titleRight={actingIsMonster && (
+                  <span className="text-[10px] text-primary-text bg-primary/10 border border-primary/30 rounded-full px-2 py-0.5 truncate max-w-[55%]">
+                    {actingEntry.name}&rsquo;s turn
+                  </span>
+                )}
+              >
+                {party.length === 0 && <p className="text-[11px] text-ink-dim">No characters yet.</p>}
+                <div className="flex flex-col gap-1.5">
+                  {party.map((p) => {
+                    const isActing = actingEntry?.id === p.id
+                    return (
+                    <button
+                      key={p.id}
+                      onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
+                      disabled={!onOpenCharacterSheet}
+                      className={`w-full text-left border rounded-lg px-2.5 py-2 hover:bg-panel2 disabled:cursor-default disabled:hover:bg-transparent ${
+                        isActing ? 'border-primary bg-primary/10' : 'border-line'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1.5 mb-1">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          {p.avatar_url ? (
+                            <img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-line shrink-0" />
+                          ) : (
+                            <div
+                              className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-medium text-white shrink-0"
+                              style={{ backgroundColor: p.color || '#3f3f46' }}
+                            >
+                              {p.name?.[0]?.toUpperCase() || '?'}
+                            </div>
+                          )}
+                          <span className="text-xs font-medium text-white truncate">{p.name}</span>
+                          {isActing && (
+                            <span className="text-[9px] uppercase tracking-wide text-primary-text bg-primary/20 rounded-full px-1.5 py-0.5 shrink-0">Acting</span>
+                          )}
+                        </span>
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${p.status === 'dying' ? 'bg-danger' : 'bg-positive'}`}
+                            title={p.status === 'dying' ? 'Dying' : 'Alive'}
+                          />
+                          <Eye size={11} className="text-ink-faint" />
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-ink-dim">
+                        {p.status === 'dying' ? (
+                          <span className="text-danger-text">Dying ({p.death_timer ?? '?'})</span>
+                        ) : (
+                          `${p.hp}/${p.max_hp} HP`
+                        )}
+                        {' '}&middot; AC {p.ac}
+                      </p>
+                    </button>
+                    )
+                  })}
                 </div>
               </Card>
             </div>
