@@ -106,12 +106,16 @@ return source.remaining_minutes
 // row of icon-only buttons living in the header itself, next to the
 // Torch/Mode/Danger/etc status cards, same icon-only convention the Map
 // card's Preview/Secrets/Light/Fog toggles already use. The left rail now
-// holds Quick tables only. A compact "active encounter" status bar (whose
-// turn it is, live monster count) now sits to the right of those icons in
-// the same row, per direct follow-up feedback -- it's a glance-able
-// summary only, not a replacement for the full Active encounter card
-// (monster list, HP controls, add-monster input), which stays in the
-// center column below.
+// holds Quick tables only. To its right (ml-auto, same row) sits a shrunk
+// but still-functional mini version of the Active encounter card -- an
+// inline Add-monster input plus a name/HP chip per monster -- per direct
+// follow-up feedback (a first pass shipped as a plain read-only status
+// text, then the user pointed at the real card's actual title/Add
+// button/empty-state copy and asked for that, shrunk, instead). HP +/-
+// and zone controls are left out of this mini version (too much for a
+// shrunk row); the full Active encounter card, with those controls, is
+// untouched in the center column below -- this is an additional quick-
+// add/glance spot, not a replacement for it.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -573,10 +577,15 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
           card, then folded into the Active encounter card), now a
           horizontal icon-button strip sitting in the header next to the
           Torch/Mode/Danger/etc status cards, per direct user feedback. A
-          compact "active encounter" status bar sits to the right of the
-          icons (ml-auto), per direct follow-up feedback -- it's just a
-          glance-able summary (whose turn, monster count), not the full
-          monster-list card, which stays put in the center column below. */}
+          shrunk, still-functional version of the Active encounter card sits
+          to the right of the icons (ml-auto) -- Add input + a condensed
+          name/HP chip per monster -- per direct follow-up feedback (first
+          tried as a plain read-only status bar, then explicitly asked for
+          "that card... shrunk in there" instead). HP +/- and zone controls
+          stay out of this mini version -- too much for a shrunk row -- the
+          full Active encounter card (with those controls) is untouched in
+          the center column below; this is an additional quick-add/glance
+          spot, not a replacement for it. */}
       <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 flex items-center gap-1.5 flex-wrap">
         <Button icon={SkipForward} iconOnly onClick={advanceTurn} disabled={turnOrder.length === 0} title="Advance round" />
         <Button
@@ -597,19 +606,32 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             title="Reveal hidden monster"
           />
         )}
-        <div className="ml-auto flex items-center gap-1.5 text-xs bg-panel border border-line-soft rounded-lg px-3 py-1.5">
-          <Swords size={12} className={turnOrder.length > 0 ? 'text-danger-text' : 'text-ink-faint'} />
-          {turnOrder.length > 0 ? (
-            <>
-              <span className="text-ink font-medium">{actingEntry ? `${actingEntry.name}'s turn` : 'In combat'}</span>
-              {encounter.length > 0 && (
-                <span className="text-ink-dim">&middot; {encounter.length} monster{encounter.length === 1 ? '' : 's'}</span>
-              )}
-            </>
-          ) : encounter.length > 0 ? (
-            <span className="text-ink-dim">{encounter.length} monster{encounter.length === 1 ? '' : 's'} ready</span>
+        <div className="ml-auto flex items-center gap-1.5 flex-wrap max-w-full text-xs bg-panel border border-line-soft rounded-lg px-2.5 py-1.5">
+          <span className="text-[10px] uppercase tracking-wide text-ink-dim shrink-0">Active encounter</span>
+          <input
+            value={monsterDraft}
+            onChange={(e) => setMonsterDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addMonster()}
+            placeholder="Monster name"
+            className="text-xs bg-bg border border-line rounded-md px-1.5 py-0.5 w-24 text-white shrink-0"
+          />
+          <Button icon={Plus} iconOnly onClick={addMonster} title="Add monster" />
+          {encounter.length === 0 ? (
+            <span className="text-ink-dim shrink-0">No monsters yet.</span>
           ) : (
-            <span className="text-ink-dim">No active encounter</span>
+            encounter.map((m) => (
+              <span
+                key={m.id}
+                title={m.hidden ? `${m.name} (hidden)` : m.name}
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] shrink-0 ${
+                  m.hidden ? 'border-danger/60' : 'border-line'
+                }`}
+              >
+                {m.hidden && <EyeOff size={9} className="text-danger-text" />}
+                <span className="text-white">{m.name}</span>
+                <span className="text-ink-dim">{m.hp}/{m.max_hp}</span>
+              </span>
+            ))
           )}
         </div>
       </div>
