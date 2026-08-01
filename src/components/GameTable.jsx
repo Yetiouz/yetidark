@@ -19,12 +19,6 @@ const VOTE_OPTIONS = [
 { key: 'vault', label: 'Vault' },
 { key: 'entry', label: 'Back to entry' },
 ]
-const SCENE_TABS = [
-{ key: 'scene', label: 'Scene' },
-{ key: 'map', label: 'Map' },
-{ key: 'split', label: 'Split' },
-]
-
 // Auto-respond debounce: after any non-AI message lands in an AI-GM
 // campaign's scene log, wait this long with no further messages before
 // automatically asking the AI to take its turn. Batches near-simultaneous
@@ -116,7 +110,6 @@ const [stabilizing, setStabilizing] = useState(false)
 const [stabilizeError, setStabilizeError] = useState(null)
 const [deathCheckPendingId, setDeathCheckPendingId] = useState(null)
 const [rollError, setRollError] = useState(null)
-const [sceneTab, setSceneTab] = useState('split') // 'scene' | 'map' | 'split' -- purely a view toggle, no new data
 // The dice roller / Attack / Stabilize cards used to render as permanent
 // stacked cards in the center column -- real screen-space budget the
 // mockup spends on one small on-demand action instead. Now behind this,
@@ -611,12 +604,11 @@ const gearUsed = occupiedGearSlots(myGear)
 // reasonable, honest stand-in rather than inventing a new column.
 const sceneMode = turnOrder.length > 0 ? 'Combat' : 'Exploration'
 
-// The scene tab is a pure view toggle over content we already have: no
-// separate "scene image" vs "tactical map" data exists, so Scene hides
-// the map and shows the log full-width, Map hides the log, and Split
-// (the default, matching the old always-both layout) shows both.
-const showMapPane = sceneTab !== 'scene'
-const showLogPane = sceneTab !== 'map'
+// The Scene/Map/Split view toggle was removed per direct user feedback --
+// scene and log always render together now. These stay as named consts
+// since the rest of this file already branches on them.
+const showMapPane = true
+const showLogPane = true
 
 // Attack resolution goes through the same authoritative server command
 // pattern as roll_campaign_dice: rolls to hit, compares to the target's
@@ -815,28 +807,14 @@ GM view
 </div>
 )}
 
-<div className="flex-1 overflow-y-auto px-6">
-<div className="max-w-6xl mx-auto w-full pb-4">
+<div className="flex-1 overflow-y-auto">
+<div className="max-w-6xl mx-auto w-full px-6 pb-4">
 {gmType === 'ai' && aiTurnError && (
 <div className="mb-3 flex items-start gap-2 text-danger-text text-xs bg-danger/10 border border-danger/20 rounded-md px-3 py-2">
 <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
 <p>{aiTurnError}</p>
 </div>
 )}
-
-<div className="flex items-center gap-1.5 mb-3">
-{SCENE_TABS.map((t) => (
-<button
-key={t.key}
-onClick={() => setSceneTab(t.key)}
-className={`text-xs px-3 py-1.5 rounded-md border ${
-sceneTab === t.key ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink hover:bg-panel2'
-}`}
->
-{t.label}
-</button>
-))}
-</div>
 
 <div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start">
 {/* LEFT RAIL: my character */}
@@ -1209,7 +1187,7 @@ className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2
 {showLogPane && (
 <div className="bg-panel rounded-lg p-4">
 <p className="text-xs text-ink-dim mb-2">{gmType === 'ai' ? 'AI GM' : 'Scene log'}</p>
-<div ref={sceneLogRef} className="min-h-[240px] max-h-[420px] overflow-y-auto flex flex-col gap-2.5 pr-1">
+<div ref={sceneLogRef} className="min-h-[160px] max-h-[280px] overflow-y-auto flex flex-col gap-2.5 pr-1">
 {log.length === 0 && (
 <p className="text-xs text-ink-dim text-center mt-4">
 {gmType === 'ai'
