@@ -100,11 +100,13 @@ return source.remaining_minutes
 // onSetZone, so players still get the browser's normal right-click menu).
 //
 // Scene controls (Advance round / Pause session / Request a roll / Start
-// encounter / Reveal area / Reveal hidden monster) is no longer its own
-// card in the left rail -- per direct feedback that it and Active encounter
-// felt like they belonged together, those Row actions now live at the top
-// of the Active encounter card itself, above the monster list, separated
-// by a divider. The left rail now holds Quick tables only.
+// encounter / Reveal area / Reveal hidden monster) has moved twice now --
+// first its own card in the left rail, then folded into the top of the
+// Active encounter card -- and per direct feedback it's now a horizontal
+// row of icon-only buttons living in the header itself, next to the
+// Torch/Mode/Danger/etc status cards, same icon-only convention the Map
+// card's Preview/Secrets/Light/Fog toggles already use. The left rail now
+// holds Quick tables only.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -562,11 +564,37 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         </div>
       </div>
 
+      {/* Scene controls -- used to be a Row list (first its own left-rail
+          card, then folded into the Active encounter card), now a
+          horizontal icon-button strip sitting in the header next to the
+          Torch/Mode/Danger/etc status cards, per direct user feedback. */}
+      <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 flex items-center gap-1.5 flex-wrap">
+        <Button icon={SkipForward} iconOnly onClick={advanceTurn} disabled={turnOrder.length === 0} title="Advance round" />
+        <Button
+          icon={sessionActive ? Pause : Play}
+          iconOnly
+          onClick={toggleSession}
+          disabled={togglingSession}
+          title={togglingSession ? 'Working…' : sessionActive ? 'Pause session' : 'Resume session'}
+        />
+        <Button icon={Dices} iconOnly onClick={requestRoll} disabled={requestingRoll} title="Request a roll" />
+        <Button icon={Swords} iconOnly onClick={startEncounter} title="Start encounter" />
+        <Button icon={EyeOff} iconOnly disabled title="Reveal area -- fog-of-war / area reveal isn't built yet, placeholder" />
+        {encounter.some((m) => m.hidden) && (
+          <Button
+            icon={Eye}
+            iconOnly
+            onClick={() => encounter.filter((m) => m.hidden).forEach((m) => revealMonster(m.id))}
+            title="Reveal hidden monster"
+          />
+        )}
+      </div>
+
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto w-full px-6 pb-4">
           <div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start">
-            {/* LEFT RAIL: quick tables only now -- scene controls moved into
-                the Active encounter card (see CENTER below), and party
+            {/* LEFT RAIL: quick tables only now -- scene controls moved up
+                into the header (see the icon-button strip above), and party
                 status lives in the right rail, in the same position as
                 GameTable.jsx's player-page Party card, per direct user
                 feedback that card placement should match the player page
@@ -582,8 +610,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               </Card>
             </div>
 
-            {/* CENTER: map, active encounter (now also holds scene controls),
-                scene log -- all always visible now */}
+            {/* CENTER: map, active encounter, scene log -- all always visible now */}
             <div className="flex flex-col gap-3 min-w-0">
               {/* Map and Active encounter used to be Scene/Map/Encounter tabs
                   (pick one, see it, lose the others); the tab switcher is
@@ -672,30 +699,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   </div>
                 }
               >
-                {/* Scene controls folded in here (used to be its own card in
-                    the left rail) -- per direct user feedback, running the
-                    encounter and controlling the scene felt like the same
-                    job, so they're the same card now. */}
-                <div className="flex flex-col gap-1.5 mb-3 pb-3 border-b border-line-soft">
-                  <Row icon={SkipForward} label="Advance round" onClick={advanceTurn} disabled={turnOrder.length === 0} />
-                  <Row
-                    icon={sessionActive ? Pause : Play}
-                    label={togglingSession ? 'Working…' : sessionActive ? 'Pause session' : 'Resume session'}
-                    onClick={toggleSession}
-                    disabled={togglingSession}
-                    title="Pausing stops torches and other timers from counting down for the whole table"
-                  />
-                  <Row icon={Dices} label="Request a roll" onClick={requestRoll} disabled={requestingRoll} />
-                  <Row icon={Swords} label="Start encounter" onClick={startEncounter} />
-                  <Row icon={EyeOff} label="Reveal area" disabled title="Fog-of-war / area reveal isn't built yet -- placeholder" />
-                  {encounter.some((m) => m.hidden) && (
-                    <Row
-                      icon={Eye}
-                      label="Reveal hidden monster"
-                      onClick={() => encounter.filter((m) => m.hidden).forEach((m) => revealMonster(m.id))}
-                    />
-                  )}
-                </div>
                 <div className="flex flex-col gap-1.5">
                   {encounter.length === 0 && <p className="text-xs text-ink-dim">No monsters yet -- add one above.</p>}
                   {encounter.map((m) => (
