@@ -97,58 +97,58 @@ export default function Profile({ session, onSignOut, onBack }) {
     <div className="max-w-xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-            <User size={16} className="text-blue-400" />
+          <div className="w-8 h-8 rounded-lg bg-primary-bg flex items-center justify-center">
+            <User size={16} className="text-primary-text" />
           </div>
-          <h1 className="text-white text-lg font-medium">Your profile</h1>
+          <h1 className="text-ink text-lg font-medium">Your profile</h1>
         </div>
         {onBack && (
           <button
             onClick={onBack}
-            className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-300 hover:bg-neutral-800"
+            className="text-xs border border-line rounded-md px-2.5 py-1 text-ink-dim hover:bg-panel2"
           >
             Back to lobby
           </button>
         )}
       </div>
 
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 mb-4">
-        <p className="text-xs text-neutral-400 mb-1.5">Display name</p>
+      <div className="bg-panel border border-line-soft rounded-xl p-4 mb-4">
+        <p className="text-xs text-ink-dim mb-1.5">Display name</p>
         {loadingProfile ? (
-          <p className="text-sm text-neutral-500">Loading...</p>
+          <p className="text-sm text-ink-faint">Loading...</p>
         ) : (
           <div className="flex gap-2">
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
+              className="flex-1 bg-bg border border-line rounded-md px-3 py-2 text-sm text-ink"
             />
             <button
               onClick={saveName}
               disabled={saving || displayName.trim() === savedName}
-              className="text-sm border border-neutral-700 rounded-md px-3 py-2 text-neutral-200 hover:bg-neutral-800 disabled:opacity-40 flex items-center gap-1.5"
+              className="text-sm border border-line rounded-md px-3 py-2 text-ink hover:bg-panel2 disabled:opacity-40 flex items-center gap-1.5"
             >
-              {saved ? <Check size={14} className="text-green-400" /> : null}
+              {saved ? <Check size={14} className="text-positive-text" /> : null}
               {saving ? 'Saving...' : saved ? 'Saved' : 'Save'}
             </button>
           </div>
         )}
         {error && (
-          <div className="flex items-center gap-1.5 text-red-400 mt-2">
+          <div className="flex items-center gap-1.5 text-danger-text mt-2">
             <AlertCircle size={12} />
             <p className="text-xs">{error}</p>
           </div>
         )}
 
-        <div className="mt-3 pt-3 border-t border-neutral-800 flex items-center justify-between">
+        <div className="mt-3 pt-3 border-t border-line-soft flex items-center justify-between">
           <div>
-            <p className="text-xs text-neutral-400">Email</p>
-            <p className="text-sm text-neutral-200">{user?.email}</p>
+            <p className="text-xs text-ink-dim">Email</p>
+            <p className="text-sm text-ink">{user?.email}</p>
           </div>
           {onSignOut && (
             <button
               onClick={onSignOut}
-              className="text-xs border border-neutral-700 rounded-md px-2.5 py-1.5 flex items-center gap-1.5 text-neutral-300 hover:bg-neutral-800"
+              className="text-xs border border-line rounded-md px-2.5 py-1.5 flex items-center gap-1.5 text-ink-dim hover:bg-panel2"
             >
               <LogOut size={13} /> Sign out
             </button>
@@ -156,23 +156,23 @@ export default function Profile({ session, onSignOut, onBack }) {
         </div>
       </div>
 
-      <p className="text-xs text-neutral-400 mb-2">Your campaigns</p>
+      <p className="text-xs text-ink-dim mb-2">Your campaigns</p>
       <div className="flex flex-col gap-1.5 mb-4">
         {loadingMemberships ? (
-          <p className="text-sm text-neutral-500">Loading...</p>
+          <p className="text-sm text-ink-faint">Loading...</p>
         ) : memberships.length === 0 ? (
-          <p className="text-sm text-neutral-500">Not in any campaigns yet.</p>
+          <p className="text-sm text-ink-faint">Not in any campaigns yet.</p>
         ) : (
           memberships.map((m) => (
-            <div key={m.campaign_id} className="flex items-center gap-2.5 bg-neutral-900 rounded-md px-3 py-2">
+            <div key={m.campaign_id} className="flex items-center gap-2.5 bg-panel rounded-md px-3 py-2">
               {m.campaigns.gm_type === 'ai' ? (
-                <Bot size={14} className="text-purple-300 flex-shrink-0" />
+                <Bot size={14} className="text-ai-text flex-shrink-0" />
               ) : (
-                <Crown size={14} className="text-neutral-400 flex-shrink-0" />
+                <Crown size={14} className="text-ink-dim flex-shrink-0" />
               )}
               <div className="flex-1">
-                <p className="text-sm text-white">{m.campaigns.name}</p>
-                <p className="text-xs text-neutral-400">
+                <p className="text-sm text-ink">{m.campaigns.name}</p>
+                <p className="text-xs text-ink-dim">
                   {m.role === 'gm' ? 'You are GM' : 'Player'}
                 </p>
               </div>
@@ -180,7 +180,7 @@ export default function Profile({ session, onSignOut, onBack }) {
                 onClick={() => leaveCampaign(m.campaign_id)}
                 disabled={leavingId === m.campaign_id}
                 title="Leave campaign"
-                className="text-xs border border-neutral-700 rounded-md px-2 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-red-400 disabled:opacity-40 flex items-center gap-1"
+                className="text-xs border border-line rounded-md px-2 py-1 text-ink-dim hover:bg-panel2 hover:text-danger-text disabled:opacity-40 flex items-center gap-1"
               >
                 <X size={12} /> {leavingId === m.campaign_id ? 'Leaving...' : 'Leave'}
               </button>
@@ -189,19 +189,19 @@ export default function Profile({ session, onSignOut, onBack }) {
         )}
       </div>
 
-      <p className="text-xs text-neutral-400 mb-2">Your characters</p>
+      <p className="text-xs text-ink-dim mb-2">Your characters</p>
       <div className="flex flex-col gap-1.5">
         {loadingCharacters ? (
-          <p className="text-sm text-neutral-500">Loading...</p>
+          <p className="text-sm text-ink-faint">Loading...</p>
         ) : characters.length === 0 ? (
-          <p className="text-sm text-neutral-500">No characters yet.</p>
+          <p className="text-sm text-ink-faint">No characters yet.</p>
         ) : (
           characters.map((c) => (
-            <div key={c.id} className="flex items-center gap-2.5 bg-neutral-900 rounded-md px-3 py-2">
-              <UsersIcon size={14} className="text-neutral-400 flex-shrink-0" />
+            <div key={c.id} className="flex items-center gap-2.5 bg-panel rounded-md px-3 py-2">
+              <UsersIcon size={14} className="text-ink-dim flex-shrink-0" />
               <div className="flex-1">
-                <p className="text-sm text-white">{c.name}</p>
-                <p className="text-xs text-neutral-400">
+                <p className="text-sm text-ink">{c.name}</p>
+                <p className="text-xs text-ink-dim">
                   {c.ancestry} {c.class} &middot; lvl {c.level} &middot; {c.campaigns?.name || 'unknown campaign'}
                 </p>
               </div>
