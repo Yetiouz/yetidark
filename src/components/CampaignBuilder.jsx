@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { AlertCircle, Check, ChevronLeft, ChevronRight, Crown, Bot, X as XIcon } from 'lucide-react'
+import { AlertCircle, ChevronLeft, ChevronRight, Crown, Bot, X as XIcon } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import ToggleSwitch from './ui/ToggleSwitch.jsx'
 import Footer from './ui/Footer.jsx'
+import Stepper from './ui/Stepper.jsx'
 
 function randomJoinCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no 0/O/1/I ambiguity
@@ -142,26 +143,10 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
   }
 
   const stepper = (
-    <div className="hidden md:flex items-center gap-1.5 overflow-x-auto">
-      {STEPS.map((label, i) => (
-        <div key={label} className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => setStep(i)}
-            className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] border shrink-0 ${
-              i < step
-                ? 'bg-positive-bg border-positive text-positive-text'
-                : i === step
-                  ? 'bg-primary border-primary text-ink'
-                  : 'border-line text-ink-faint'
-            }`}
-          >
-            {i < step ? <Check size={12} /> : i + 1}
-          </button>
-          <span className={`text-xs whitespace-nowrap ${i === step ? 'text-ink' : 'text-ink-faint'}`}>{label}</span>
-          {i < STEPS.length - 1 && <span className="w-5 h-px bg-panel2 shrink-0" />}
-        </div>
-      ))}
-    </div>
+    <Stepper
+      steps={STEPS.map((label, i) => ({ label, state: i < step ? 'done' : i === step ? 'active' : 'upcoming' }))}
+      onStepClick={setStep}
+    />
   )
 
   const sidebar = (
