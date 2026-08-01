@@ -516,6 +516,16 @@ return a.remaining - b.remaining
 })
 .slice(0, 3)
 const litCharacterId = lightSources.find((s) => s.lit)?.character_id || null
+
+// Turn order used to be its own left-rail card; merged into the Party
+// panel below so "whose turn is it" and "how's the party doing" live in
+// one place. actingEntry can be a monster -- turn order includes visible
+// monsters too, not just party members (see GmDashboard.jsx's
+// rollInitiative) -- so when it's a monster's turn there's no party row
+// to highlight; that gets its own small line instead of silently
+// disappearing.
+const actingEntry = turnOrder.find((t) => t.status === 'acting') || null
+const actingIsMonster = actingEntry ? !party.some((p) => p.id === actingEntry.id) : false
 const myCharacter = party.find((p) => p.owner_user_id === user?.id) || null
 
 // My gear/talents -- refetched (not realtime-subscribed) whenever which
@@ -834,27 +844,6 @@ title="Item consumption isn't wired up yet -- placeholder slot"
 <p className="text-[11px] text-ink-dim">You don't have a character in this campaign yet.</p>
 </div>
 )}
-
-<div className="bg-panel rounded-lg p-3">
-<p className="text-xs text-ink-dim mb-2">Turn order</p>
-{turnOrder.length === 0 ? (
-<p className="text-[11px] text-ink-dim">Not set yet -- the GM rolls initiative to start.</p>
-) : (
-<div className="flex flex-col gap-1">
-{turnOrder.map((t, i) => (
-<div
-key={t.id || i}
-className={`flex items-center justify-between text-[11px] px-2 py-1 rounded ${
-t.status === 'acting' ? 'bg-primary/20 text-primary-text font-medium' : 'text-ink'
-}`}
->
-<span>{t.name}</span>
-<span className={t.status === 'acting' ? '' : 'text-ink-dim'}>{t.status}</span>
-</div>
-))}
-</div>
-)}
-</div>
 </div>
 
 {/* CENTER: scene + log + composer helpers. At md+, the map and Scene
@@ -1209,11 +1198,24 @@ ZoneScene wrapper) so they no longer stack in this rail as their own
 card. */}
 
 <div className="bg-panel rounded-lg p-3">
-<p className="text-xs text-ink-dim mb-2">Party</p>
+<div className="flex items-center justify-between mb-2">
+<p className="text-xs text-ink-dim">Party</p>
+{/* actingEntry can be a monster, which has no row of its own below --
+this is the only place that turn gets surfaced. */}
+{actingIsMonster && (
+<span className="text-[10px] text-primary-text bg-primary/10 border border-primary/30 rounded-full px-2 py-0.5 truncate max-w-[55%]">
+{actingEntry.name}&rsquo;s turn
+</span>
+)}
+</div>
 {party.length === 0 && <p className="text-[11px] text-ink-dim">No characters in this campaign yet.</p>}
 <div className="flex flex-col gap-2">
-{party.map((p) => (
-<div key={p.id} className="border border-line-soft rounded-md p-2">
+{party.map((p) => {
+const isActing = actingEntry?.id === p.id
+const light = lightSources.find((s) => s.character_id === p.id)
+const lightRemaining = light?.lit ? displayedMinutes(light, nowTick) : null
+return (
+<div key={p.id} className={`border rounded-md p-2 ${isActing ? 'border-primary bg-primary/10' : 'border-line-soft'}`}>
 <button
 onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
 disabled={!onOpenCharacterSheet}
@@ -1232,11 +1234,23 @@ style={{ backgroundColor: p.color || '#3f3f46' }}
 </div>
 )}
 <span className="text-xs font-medium text-white truncate">{p.name}</span>
+{isActing && (
+<span className="text-[9px] uppercase tracking-wide text-primary-text bg-primary/20 rounded-full px-1.5 py-0.5 shrink-0">Acting</span>
+)}
 </div>
 <span className="text-[11px] text-ink-dim shrink-0">{p.hp}/{p.max_hp}</span>
 </div>
 <ProgressBar value={p.hp} max={p.max_hp} barClassName={hpBarColor(p.hp, p.max_hp)} trackBg="bg-danger/40" heightClassName="h-1" />
 </button>
+{lightRemaining !== null && (
+<div className="mt-1.5">
+<div className="flex items-center justify-between mb-0.5">
+<span className="text-[9px] text-warning-text flex items-center gap-1"><Flame size={9} /> Torch</span>
+<span className="text-[9px] text-ink-dim">{formatMinutes(lightRemaining)}</span>
+</div>
+<ProgressBar value={lightRemaining} max={light.total_minutes} tone="amber" heightClassName="h-1" />
+</div>
+)}
 {p.status && p.status !== 'alive' && (
 <span className={`inline-block mt-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
 p.status === 'dying' ? 'border-danger text-danger-text' : p.status === 'stable' ? 'border-warning text-warning-text' : 'border-line text-ink-dim'
@@ -1254,7 +1268,8 @@ className="mt-1.5 w-full text-[11px] border border-danger/60 text-danger-text ro
 </button>
 )}
 </div>
-))}
+)
+})}
 </div>
 </div>
 </div>
