@@ -17,6 +17,7 @@ import { supabase } from '../lib/supabaseClient.js'
 import { getCampaignEntryBlockReason } from '../app/campaignEntry.js'
 import Badge from './ui/Badge.jsx'
 import Button from './ui/Button.jsx'
+import Card from './ui/Card.jsx'
 
 // Paraphrased labels for the Modes of Play chips -- same keys as
 // CampaignSettings.jsx's MODES_OF_PLAY, just the short label without the
@@ -261,11 +262,7 @@ export default function CampaignLobby({
       {startError && <p className="text-xs text-danger-text mb-4">{startError}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-        <div className="bg-panel border border-line-soft rounded-xl p-4">
-          <p className="text-sm font-medium text-ink mb-3">
-            Players &middot; {members.length} / {maxPlayers}
-          </p>
-
+        <Card title={`Players · ${members.length} / ${maxPlayers}`}>
           <div className="flex flex-col gap-3">
             {members.map((m) => (
               <div key={m.userId} className="border border-line-soft rounded-lg p-3">
@@ -325,11 +322,10 @@ export default function CampaignLobby({
           >
             <UserPlus size={14} /> {copiedInvite ? 'Join code copied' : 'Invite another player'}
           </button>
-        </div>
+        </Card>
 
         <div className="flex flex-col gap-4">
-          <div className="bg-panel border border-line-soft rounded-xl p-4">
-            <p className="text-sm font-medium text-ink mb-3">Ready to begin?</p>
+          <Card title="Ready to begin?">
             <div className="flex flex-col gap-2 mb-3">
               {checks.map((c) => (
                 <div key={c.key} className="flex items-start gap-2 text-xs">
@@ -354,10 +350,9 @@ export default function CampaignLobby({
                 style={{ width: `${(checksComplete / checks.length) * 100}%` }}
               />
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-panel border border-line-soft rounded-xl p-4">
-            <p className="text-sm font-medium text-ink mb-3">Invite players</p>
+          <Card title="Invite players">
             <div className="flex items-center justify-between text-xs mb-2.5">
               <span className="text-ink-dim flex items-center gap-1.5">
                 <Key size={13} /> Join code
@@ -386,10 +381,9 @@ export default function CampaignLobby({
                   ? 'Anyone with the code and campaign password can request to join.'
                   : 'Anyone with the code can request to join.'}
             </p>
-          </div>
+          </Card>
 
-          <div className="bg-panel border border-line-soft rounded-xl p-4">
-            <p className="text-sm font-medium text-ink mb-3">Campaign rules</p>
+          <Card title="Campaign rules">
             <div className="flex flex-col gap-2 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-ink-dim">GM</span>
@@ -458,7 +452,7 @@ export default function CampaignLobby({
             >
               View all rules &amp; house rules
             </button>
-          </div>
+          </Card>
         </div>
       </div>
     </div>
