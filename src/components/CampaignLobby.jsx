@@ -16,6 +16,7 @@ import {
 import { supabase } from '../lib/supabaseClient.js'
 import { getCampaignEntryBlockReason } from '../app/campaignEntry.js'
 import Badge from './ui/Badge.jsx'
+import Button from './ui/Button.jsx'
 
 // Paraphrased labels for the Modes of Play chips -- same keys as
 // CampaignSettings.jsx's MODES_OF_PLAY, just the short label without the
@@ -241,27 +242,19 @@ export default function CampaignLobby({
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={onOpenSettings}
-            className="text-sm border border-line rounded-md px-3 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2"
+          <Button variant="outline" icon={Settings} onClick={onOpenSettings}>
+            Campaign settings
+          </Button>
+          <Button
+            variant="primary"
+            icon={Rocket}
+            onClick={startSession}
+            disabled={starting || !!blockReason}
+            tooltip={blockReason}
+            className="px-4"
           >
-            <Settings size={14} /> Campaign settings
-          </button>
-          <div className="relative group">
-            <button
-              onClick={startSession}
-              disabled={starting || !!blockReason}
-              className="text-sm bg-primary hover:bg-primary/90 disabled:bg-panel2 disabled:text-ink-faint rounded-md px-4 py-1.5 flex items-center gap-1.5 text-ink font-medium"
-            >
-              <Rocket size={14} />
-              {starting ? 'Starting...' : campaign.session_active ? 'Enter session' : 'Start session'}
-            </button>
-            {blockReason && (
-              <div className="absolute right-0 top-full mt-1.5 whitespace-nowrap text-xs bg-panel2 border border-line rounded-md px-2.5 py-1.5 text-ink-dim opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
-                {blockReason}
-              </div>
-            )}
-          </div>
+            {starting ? 'Starting...' : campaign.session_active ? 'Enter session' : 'Start session'}
+          </Button>
         </div>
       </div>
 
@@ -304,27 +297,22 @@ export default function CampaignLobby({
                         {m.character.hp} &middot; AC {m.character.ac}
                       </p>
                     </div>
-                    <button
+                    <Button
+                      variant="outline"
                       onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(m.character.id)}
-                      className="text-xs border border-line rounded-md px-2.5 py-1 text-ink hover:bg-panel2 shrink-0"
+                      className="text-xs px-2.5 py-1 shrink-0"
                     >
                       View character
-                    </button>
+                    </Button>
                   </div>
                 ) : m.userId === user?.id ? (
                   <div className="flex gap-2 mt-1.5">
-                    <button
-                      onClick={onCreateCharacter}
-                      className="flex-1 text-sm bg-primary hover:bg-primary/90 rounded-md py-1.5 text-ink font-medium"
-                    >
+                    <Button variant="primary" onClick={onCreateCharacter} className="flex-1">
                       Create character
-                    </button>
-                    <button
-                      onClick={onChooseCharacter}
-                      className="flex-1 text-sm border border-line rounded-md py-1.5 text-ink hover:bg-panel2"
-                    >
+                    </Button>
+                    <Button variant="outline" onClick={onChooseCharacter} className="flex-1">
                       Choose existing
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
               </div>
@@ -388,12 +376,9 @@ export default function CampaignLobby({
               <span className="text-ink-dim">Campaign access</span>
               <span className="text-ink">{campaign.is_public ? 'Public' : 'Private'}</span>
             </div>
-            <button
-              onClick={copyInviteLink}
-              className="w-full text-sm border border-line rounded-md py-2 flex items-center justify-center gap-1.5 text-ink hover:bg-panel2"
-            >
-              <Copy size={13} /> {copiedLink ? 'Link copied' : 'Copy invite link'}
-            </button>
+            <Button variant="outline" icon={Copy} onClick={copyInviteLink} className="w-full py-2">
+              {copiedLink ? 'Link copied' : 'Copy invite link'}
+            </Button>
             <p className="text-[11px] text-ink-faint mt-2">
               {campaign.is_public
                 ? 'Anyone with the link can join directly.'
