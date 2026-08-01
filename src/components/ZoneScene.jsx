@@ -56,13 +56,13 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
 
   return (
     <div>
-      {mapAccessError && <p className="text-xs text-red-400 mb-2">{mapAccessError}</p>}
-      <div className="relative w-full rounded-lg overflow-hidden bg-neutral-950 border border-neutral-800" style={{ aspectRatio: '16 / 10' }}>
+      {mapAccessError && <p className="text-xs text-danger-text mb-2">{mapAccessError}</p>}
+      <div className="relative w-full rounded-lg overflow-hidden bg-bg border border-line-soft" style={{ aspectRatio: '16 / 10' }}>
         {mapUrl ? (
           <img src={mapUrl} alt={sceneLabel || 'Scene'} className="absolute inset-0 w-full h-full object-cover opacity-80" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-xs text-neutral-600">No scene image yet</p>
+            <p className="text-xs text-ink-faint">No scene image yet</p>
           </div>
         )}
 
@@ -81,15 +81,15 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
         )}
 
         <div
-          className="absolute rounded-full border border-dashed border-neutral-600 pointer-events-none"
+          className="absolute rounded-full border border-dashed border-line pointer-events-none"
           style={{ width: `${ZONE_RADIUS_PCT.near * 2}%`, height: `${ZONE_RADIUS_PCT.near * 2}%`, left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
         />
         <div
-          className="absolute rounded-full border border-dashed border-neutral-500 pointer-events-none"
+          className="absolute rounded-full border border-dashed border-line pointer-events-none"
           style={{ width: `${ZONE_RADIUS_PCT.close * 2}%`, height: `${ZONE_RADIUS_PCT.close * 2}%`, left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
         />
-        <span className="absolute text-[10px] text-neutral-500 pointer-events-none" style={{ left: '50%', top: `${50 - ZONE_RADIUS_PCT.close}%`, transform: 'translate(-50%, -140%)' }}>Close</span>
-        <span className="absolute text-[10px] text-neutral-600 pointer-events-none" style={{ left: '50%', top: `${50 - ZONE_RADIUS_PCT.near}%`, transform: 'translate(-50%, -140%)' }}>Near</span>
+        <span className="absolute text-[10px] text-ink-dim pointer-events-none" style={{ left: '50%', top: `${50 - ZONE_RADIUS_PCT.close}%`, transform: 'translate(-50%, -140%)' }}>Close</span>
+        <span className="absolute text-[10px] text-ink-faint pointer-events-none" style={{ left: '50%', top: `${50 - ZONE_RADIUS_PCT.near}%`, transform: 'translate(-50%, -140%)' }}>Near</span>
 
         {positioned.map((t) => (
           <div key={t.id} className="absolute flex flex-col items-center gap-0.5" style={{ left: `${t.x}%`, top: `${t.y}%`, transform: 'translate(-50%, -50%)' }}>
@@ -98,15 +98,15 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
               style={{ background: `${t.color}33`, border: `2px solid ${t.color}`, color: t.color }}
             >
               {t.name?.[0]?.toUpperCase() || '?'}
-              {litCharacterId === t.id && <Flame size={9} className="absolute -top-1.5 -right-1.5" style={{ color: '#fbbf24' }} />}
+              {litCharacterId === t.id && <Flame size={9} className="absolute -top-1.5 -right-1.5" style={{ color: '#f5a524' }} />}
             </div>
-            <span className="text-[9px] text-neutral-400 whitespace-nowrap">{t.name}</span>
+            <span className="text-[9px] text-ink-dim whitespace-nowrap">{t.name}</span>
           </div>
         ))}
 
         {sceneLabel && (
           <div className="absolute top-2 left-2 bg-black/40 rounded px-2 py-1">
-            <p className="text-[10px] text-neutral-300">{sceneLabel}</p>
+            <p className="text-[10px] text-ink">{sceneLabel}</p>
           </div>
         )}
       </div>

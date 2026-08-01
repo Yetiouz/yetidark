@@ -28,9 +28,9 @@ const AUTO_TURN_DEBOUNCE_MS = 8000
 
 function hpBarColor(hp, maxHp) {
 const pct = maxHp ? hp / maxHp : 0
-if (pct > 0.6) return 'bg-green-500'
-if (pct > 0.3) return 'bg-amber-500'
-return 'bg-red-500'
+if (pct > 0.6) return 'bg-positive'
+if (pct > 0.3) return 'bg-warning'
+return 'bg-danger'
 }
 
 // Mirrors CampaignLog.jsx's minute formatting -- kept local here rather
@@ -796,23 +796,23 @@ if (chatLogRef.current) chatLogRef.current.scrollTop = chatLogRef.current.scroll
 // wherever it shows up.
 const renderLogEntry = (entry) => {
 if (entry.type === 'narration') {
-return <span key={entry.id} className="block italic text-neutral-400">{entry.text}</span>
+return <span key={entry.id} className="block italic text-ink-dim">{entry.text}</span>
 }
 if (entry.type === 'gm') {
 return (
 <span key={entry.id} className="block">
-<span className="font-medium text-blue-400">{entry.sender_name}:</span>{' '}
-<span className="text-neutral-300">{entry.text}</span>
+<span className="font-medium text-primary-text">{entry.sender_name}:</span>{' '}
+<span className="text-ink">{entry.text}</span>
 </span>
 )
 }
 if (entry.type === 'ai_gm') {
 return (
-<span key={entry.id} className="block bg-purple-500/10 border border-purple-500/20 rounded-md px-2.5 py-2 -mx-0.5">
-<span className="font-medium text-purple-300 flex items-center gap-1.5 mb-1">
+<span key={entry.id} className="block bg-ai/10 border border-ai/20 rounded-md px-2.5 py-2 -mx-0.5">
+<span className="font-medium text-ai-text flex items-center gap-1.5 mb-1">
 <Bot size={12} /> AI GM
 </span>
-<span className="text-neutral-200 whitespace-pre-wrap">{entry.text}</span>
+<span className="text-ink whitespace-pre-wrap">{entry.text}</span>
 </span>
 )
 }
@@ -820,12 +820,12 @@ if (entry.type === 'roll') {
 return (
 <span key={entry.id} className="inline-flex items-center gap-1.5 flex-wrap">
 <span className="font-medium text-white">{entry.sender_name}:</span>
-<span className="text-neutral-300">{entry.text}</span>
+<span className="text-ink">{entry.text}</span>
 <span
 className={`text-[10px] px-1.5 py-0.5 rounded ${
 entry.roll_source === 'app'
-? 'bg-blue-500/20 text-blue-300'
-: 'bg-neutral-800 border border-neutral-700 text-neutral-400'
+? 'bg-primary/20 text-primary-text'
+: 'bg-panel2 border border-line text-ink-dim'
 }`}
 >
 {entry.roll_source === 'app' ? 'app roll' : 'self-reported'}
@@ -836,7 +836,7 @@ entry.roll_source === 'app'
 return (
 <span key={entry.id} className="block">
 <span className="font-medium text-white">{entry.sender_name}:</span>{' '}
-<span className="text-neutral-300">{entry.text}</span>
+<span className="text-ink">{entry.text}</span>
 </span>
 )
 }
@@ -849,11 +849,11 @@ const renderChatBubble = (entry) => {
 if (entry.type === 'ai_gm') {
 return (
 <div key={entry.id} className="flex justify-start">
-<div className="max-w-[85%] bg-purple-500/10 border border-purple-500/20 rounded-xl px-3.5 py-2.5">
-<p className="font-medium text-purple-300 flex items-center gap-1.5 mb-1 text-xs">
+<div className="max-w-[85%] bg-ai/10 border border-ai/20 rounded-xl px-3.5 py-2.5">
+<p className="font-medium text-ai-text flex items-center gap-1.5 mb-1 text-xs">
 <Bot size={12} /> AI GM
 </p>
-<p className="text-sm text-neutral-100 whitespace-pre-wrap">{entry.text}</p>
+<p className="text-sm text-ink whitespace-pre-wrap">{entry.text}</p>
 </div>
 </div>
 )
@@ -861,7 +861,7 @@ return (
 if (entry.type === 'roll') {
 return (
 <div key={entry.id} className="flex justify-center">
-<p className="text-[11px] text-neutral-500 italic px-2 py-1">
+<p className="text-[11px] text-ink-dim italic px-2 py-1">
 {entry.sender_name} {entry.text}
 </p>
 </div>
@@ -870,16 +870,16 @@ return (
 if (entry.type === 'narration' || entry.type === 'gm') {
 return (
 <div key={entry.id} className="flex justify-center">
-<p className="text-xs text-neutral-400 italic px-2 py-1 text-center">{entry.text}</p>
+<p className="text-xs text-ink-dim italic px-2 py-1 text-center">{entry.text}</p>
 </div>
 )
 }
 const isMine = entry.sender_user_id === user?.id
 return (
 <div key={entry.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-<div className={`max-w-[75%] rounded-xl px-3.5 py-2 ${isMine ? 'bg-blue-500/20' : 'bg-neutral-800'}`}>
-{!isMine && <p className="text-[11px] font-medium text-neutral-400 mb-0.5">{entry.sender_name}</p>}
-<p className="text-sm text-neutral-100 whitespace-pre-wrap">{entry.text}</p>
+<div className={`max-w-[75%] rounded-xl px-3.5 py-2 ${isMine ? 'bg-primary/20' : 'bg-panel2'}`}>
+{!isMine && <p className="text-[11px] font-medium text-ink-dim mb-0.5">{entry.sender_name}</p>}
+<p className="text-sm text-ink whitespace-pre-wrap">{entry.text}</p>
 </div>
 </div>
 )
@@ -890,7 +890,7 @@ return (
 <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pt-6 pb-3 flex items-center justify-between">
 <div className="flex items-center gap-2.5">
 <p className="text-white font-medium">{campaignName}</p>
-<span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300 border border-green-600/40">Live now</span>
+<span className="text-[10px] px-1.5 py-0.5 rounded bg-positive/20 text-positive-text border border-positive/40">Live now</span>
 </div>
 <div className="flex items-center gap-1.5">
 <div className="flex items-center -space-x-1.5 mr-1">
@@ -898,7 +898,7 @@ return (
 <div
 key={p.id}
 title={p.name}
-className="w-6 h-6 rounded-full border-2 border-neutral-950 flex items-center justify-center text-[10px] font-medium text-white"
+className="w-6 h-6 rounded-full border-2 border-bg flex items-center justify-center text-[10px] font-medium text-white"
 style={{ backgroundColor: p.color || '#3f3f46' }}
 >
 {p.name?.[0]?.toUpperCase() || '?'}
@@ -909,7 +909,7 @@ style={{ backgroundColor: p.color || '#3f3f46' }}
 <button
 onClick={onOpenLog}
 title="Campaign log"
-className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
 >
 <ScrollText size={14} />
 </button>
@@ -918,7 +918,7 @@ className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 h
 <button
 onClick={onOpenLibrary}
 title="Rules library"
-className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
 >
 <BookOpen size={14} />
 </button>
@@ -927,7 +927,7 @@ className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 h
 <button
 onClick={onOpenTracker}
 title="NPCs, factions & treasure"
-className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
 >
 <Users size={14} />
 </button>
@@ -936,13 +936,13 @@ className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 h
 <button
 onClick={onOpenSettings}
 title="Campaign settings"
-className="text-xs border border-neutral-700 rounded-md p-1.5 text-neutral-300 hover:bg-neutral-800"
+className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
 >
 <Settings size={14} />
 </button>
 )}
 {isGm && gmType !== 'ai' && onOpenGmView && (
-<button onClick={onOpenGmView} className="text-xs border border-neutral-700 rounded-md px-2.5 py-1 text-neutral-300 hover:bg-neutral-800">
+<button onClick={onOpenGmView} className="text-xs border border-line rounded-md px-2.5 py-1 text-ink hover:bg-panel2">
 GM view
 </button>
 )}
@@ -951,34 +951,34 @@ GM view
 
 {myCharacter && (
 <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
-<div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
-<p className="text-[10px] tracking-wide text-neutral-500 mb-0.5">HP</p>
+<div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
+<p className="text-[10px] tracking-wide text-ink-dim mb-0.5">HP</p>
 <p className="text-lg font-semibold text-white">
-<span className={myCharacter.hp <= myCharacter.max_hp * 0.3 ? 'text-red-400' : 'text-green-400'}>{myCharacter.hp}</span>
-<span className="text-neutral-500"> / {myCharacter.max_hp}</span>
+<span className={myCharacter.hp <= myCharacter.max_hp * 0.3 ? 'text-danger-text' : 'text-positive-text'}>{myCharacter.hp}</span>
+<span className="text-ink-dim"> / {myCharacter.max_hp}</span>
 </p>
 </div>
-<div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
-<p className="text-[10px] tracking-wide text-neutral-500 mb-0.5">AC</p>
+<div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
+<p className="text-[10px] tracking-wide text-ink-dim mb-0.5">AC</p>
 <p className="text-lg font-semibold text-white">{myCharacter.ac}</p>
 </div>
-<div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
-<p className="text-[10px] tracking-wide text-neutral-500 mb-0.5">Gear</p>
-<p className="text-lg font-semibold text-amber-400">{gearUsed}<span className="text-neutral-500"> / {gearCapacity}</span></p>
+<div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
+<p className="text-[10px] tracking-wide text-ink-dim mb-0.5">Gear</p>
+<p className="text-lg font-semibold text-warning-text">{gearUsed}<span className="text-ink-dim"> / {gearCapacity}</span></p>
 </div>
-<div className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
-<p className="text-[10px] tracking-wide text-neutral-500 mb-0.5 flex items-center gap-1"><Sparkles size={10} /> LUCK</p>
-<p className="text-lg font-semibold text-neutral-600" title="Luck isn't tracked yet -- placeholder slot">&mdash;</p>
+<div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
+<p className="text-[10px] tracking-wide text-ink-dim mb-0.5 flex items-center gap-1"><Sparkles size={10} /> LUCK</p>
+<p className="text-lg font-semibold text-ink-faint" title="Luck isn't tracked yet -- placeholder slot">&mdash;</p>
 </div>
-<div className={`rounded-lg px-3 py-2 border ${litSources[0]?.lit ? 'border-amber-500/60 bg-amber-500/5' : 'bg-neutral-900 border-neutral-800'}`}>
-<p className="text-[10px] tracking-wide text-neutral-500 mb-0.5 flex items-center gap-1"><Flame size={10} /> TORCH</p>
+<div className={`rounded-lg px-3 py-2 border ${litSources[0]?.lit ? 'border-warning/60 bg-warning/5' : 'bg-panel border-line-soft'}`}>
+<p className="text-[10px] tracking-wide text-ink-dim mb-0.5 flex items-center gap-1"><Flame size={10} /> TORCH</p>
 {litSources[0]?.lit ? (
-<p className="text-sm font-semibold text-amber-300">
+<p className="text-sm font-semibold text-warning-text">
 {formatMinutes(litSources[0].remaining)}
-<span className="text-neutral-500 font-normal"> · {party.find((p) => p.id === litSources[0].character_id)?.name || '—'}</span>
+<span className="text-ink-dim font-normal"> · {party.find((p) => p.id === litSources[0].character_id)?.name || '—'}</span>
 </p>
 ) : (
-<p className="text-sm text-neutral-500">Unlit</p>
+<p className="text-sm text-ink-dim">Unlit</p>
 )}
 </div>
 </div>
@@ -987,7 +987,7 @@ GM view
 <div className="flex-1 overflow-y-auto px-6">
 <div className="max-w-6xl mx-auto w-full pb-4">
 {gmType === 'ai' && aiTurnError && (
-<div className="mb-3 flex items-start gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
+<div className="mb-3 flex items-start gap-2 text-danger-text text-xs bg-danger/10 border border-danger/20 rounded-md px-3 py-2">
 <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
 <p>{aiTurnError}</p>
 </div>
@@ -999,7 +999,7 @@ GM view
 key={t.key}
 onClick={() => setSceneTab(t.key)}
 className={`text-xs px-3 py-1.5 rounded-md border ${
-sceneTab === t.key ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+sceneTab === t.key ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink hover:bg-panel2'
 }`}
 >
 {t.label}
@@ -1012,86 +1012,86 @@ sceneTab === t.key ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-ne
 <div className="flex flex-col gap-3">
 {myCharacter ? (
 <>
-<div className="bg-neutral-900 border border-neutral-800 rounded-lg p-3">
+<div className="bg-panel border border-line-soft rounded-lg p-3">
 <p className="text-sm font-medium text-white">{myCharacter.name}</p>
-<p className="text-[11px] text-neutral-500">Level {myCharacter.level} &middot; {myCharacter.class}</p>
+<p className="text-[11px] text-ink-dim">Level {myCharacter.level} &middot; {myCharacter.class}</p>
 </div>
 
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-2">Quick actions</p>
+<div className="bg-panel rounded-lg p-3">
+<p className="text-xs text-ink-dim mb-2">Quick actions</p>
 <div className="flex flex-col gap-1.5">
 {myGear.filter((g) => g.equipped).length === 0 && (
-<p className="text-[11px] text-neutral-500">No equipped gear yet.</p>
+<p className="text-[11px] text-ink-dim">No equipped gear yet.</p>
 )}
 {myGear.filter((g) => g.equipped).map((g) => (
 <button
 key={g.id}
 onClick={() => readyGear(g)}
-className="flex items-center gap-1.5 text-xs border border-neutral-700 rounded-md px-2 py-1.5 text-neutral-200 hover:bg-neutral-800 text-left"
+className="flex items-center gap-1.5 text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 text-left"
 >
-<Swords size={12} className="text-neutral-500 shrink-0" /> <span className="truncate">{g.name}</span>
+<Swords size={12} className="text-ink-dim shrink-0" /> <span className="truncate">{g.name}</span>
 </button>
 ))}
 {onOpenCharacterSheet && myCharacter && (
 <button
 onClick={() => onOpenCharacterSheet(myCharacter.id)}
-className="flex items-center gap-1.5 text-xs border border-neutral-700 rounded-md px-2 py-1.5 text-neutral-200 hover:bg-neutral-800 text-left"
+className="flex items-center gap-1.5 text-xs border border-line rounded-md px-2 py-1.5 text-ink hover:bg-panel2 text-left"
 >
-<Backpack size={12} className="text-neutral-500 shrink-0" /> Inspect character
+<Backpack size={12} className="text-ink-dim shrink-0" /> Inspect character
 </button>
 )}
 <button
 disabled
 title="Item consumption isn't wired up yet -- placeholder slot"
-className="flex items-center gap-1.5 text-xs border border-neutral-800 rounded-md px-2 py-1.5 text-neutral-600 text-left cursor-not-allowed"
+className="flex items-center gap-1.5 text-xs border border-line-soft rounded-md px-2 py-1.5 text-ink-faint text-left cursor-not-allowed"
 >
-<Package size={12} className="text-neutral-600 shrink-0" /> Use item
+<Package size={12} className="text-ink-faint shrink-0" /> Use item
 </button>
 </div>
 </div>
 
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-2">Talents</p>
+<div className="bg-panel rounded-lg p-3">
+<p className="text-xs text-ink-dim mb-2">Talents</p>
 {myTalents.length === 0 ? (
-<p className="text-[11px] text-neutral-500">None yet.</p>
+<p className="text-[11px] text-ink-dim">None yet.</p>
 ) : (
 <div className="flex flex-col gap-2">
 {myTalents.map((t) => (
 <div key={t.id} className="text-[11px]">
-<p className="text-neutral-200">{t.description}</p>
-<p className="text-neutral-600">{t.source}</p>
+<p className="text-ink">{t.description}</p>
+<p className="text-ink-faint">{t.source}</p>
 </div>
 ))}
 </div>
 )}
 </div>
 
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-2 flex items-center gap-1"><ShieldCheck size={11} className="text-neutral-500" /> Active effects</p>
-<p className="text-[11px] text-neutral-500">Not tracked yet -- conditions/buffs are a planned feature.</p>
+<div className="bg-panel rounded-lg p-3">
+<p className="text-xs text-ink-dim mb-2 flex items-center gap-1"><ShieldCheck size={11} className="text-ink-dim" /> Active effects</p>
+<p className="text-[11px] text-ink-dim">Not tracked yet -- conditions/buffs are a planned feature.</p>
 </div>
 </>
 ) : (
-<div className="bg-neutral-900 border border-neutral-800 rounded-lg p-3">
-<p className="text-[11px] text-neutral-500">You don't have a character in this campaign yet.</p>
+<div className="bg-panel border border-line-soft rounded-lg p-3">
+<p className="text-[11px] text-ink-dim">You don't have a character in this campaign yet.</p>
 </div>
 )}
 
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-2">Turn order</p>
+<div className="bg-panel rounded-lg p-3">
+<p className="text-xs text-ink-dim mb-2">Turn order</p>
 {turnOrder.length === 0 ? (
-<p className="text-[11px] text-neutral-500">Not set yet -- the GM rolls initiative to start.</p>
+<p className="text-[11px] text-ink-dim">Not set yet -- the GM rolls initiative to start.</p>
 ) : (
 <div className="flex flex-col gap-1">
 {turnOrder.map((t, i) => (
 <div
 key={t.id || i}
 className={`flex items-center justify-between text-[11px] px-2 py-1 rounded ${
-t.status === 'acting' ? 'bg-blue-500/20 text-blue-300 font-medium' : 'text-neutral-300'
+t.status === 'acting' ? 'bg-primary/20 text-primary-text font-medium' : 'text-ink'
 }`}
 >
 <span>{t.name}</span>
-<span className={t.status === 'acting' ? '' : 'text-neutral-500'}>{t.status}</span>
+<span className={t.status === 'acting' ? '' : 'text-ink-dim'}>{t.status}</span>
 </div>
 ))}
 </div>
@@ -1102,16 +1102,16 @@ t.status === 'acting' ? 'bg-blue-500/20 text-blue-300 font-medium' : 'text-neutr
 {/* CENTER: scene + log + composer helpers */}
 <div className="flex flex-col gap-3 min-w-0">
 {showMapPane && (
-<div className="bg-neutral-900 rounded-lg p-4">
+<div className="bg-panel rounded-lg p-4">
 <div className="flex items-center justify-between mb-2.5">
-<span className="text-xs text-neutral-400">Scene</span>
+<span className="text-xs text-ink-dim">Scene</span>
 <div className="flex items-center gap-1">
 {[ZoomIn, ZoomOut, Sun].map((Icon, i) => (
 <button
 key={i}
 disabled
 title="Map view controls aren't wired up yet -- placeholder"
-className="p-1 rounded border border-neutral-800 text-neutral-600 cursor-not-allowed"
+className="p-1 rounded border border-line-soft text-ink-faint cursor-not-allowed"
 >
 <Icon size={12} />
 </button>
@@ -1125,19 +1125,19 @@ party={party}
 monsters={monsters}
 litCharacterId={litCharacterId}
 />
-<div className="flex items-center justify-between mt-3 pt-2.5 border-t border-neutral-800">
-<span className="text-xs text-neutral-400">Where to next?</span>
+<div className="flex items-center justify-between mt-3 pt-2.5 border-t border-line-soft">
+<span className="text-xs text-ink-dim">Where to next?</span>
 <div className="flex gap-1.5">
 {VOTE_OPTIONS.map((o) => (
 <button
 key={o.key}
 onClick={() => vote(o.key)}
-className={`text-xs border rounded-md px-2 py-1 flex items-center gap-1.5 hover:bg-neutral-800 ${
-myVote === o.key ? 'border-blue-500 text-blue-200' : 'border-neutral-700 text-neutral-200'
+className={`text-xs border rounded-md px-2 py-1 flex items-center gap-1.5 hover:bg-panel2 ${
+myVote === o.key ? 'border-primary text-primary-text' : 'border-line text-ink'
 }`}
 >
 {o.label}{' '}
-<span className="text-[10px] px-1.5 rounded-full bg-blue-500/20 text-blue-300">{voteCounts[o.key]}</span>
+<span className="text-[10px] px-1.5 rounded-full bg-primary/20 text-primary-text">{voteCounts[o.key]}</span>
 </button>
 ))}
 </div>
@@ -1146,7 +1146,7 @@ myVote === o.key ? 'border-blue-500 text-blue-200' : 'border-neutral-700 text-ne
 )}
 
 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-<div className="bg-neutral-900 rounded-lg p-3">
+<div className="bg-panel rounded-lg p-3">
 <style>{`
 @keyframes dice-spin {
 0% { transform: rotate(0deg) scale(1); }
@@ -1161,7 +1161,7 @@ myVote === o.key ? 'border-blue-500 text-blue-200' : 'border-neutral-700 text-ne
 .dice-rolling { animation: dice-spin 0.3s linear infinite; }
 .dice-landed { animation: dice-land 0.3s ease-out; }
 `}</style>
-<p className="text-xs text-neutral-400 mb-2">Roll a die</p>
+<p className="text-xs text-ink-dim mb-2">Roll a die</p>
 
 <div className="flex flex-col items-center justify-center mb-3">
 <div
@@ -1169,17 +1169,17 @@ key={rollNonce}
 className={`w-16 h-16 rounded-xl border-2 flex items-center justify-center text-2xl font-bold ${
 rollState
 ? rollState.isCrit
-? 'border-green-500 text-white bg-green-500/10'
+? 'border-positive text-white bg-positive/10'
 : rollState.isFumble
-? 'border-red-500 text-white bg-red-500/10'
-: 'border-blue-500 text-white bg-blue-500/10'
-: 'border-neutral-700 text-neutral-600 bg-neutral-950'
+? 'border-danger text-white bg-danger/10'
+: 'border-primary text-white bg-primary/10'
+: 'border-line text-ink-faint bg-bg'
 } ${rollState?.isRolling ? 'dice-rolling' : rollState ? 'dice-landed' : ''}`}
 >
 {rollState ? rollState.value : <Dices size={22} />}
 </div>
 {rollState && (
-<p className="text-[11px] text-neutral-500 mt-1.5">
+<p className="text-[11px] text-ink-dim mt-1.5">
 {rollState.label}
 {rollState.isRolling ? ' rolling…' : rollState.isCrit ? ' — crit!' : rollState.isFumble ? ' — fumble!' : ''}
 </p>
@@ -1192,21 +1192,21 @@ rollState
 key={sides}
 onClick={() => rollQuickDie(sides)}
 disabled={rollState?.isRolling}
-className="text-xs py-1.5 border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+className="text-xs py-1.5 border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
 >
 d{sides}
 </button>
 ))}
 </div>
 
-<div className="pt-2.5 border-t border-neutral-800">
-<p className="text-[11px] text-neutral-500 mb-1.5">Custom roll (notation, advantage/disadvantage, reason)</p>
+<div className="pt-2.5 border-t border-line-soft">
+<p className="text-[11px] text-ink-dim mb-1.5">Custom roll (notation, advantage/disadvantage, reason)</p>
 <div className="flex gap-1.5 mb-1.5">
 <input
 value={notationInput}
 onChange={(e) => setNotationInput(e.target.value)}
 placeholder="1d20+3"
-className="w-20 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+className="w-20 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
 />
 <div className="flex flex-1 gap-1">
 {['flat', 'advantage', 'disadvantage'].map((m) => (
@@ -1214,7 +1214,7 @@ className="w-20 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1
 key={m}
 onClick={() => setRollMode(m)}
 className={`flex-1 text-[10px] py-1 rounded-md border ${
-rollMode === m ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-neutral-700 text-neutral-300'
+rollMode === m ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink'
 }`}
 >
 {m === 'flat' ? 'flat' : m === 'advantage' ? 'adv' : 'disadv'}
@@ -1227,31 +1227,31 @@ rollMode === m ? 'border-blue-500 text-blue-200 bg-blue-500/10' : 'border-neutra
 value={reasonInput}
 onChange={(e) => setReasonInput(e.target.value)}
 placeholder="reason (optional)"
-className="flex-1 min-w-0 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
 />
 <button
 onClick={rollCustom}
 disabled={rollState?.isRolling}
-className="text-xs px-2.5 border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+className="text-xs px-2.5 border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
 >
 Roll
 </button>
 </div>
 {rollError && (
-<div className="flex items-center gap-1.5 text-red-400 mb-1.5">
+<div className="flex items-center gap-1.5 text-danger-text mb-1.5">
 <AlertCircle size={12} />
 <p className="text-[11px]">{rollError}</p>
 </div>
 )}
 </div>
 
-<div className="pt-2.5 border-t border-neutral-800">
-<p className="text-[11px] text-neutral-500 mb-1.5">Rolled it yourself? Log it here.</p>
+<div className="pt-2.5 border-t border-line-soft">
+<p className="text-[11px] text-ink-dim mb-1.5">Rolled it yourself? Log it here.</p>
 <div className="flex gap-1.5">
 <select
 value={manualDie}
 onChange={(e) => setManualDie(e.target.value)}
-className="w-14 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1 py-1 text-white"
+className="w-14 text-xs bg-bg border border-line rounded-md px-1 py-1 text-white"
 >
 {dice.map((d) => (
 <option key={d} value={d}>d{d}</option>
@@ -1262,9 +1262,9 @@ type="number"
 value={manualValue}
 onChange={(e) => setManualValue(e.target.value)}
 placeholder="14"
-className="w-14 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+className="w-14 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
 />
-<button onClick={logManualRoll} className="flex-1 text-xs border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800">
+<button onClick={logManualRoll} className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2">
 Log
 </button>
 </div>
@@ -1272,16 +1272,16 @@ Log
 </div>
 
 <div className="flex flex-col gap-3">
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-2">Attack</p>
+<div className="bg-panel rounded-lg p-3">
+<p className="text-xs text-ink-dim mb-2">Attack</p>
 {monsters.length === 0 ? (
-<p className="text-[11px] text-neutral-500">No monsters in this encounter yet.</p>
+<p className="text-[11px] text-ink-dim">No monsters in this encounter yet.</p>
 ) : (
 <>
 <select
 value={attackTargetId}
 onChange={(e) => setAttackTargetId(e.target.value)}
-className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white mb-1.5"
+className="w-full text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white mb-1.5"
 >
 <option value="">Target...</option>
 {monsters.map((m) => (
@@ -1293,24 +1293,24 @@ className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px
 value={attackNotation}
 onChange={(e) => setAttackNotation(e.target.value)}
 placeholder="1d20+3"
-className="w-16 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+className="w-16 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
 />
 <input
 value={damageNotation}
 onChange={(e) => setDamageNotation(e.target.value)}
 placeholder="1d6+1"
-className="w-16 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+className="w-16 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
 />
 <button
 onClick={resolveAttack}
 disabled={!attackTargetId || attacking}
-className="flex-1 text-xs border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
 >
 {attacking ? 'Rolling…' : 'Attack'}
 </button>
 </div>
 {attackError && (
-<div className="flex items-center gap-1.5 text-red-400">
+<div className="flex items-center gap-1.5 text-danger-text">
 <AlertCircle size={12} />
 <p className="text-[11px]">{attackError}</p>
 </div>
@@ -1319,16 +1319,16 @@ className="flex-1 text-xs border border-neutral-700 rounded-md text-neutral-200 
 )}
 </div>
 
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-2">Stabilize</p>
+<div className="bg-panel rounded-lg p-3">
+<p className="text-xs text-ink-dim mb-2">Stabilize</p>
 {party.filter((p) => p.status === 'dying').length === 0 ? (
-<p className="text-[11px] text-neutral-500">No one is dying right now.</p>
+<p className="text-[11px] text-ink-dim">No one is dying right now.</p>
 ) : (
 <>
 <select
 value={stabilizeTargetId}
 onChange={(e) => setStabilizeTargetId(e.target.value)}
-className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white mb-1.5"
+className="w-full text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white mb-1.5"
 >
 <option value="">Target...</option>
 {party.filter((p) => p.status === 'dying').map((p) => (
@@ -1340,18 +1340,18 @@ className="w-full text-xs bg-neutral-950 border border-neutral-700 rounded-md px
 value={stabilizeNotation}
 onChange={(e) => setStabilizeNotation(e.target.value)}
 placeholder="1d20+1"
-className="w-16 text-xs bg-neutral-950 border border-neutral-700 rounded-md px-1.5 py-1 text-white"
+className="w-16 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
 />
 <button
 onClick={resolveStabilize}
 disabled={!stabilizeTargetId || stabilizing}
-className="flex-1 text-xs border border-neutral-700 rounded-md text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
 >
 {stabilizing ? 'Rolling…' : 'Stabilize (DC 15 INT)'}
 </button>
 </div>
 {stabilizeError && (
-<div className="flex items-center gap-1.5 text-red-400">
+<div className="flex items-center gap-1.5 text-danger-text">
 <AlertCircle size={12} />
 <p className="text-[11px]">{stabilizeError}</p>
 </div>
@@ -1363,29 +1363,29 @@ className="flex-1 text-xs border border-neutral-700 rounded-md text-neutral-200 
 </div>
 
 {showLogPane && (gmType === 'ai' ? (
-<div className="bg-neutral-900 rounded-lg p-4">
-<p className="text-xs text-neutral-400 mb-2">AI GM</p>
+<div className="bg-panel rounded-lg p-4">
+<p className="text-xs text-ink-dim mb-2">AI GM</p>
 <div ref={sceneLogRef} className="min-h-[240px] max-h-[420px] overflow-y-auto flex flex-col gap-2.5 pr-1">
 {log.length === 0 && (
-<p className="text-xs text-neutral-500 text-center mt-4">
+<p className="text-xs text-ink-dim text-center mt-4">
 Nothing has happened yet. Say or do something below, then hit Continue when the party's ready.
 </p>
 )}
 {log.map((entry) => renderChatBubble(entry))}
 {aiTurnPending && (
 <div className="flex justify-start">
-<div className="max-w-[85%] bg-neutral-800/70 border border-neutral-700 rounded-xl px-3.5 py-2.5">
-<p className="font-medium text-neutral-300 flex items-center gap-1.5 mb-1 text-xs">
+<div className="max-w-[85%] bg-panel2/70 border border-line rounded-xl px-3.5 py-2.5">
+<p className="font-medium text-ink flex items-center gap-1.5 mb-1 text-xs">
 <Loader2 size={12} className="animate-spin" /> Pending adjudication
 </p>
-<p className="text-xs text-neutral-500 mb-2">The AI GM is resolving what happens next.</p>
+<p className="text-xs text-ink-dim mb-2">The AI GM is resolving what happens next.</p>
 <div className="flex gap-1.5">
 {['No roll', 'Request check', 'Clarify'].map((label) => (
 <button
 key={label}
 disabled
 title="Manual adjudication controls aren't wired up yet -- placeholder"
-className="text-[11px] border border-neutral-700 rounded-md px-2 py-1 text-neutral-600 cursor-not-allowed"
+className="text-[11px] border border-line rounded-md px-2 py-1 text-ink-faint cursor-not-allowed"
 >
 {label}
 </button>
@@ -1398,18 +1398,18 @@ className="text-[11px] border border-neutral-700 rounded-md px-2 py-1 text-neutr
 </div>
 ) : (
 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-<div className="bg-neutral-900 rounded-lg p-4">
-<p className="text-xs text-neutral-400 mb-2">Scene log</p>
+<div className="bg-panel rounded-lg p-4">
+<p className="text-xs text-ink-dim mb-2">Scene log</p>
 <div className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
-{narrationLog.length === 0 && <p className="text-xs text-neutral-500">Nothing has happened yet.</p>}
+{narrationLog.length === 0 && <p className="text-xs text-ink-dim">Nothing has happened yet.</p>}
 {narrationLog.map((entry) => renderLogEntry(entry))}
 </div>
 </div>
 
-<div className="bg-neutral-900 rounded-lg p-4">
-<p className="text-xs text-neutral-400 mb-2">Party chat</p>
+<div className="bg-panel rounded-lg p-4">
+<p className="text-xs text-ink-dim mb-2">Party chat</p>
 <div ref={chatLogRef} className="h-[220px] overflow-y-auto flex flex-col gap-2.5 text-sm pr-1">
-{chatLog.length === 0 && <p className="text-xs text-neutral-500">No messages yet -- say something below.</p>}
+{chatLog.length === 0 && <p className="text-xs text-ink-dim">No messages yet -- say something below.</p>}
 {chatLog.map((entry) => renderLogEntry(entry))}
 </div>
 </div>
@@ -1419,24 +1419,24 @@ className="text-[11px] border border-neutral-700 rounded-md px-2 py-1 text-neutr
 
 {/* RIGHT RAIL: current scene / known details / objective / party */}
 <div className="flex flex-col gap-3">
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-1.5">Current scene</p>
+<div className="bg-panel rounded-lg p-3">
+<p className="text-xs text-ink-dim mb-1.5">Current scene</p>
 <span className={`inline-block text-xs px-2 py-1 rounded-md border ${
-sceneMode === 'Combat' ? 'border-red-600/60 text-red-300 bg-red-500/10' : 'border-blue-600/60 text-blue-300 bg-blue-500/10'
+sceneMode === 'Combat' ? 'border-danger/60 text-danger-text bg-danger/10' : 'border-primary/60 text-primary-text bg-primary/10'
 }`}>
 {sceneMode}
 </span>
 </div>
 
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-2">Known details</p>
+<div className="bg-panel rounded-lg p-3">
+<p className="text-xs text-ink-dim mb-2">Known details</p>
 {gmNotes.length === 0 ? (
-<p className="text-[11px] text-neutral-500">Nothing revealed yet.</p>
+<p className="text-[11px] text-ink-dim">Nothing revealed yet.</p>
 ) : (
 <div className="flex flex-col gap-1.5">
 {gmNotes.map((n) => (
-<div key={n.id} className="flex items-start gap-1.5 text-[11px] text-neutral-300 border border-neutral-800 rounded-md px-2 py-1.5">
-<HelpCircle size={11} className="text-neutral-500 mt-0.5 shrink-0" />
+<div key={n.id} className="flex items-start gap-1.5 text-[11px] text-ink border border-line-soft rounded-md px-2 py-1.5">
+<HelpCircle size={11} className="text-ink-dim mt-0.5 shrink-0" />
 <span>{n.text}</span>
 </div>
 ))}
@@ -1445,27 +1445,27 @@ sceneMode === 'Combat' ? 'border-red-600/60 text-red-300 bg-red-500/10' : 'borde
 </div>
 
 {objective && (
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-1.5">Objective</p>
-<p className="text-sm text-neutral-200">{objective.title}</p>
+<div className="bg-panel rounded-lg p-3">
+<p className="text-xs text-ink-dim mb-1.5">Objective</p>
+<p className="text-sm text-ink">{objective.title}</p>
 </div>
 )}
 
 {activeClocks.length > 0 && (
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-2">Clocks</p>
+<div className="bg-panel rounded-lg p-3">
+<p className="text-xs text-ink-dim mb-2">Clocks</p>
 <div className="flex flex-col gap-2">
 {activeClocks.map((c) => (
 <div key={c.id}>
 <div className="flex items-center justify-between mb-1">
-<span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-neutral-300' : 'text-neutral-500'}`}>{c.name}</span>
-<span className="text-[10px] text-neutral-500 shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
+<span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-ink' : 'text-ink-dim'}`}>{c.name}</span>
+<span className="text-[10px] text-ink-dim shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
 </div>
 <div className="flex gap-0.5">
 {Array.from({ length: c.segments_total }).map((_, i) => (
 <span
 key={i}
-className={`h-1.5 flex-1 rounded-sm ${i < c.segments_filled ? 'bg-blue-400' : 'bg-neutral-700'}`}
+className={`h-1.5 flex-1 rounded-sm ${i < c.segments_filled ? 'bg-primary' : 'bg-panel2'}`}
 />
 ))}
 </div>
@@ -1475,12 +1475,12 @@ className={`h-1.5 flex-1 rounded-sm ${i < c.segments_filled ? 'bg-blue-400' : 'b
 </div>
 )}
 
-<div className="bg-neutral-900 rounded-lg p-3">
-<p className="text-xs text-neutral-400 mb-2">Party</p>
-{party.length === 0 && <p className="text-[11px] text-neutral-500">No characters in this campaign yet.</p>}
+<div className="bg-panel rounded-lg p-3">
+<p className="text-xs text-ink-dim mb-2">Party</p>
+{party.length === 0 && <p className="text-[11px] text-ink-dim">No characters in this campaign yet.</p>}
 <div className="flex flex-col gap-2">
 {party.map((p) => (
-<div key={p.id} className="border border-neutral-800 rounded-md p-2">
+<div key={p.id} className="border border-line-soft rounded-md p-2">
 <button
 onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
 disabled={!onOpenCharacterSheet}
@@ -1489,23 +1489,23 @@ className="w-full text-left disabled:cursor-default"
 <div className="flex items-center justify-between mb-1">
 <div className="flex items-center gap-1.5 min-w-0">
 {p.avatar_url ? (
-<img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-neutral-700 shrink-0" />
+<img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-line shrink-0" />
 ) : (
-<div className="w-5 h-5 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center shrink-0">
-<User size={10} className="text-neutral-500" />
+<div className="w-5 h-5 rounded-full bg-panel2 border border-line flex items-center justify-center shrink-0">
+<User size={10} className="text-ink-dim" />
 </div>
 )}
 <span className="text-xs font-medium text-white truncate">{p.name}</span>
 </div>
-<span className="text-[11px] text-neutral-500 shrink-0">{p.hp}/{p.max_hp}</span>
+<span className="text-[11px] text-ink-dim shrink-0">{p.hp}/{p.max_hp}</span>
 </div>
-<div className="h-1 rounded-full bg-red-900/40 overflow-hidden">
+<div className="h-1 rounded-full bg-danger/40 overflow-hidden">
 <div className={`h-full ${hpBarColor(p.hp, p.max_hp)}`} style={{ width: `${p.max_hp ? (p.hp / p.max_hp) * 100 : 0}%` }} />
 </div>
 </button>
 {p.status && p.status !== 'alive' && (
 <span className={`inline-block mt-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
-p.status === 'dying' ? 'border-red-600 text-red-400' : p.status === 'stable' ? 'border-amber-500 text-amber-400' : 'border-neutral-600 text-neutral-500'
+p.status === 'dying' ? 'border-danger text-danger-text' : p.status === 'stable' ? 'border-warning text-warning-text' : 'border-line text-ink-dim'
 }`}>
 {p.status === 'dying' ? `Dying (${p.death_timer ?? '?'})` : p.status}
 </span>
@@ -1514,7 +1514,7 @@ p.status === 'dying' ? 'border-red-600 text-red-400' : p.status === 'stable' ? '
 <button
 onClick={() => rollDeathCheck(p.id)}
 disabled={deathCheckPendingId === p.id}
-className="mt-1.5 w-full text-[11px] border border-red-800/60 text-red-300 rounded-md py-1 hover:bg-red-950/40 disabled:opacity-50"
+className="mt-1.5 w-full text-[11px] border border-danger/60 text-danger-text rounded-md py-1 hover:bg-danger/40 disabled:opacity-50"
 >
 {deathCheckPendingId === p.id ? 'Rolling…' : 'Roll death check'}
 </button>
@@ -1528,19 +1528,19 @@ className="mt-1.5 w-full text-[11px] border border-red-800/60 text-red-300 round
 </div>
 </div>
 
-<div className="shrink-0 border-t border-neutral-800">
+<div className="shrink-0 border-t border-line-soft">
 <div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_220px] gap-3 items-center">
 <input
 value={message}
 onChange={(e) => setMessage(e.target.value)}
 onKeyDown={(e) => e.key === 'Enter' && (gmType === 'ai' ? sendAndAskAiGm() : sendMessage())}
 placeholder="Say or do something"
-className="min-w-0 bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-white"
+className="min-w-0 bg-panel border border-line rounded-md px-3 py-2 text-sm text-white"
 />
 <button
 disabled
 title="Voice input isn't wired up yet -- placeholder"
-className="text-sm border border-neutral-800 rounded-md px-3 py-2 text-neutral-600 cursor-not-allowed"
+className="text-sm border border-line-soft rounded-md px-3 py-2 text-ink-faint cursor-not-allowed"
 >
 <Mic size={15} />
 </button>
@@ -1548,7 +1548,7 @@ className="text-sm border border-neutral-800 rounded-md px-3 py-2 text-neutral-6
 <button
 onClick={onOpenLibrary}
 title="Ask a rule"
-className="text-sm border border-neutral-700 rounded-md px-3 py-2 flex items-center gap-1.5 text-neutral-300 hover:bg-neutral-800 whitespace-nowrap"
+className="text-sm border border-line rounded-md px-3 py-2 flex items-center gap-1.5 text-ink hover:bg-panel2 whitespace-nowrap"
 >
 <HelpCircle size={15} /> Ask a rule
 </button>
@@ -1557,7 +1557,7 @@ className="text-sm border border-neutral-700 rounded-md px-3 py-2 flex items-cen
 <button
 onClick={sendAndAskAiGm}
 disabled={aiTurnPending}
-className="text-sm border border-purple-500/40 bg-purple-500/10 rounded-md px-3.5 py-2 flex items-center justify-center gap-1.5 text-purple-200 hover:bg-purple-500/20 disabled:opacity-60 whitespace-nowrap"
+className="text-sm border border-ai/40 bg-ai/10 rounded-md px-3.5 py-2 flex items-center justify-center gap-1.5 text-ai-text hover:bg-ai/20 disabled:opacity-60 whitespace-nowrap"
 >
 {aiTurnPending ? <Loader2 size={15} className="animate-spin" /> : message.trim() ? <Send size={15} /> : <Bot size={15} />}
 {aiTurnPending ? 'Thinking…' : message.trim() ? 'Send' : 'Continue'}
@@ -1565,7 +1565,7 @@ className="text-sm border border-purple-500/40 bg-purple-500/10 rounded-md px-3.
 ) : (
 <button
 onClick={sendMessage}
-className="text-sm border border-neutral-700 rounded-md px-3.5 py-2 flex items-center justify-center gap-1.5 text-neutral-200 hover:bg-neutral-800"
+className="text-sm border border-line rounded-md px-3.5 py-2 flex items-center justify-center gap-1.5 text-ink hover:bg-panel2"
 >
 <Send size={15} /> Send
 </button>
