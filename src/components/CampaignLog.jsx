@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, Plus, Trash2, Flame, Play, Pause } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import { appendUniqueById } from '../app/realtimeCollections.js'
+import ProgressBar from './ui/ProgressBar.jsx'
 
 const THREAD_STATUSES = ['open', 'resolved', 'abandoned']
 const STATUS_COLOR = {
@@ -368,14 +369,14 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
                 <span className="text-ink-faint">{clock.segments_filled} / {clock.segments_total}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="flex gap-0.5 flex-1">
-                  {Array.from({ length: clock.segments_total }).map((_, i) => (
-                    <span
-                      key={i}
-                      className={`h-2 flex-1 rounded-sm ${i < clock.segments_filled ? 'bg-primary' : 'bg-panel2'}`}
-                    />
-                  ))}
-                </div>
+                <ProgressBar
+                  mode="segmented"
+                  segments={clock.segments_total}
+                  filled={clock.segments_filled}
+                  tone="amber"
+                  heightClassName="h-2"
+                  className="flex-1"
+                />
                 {isGm && (
                   <div className="flex items-center gap-1 shrink-0">
                     <button onClick={() => adjustClock(clock, -1)} className="px-1.5 border border-line rounded text-ink-dim">-</button>

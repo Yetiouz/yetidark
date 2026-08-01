@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Eye, EyeOff, Plus, Upload, Dices, SkipForward, Settings, ScrollText, BookOpen, Users, Flame, AlertTriangle, RotateCw, Timer, Sun, CloudFog, Target, Mic, Paperclip, Megaphone, Lock } from 'lucide-react'
 
 import ZoneScene from './ZoneScene.jsx'
+import ProgressBar from './ui/ProgressBar.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { campaignMapPath, useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 import { abilityModifier } from '../game/rules/character.js'
@@ -947,14 +948,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                           <span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-ink' : 'text-ink-dim'}`}>{c.name}</span>
                           <span className="text-[10px] text-ink-dim shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
                         </div>
-                        <div className="flex gap-0.5">
-                          {Array.from({ length: c.segments_total }).map((_, i) => (
-                            <span
-                              key={i}
-                              className={`h-1.5 flex-1 rounded-sm ${i < c.segments_filled ? 'bg-warning' : 'bg-panel2'}`}
-                            />
-                          ))}
-                        </div>
+                        <ProgressBar mode="segmented" segments={c.segments_total} filled={c.segments_filled} tone="amber" />
                       </div>
                     ))}
                   </div>
