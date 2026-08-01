@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Flame } from 'lucide-react'
 import PlaceholderScene from './ui/PlaceholderScene.jsx'
 
@@ -42,7 +43,15 @@ function groupByZone(tokens) {
 // this is the map-selection half of the GM notes "contextual inspector"
 // design decision (see GmDashboard.jsx's selectedEntity). Omit it (the
 // player table does) and tokens render exactly as before, not clickable.
-export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = [], monsters = [], litCharacterId, onSelectToken, selectedTokenId }) {
+//
+// onSetZone(type, id, zone), if passed, right-click on a token instead
+// pops a small Close/Near/Far menu right on the map -- GM-only (GameTable.jsx
+// never passes this, so the browser's normal context menu still shows for
+// players), replacing the old always-visible per-character/monster zone
+// button list GmDashboard.jsx used to render below the map.
+export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = [], monsters = [], litCharacterId, onSelectToken, selectedTokenId, onSetZone }) {
+  const [zoneMenu, setZoneMenu] = useState(null) // { id, type, name, x, y } while a right-click menu is open
+
   const tokens = [
     ...party.map((p) => ({ id: p.id, name: p.name, color: p.color || '#3b82f6', zone: p.zone || 'near', type: 'character' })),
     ...monsters.map((m) => ({ id: m.id, name: m.name, color: '#737373', zone: m.zone || 'near', type: 'monster' })),
@@ -109,6 +118,11 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
               type="button"
               disabled={!clickable}
               onClick={() => clickable && onSelectToken(t.id, t.type, t.name)}
+              onContextMenu={(e) => {
+                if (!onSetZone) return
+                e.preventDefault()
+                setZoneMenu({ id: t.id, type: t.type, name: t.name, x: t.x, y: t.y })
+              }}
               className={`absolute flex flex-col items-center gap-0.5 bg-transparent border-0 p-0 ${clickable ? 'cursor-pointer' : 'cursor-default'}`}
               style={{ left: `${t.x}%`, top: `${t.y}%`, transform: 'translate(-50%, -50%)' }}
             >
@@ -133,6 +147,34 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
           <div className="absolute top-2 left-2 bg-black/40 rounded px-2 py-1">
             <p className="text-[10px] text-ink">{sceneLabel}</p>
           </div>
+        )}
+
+        {zoneMenu && (
+          <>
+            {/* Full-cover backdrop closes the menu on an outside click or a
+                second right-click, without needing a document-level listener. */}
+            <div
+              className="absolute inset-0 z-10"
+              onClick={() => setZoneMenu(null)}
+              onContextMenu={(e) => { e.preventDefault(); setZoneMenu(null) }}
+            />
+            <div
+              className="absolute z-20 bg-panel border border-line-soft rounded-lg shadow-lg py-1 flex flex-col min-w-[96px]"
+              style={{ left: `${zoneMenu.x}%`, top: `${zoneMenu.y}%`, transform: 'translate(-50%, 10px)' }}
+            >
+              <p className="text-[10px] text-ink-dim px-2.5 pt-1 pb-1.5 mb-1 border-b border-line-soft truncate">{zoneMenu.name}</p>
+              {['close', 'near', 'far'].map((z) => (
+                <button
+                  key={z}
+                  type="button"
+                  onClick={() => { onSetZone(zoneMenu.type, zoneMenu.id, z); setZoneMenu(null) }}
+                  className="text-xs text-left px-2.5 py-1 capitalize text-ink hover:bg-panel2"
+                >
+                  {z}
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
