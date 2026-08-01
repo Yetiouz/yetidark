@@ -1,4 +1,5 @@
 import { Flame } from 'lucide-react'
+import PlaceholderScene from './ui/PlaceholderScene.jsx'
 
 // Shadowdark's own range system is three unmeasured bands -- close (melee),
 // near (~30ft, where ranged weapons work normally), far (in sight, ranged
@@ -66,9 +67,7 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
         {mapUrl ? (
           <img src={mapUrl} alt={sceneLabel || 'Scene'} className="absolute inset-0 w-full h-full object-cover opacity-80" />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-xs text-ink-faint">No scene image yet</p>
-          </div>
+          <PlaceholderScene caption="scene art placeholder -- map/zone view comes later" />
         )}
 
         {litPos && (
