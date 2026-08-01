@@ -3,6 +3,7 @@ import { Dices, Send, AlertCircle, User, Settings, ScrollText, BookOpen, Users, 
 import ZoneScene from './ZoneScene.jsx'
 import Row from './ui/Row.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
+import Footer from './ui/Footer.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { flatDieNotation } from '../lib/dice.js'
 import { useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
@@ -1509,7 +1510,7 @@ className="mt-1.5 w-full text-[11px] border border-danger/60 text-danger-text ro
 </div>
 </div>
 
-<div className="shrink-0 border-t border-line-soft">
+<Footer>
 <div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_220px] gap-3 items-center">
 <input
 value={message}
@@ -1552,7 +1553,7 @@ className="text-sm border border-line rounded-md px-3.5 py-2 flex items-center j
 </button>
 )}
 </div>
-</div>
+</Footer>
 </div>
 )
 }
