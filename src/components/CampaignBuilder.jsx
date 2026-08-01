@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AlertCircle, Check, ChevronLeft, ChevronRight, Crown, Bot, X as XIcon } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import ToggleSwitch from './ui/ToggleSwitch.jsx'
 
 function randomJoinCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no 0/O/1/I ambiguity
@@ -388,11 +389,10 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
                 <div className="flex flex-col gap-1.5 mb-4">
                   {MODES_OF_PLAY.map((mode) => (
                     <label key={mode.key} className="flex items-start gap-2 text-xs">
-                      <input
-                        type="checkbox"
+                      <ToggleSwitch
                         checked={modes.includes(mode.key)}
                         onChange={() => toggleMode(mode.key)}
-                        className="mt-0.5"
+                        label={mode.label}
                       />
                       <span>
                         <span className={`font-medium ${modes.includes(mode.key) ? 'text-ink' : 'text-ink-faint'}`}>{mode.label}</span>
