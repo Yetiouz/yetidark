@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send, AlertCircle, Bot, Loader2, Flame, HelpCircle, Swords, Backpack, Sparkles, Package, Mic, ZoomIn, ZoomOut, Sun, ShieldCheck } from 'lucide-react'
+import { Dices, Send, AlertCircle, Bot, Loader2, Flame, HelpCircle, Swords, Backpack, Sparkles, Package, Mic, ShieldCheck } from 'lucide-react'
 import ZoneScene from './ZoneScene.jsx'
 import Row from './ui/Row.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
 import StatTile from './ui/StatTile.jsx'
+import Card from './ui/Card.jsx'
 import Footer from './ui/Footer.jsx'
 import Modal from './ui/Modal.jsx'
 import CampaignToolbar from './CampaignToolbar.jsx'
@@ -848,22 +849,13 @@ request, so together they always exactly fill this column's height
 rather than however tall their content happens to be. */}
 <div className="flex flex-col gap-3 min-w-0 md:h-full md:min-h-0">
 {showMapPane && (
-<div className="bg-panel rounded-lg p-4 md:flex-[2] md:min-h-0 md:flex md:flex-col">
-<div className="flex items-center justify-between mb-3">
-<span className="text-xs text-ink-dim">Scene</span>
-<div className="flex items-center gap-1">
-{[ZoomIn, ZoomOut, Sun].map((Icon, i) => (
-<button
-key={i}
-disabled
-title="Map view controls aren't wired up yet -- placeholder"
-className="p-1 rounded border border-line-soft text-ink-faint cursor-not-allowed"
->
-<Icon size={12} />
-</button>
-))}
-</div>
-</div>
+<Card className="md:flex-[2] md:min-h-0 md:flex md:flex-col" bodyClassName="md:flex-1 md:min-h-0 md:flex md:flex-col">
+{/* No card title/header here, matching GmDashboard's map panel -- a
+map is self-explanatory, per direct user feedback (see GmDashboard.jsx),
+and this card previously had its own "Scene" label plus disabled
+Zoom/Light placeholder buttons that GmDashboard's never had; dropped
+here too so the frame around the map -- not just ZoneScene itself --
+renders identically on both screens. */}
 {/* Clocks used to be their own stacked right-rail card, competing for
 the same vertical space as Party/Known details/Objective -- moved to
 an overlay on the map itself, since that's screen real estate the
@@ -894,7 +886,7 @@ litCharacterId={litCharacterId}
 </div>
 )}
 </div>
-</div>
+</Card>
 )}
 
 <Modal open={showDiceModal} onClose={() => setShowDiceModal(false)} title="Dice & combat">
