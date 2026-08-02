@@ -76,8 +76,12 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
     setModes((m) => (m.includes(key) ? m.filter((k) => k !== key) : [...m, key]))
   }
 
-  const goNext = () => setStep((s) => Math.min(STEPS.length - 1, s + 1))
-  const goBack = () => setStep((s) => Math.max(0, s - 1))
+  // Clear any stale RPC error when navigating steps -- without this, a failed
+  // create() attempt (e.g. missing password on the Private-access path) leaves
+  // its error banner visible on Review even after the user goes back and fixes
+  // the underlying field, which reads as if the fix didn't take.
+  const goNext = () => { setError(null); setStep((s) => Math.min(STEPS.length - 1, s + 1)) }
+  const goBack = () => { setError(null); setStep((s) => Math.max(0, s - 1)) }
 
   const create = async () => {
     if (!session?.user) return
