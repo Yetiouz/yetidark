@@ -124,6 +124,17 @@ return source.remaining_minutes
 // card is gone -- monsters still render as tokens on the map via
 // ZoneScene same as always, and the left rail is now the one place their
 // full stat list lives, so nothing is duplicated across rails/columns.
+//
+// The CENTER column's Map and Scene log cards now adopt the same 2:1
+// height-locked split GameTable.jsx's player page has used since PR #69:
+// at md+, the whole body below the header/status strip stops page-
+// scrolling and instead locks to the remaining viewport height, each rail
+// scrolls independently, and the Map/Scene log cards split that height
+// 2:1 (flex-[2] / flex-1) so together they always exactly fill the column
+// instead of however tall their content happens to be. Below md it's a
+// normal stacked, page-scrolling grid, same reasoning as the player page:
+// three independently-tall columns only make sense locked to one screen
+// height once they're side by side.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -585,9 +596,9 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto w-full px-6 pb-4">
-          <div className="grid grid-cols-1 md:grid-cols-[260px_1fr_220px] gap-3 mb-3 items-start">
+      <div className="flex-1 overflow-y-auto md:overflow-hidden md:min-h-0">
+        <div className="max-w-6xl mx-auto w-full px-6 pb-4 md:h-full md:flex md:flex-col md:min-h-0">
+          <div className="grid grid-cols-1 md:grid-cols-[260px_1fr_220px] gap-3 mb-3 items-start md:items-stretch md:flex-1 md:min-h-0 md:grid-rows-[1fr]">
             {/* LEFT RAIL: the actual "run the encounter" console -- Scene
                 controls (turn indicator + Advance round / Pause-or-Resume /
                 Start encounter / Reveal area / Reveal hidden monster) above
@@ -600,7 +611,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 running the encounter, not dice shortcuts. Party status lives
                 in the right rail, matching GameTable.jsx's player-page Party
                 card position. */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 md:h-full md:min-h-0 md:overflow-y-auto">
               <Card title="Scene controls">
                 <div className="flex flex-col gap-1.5">
                   <p className="text-[11px] text-ink-dim px-0.5">
@@ -687,8 +698,11 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
             {/* CENTER: map + scene log -- Active encounter moved to the left
                 rail above, so monsters live there now; they still render as
-                tokens on the map via ZoneScene same as always. */}
-            <div className="flex flex-col gap-3 min-w-0">
+                tokens on the map via ZoneScene same as always. At md+ this
+                column splits 2:1 (Map flex-[2], Scene log flex-1) and locks
+                to the row's full height, same as GameTable.jsx's player
+                page -- see the top-of-file comment. */}
+            <div className="flex flex-col gap-3 min-w-0 md:h-full md:min-h-0">
               {/* Map and Active encounter used to be Scene/Map/Encounter tabs
                   (pick one, see it, lose the others); the tab switcher is
                   gone now, per direct user feedback, so both are just always
@@ -696,6 +710,8 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   one-page precedent. A bigger map redesign is planned later
                   -- this is the interim shape, not the final one. */}
               <Card
+                className="md:flex-[2] md:min-h-0 md:flex md:flex-col"
+                bodyClassName="md:flex-1 md:min-h-0 md:flex md:flex-col"
                 title="Map"
                 titleRight={
                   <div className="flex items-center gap-1 flex-wrap justify-end">
@@ -728,7 +744,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     -- see ZoneScene.jsx's onSetZone -- replacing the old
                     always-visible per-character/monster button list below
                     the map. */}
-                <div className="relative">
+                <div className="relative md:flex-1 md:min-h-0">
                   <ZoneScene
                     mapUrl={mapUrl}
                     mapAccessError={mapAccessError}
@@ -761,8 +777,15 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 </p>
               </Card>
 
-              <Card title="Scene log">
-                <div ref={sceneLogRef} className="h-[260px] overflow-y-auto flex flex-col gap-2 text-sm pr-1">
+              <Card
+                className="md:flex-1 md:min-h-0 md:flex md:flex-col"
+                bodyClassName="md:flex-1 md:min-h-0 md:flex md:flex-col"
+                title="Scene log"
+              >
+                <div
+                  ref={sceneLogRef}
+                  className="min-h-[160px] max-h-[280px] md:min-h-0 md:max-h-none md:flex-1 overflow-y-auto flex flex-col gap-2 text-sm pr-1"
+                >
                   {log.length === 0 && <p className="text-xs text-ink-dim">No messages yet -- narrate something below.</p>}
                   {log.map((entry) => <LogEntry as="p" key={entry.id} entry={entry} />)}
                 </div>
@@ -772,7 +795,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             {/* RIGHT RAIL: selected entity / trap placeholder / encounter /
                 GM notes / party -- Party sits last, same position it has in
                 GameTable.jsx's right rail. */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 md:h-full md:min-h-0 md:overflow-y-auto">
               <Card
                 title="Selected"
                 titleRight={selectedEntity && (
