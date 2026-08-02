@@ -10,6 +10,7 @@ import Card from './ui/Card.jsx'
 import Badge from './ui/Badge.jsx'
 import Button from './ui/Button.jsx'
 import Row from './ui/Row.jsx'
+import Modal from './ui/Modal.jsx'
 import Footer from './ui/Footer.jsx'
 import LogEntry from './LogEntry.jsx'
 import CampaignToolbar from './CampaignToolbar.jsx'
@@ -99,23 +100,30 @@ return source.remaining_minutes
 // ZoneScene.jsx's onSetZone), which is GM-only (GameTable.jsx never passes
 // onSetZone, so players still get the browser's normal right-click menu).
 //
-// Scene controls (Advance round / Pause session / Request a roll / Start
-// encounter / Reveal area / Reveal hidden monster) has moved twice now --
-// first its own card in the left rail, then folded into the top of the
-// Active encounter card -- and per direct feedback it's now a horizontal
-// row of icon-only buttons living in the header itself, next to the
-// Torch/Mode/Danger/etc status cards, same icon-only convention the Map
-// card's Preview/Secrets/Light/Fog toggles already use. The left rail now
-// holds Quick tables only. To its right (ml-auto, same row) sits a shrunk
-// but still-functional mini version of the Active encounter card -- an
-// inline Add-monster input plus a name/HP chip per monster -- per direct
-// follow-up feedback (a first pass shipped as a plain read-only status
-// text, then the user pointed at the real card's actual title/Add
-// button/empty-state copy and asked for that, shrunk, instead). HP +/-
-// and zone controls are left out of this mini version (too much for a
-// shrunk row); the full Active encounter card, with those controls, is
-// untouched in the center column below -- this is an additional quick-
-// add/glance spot, not a replacement for it.
+// Scene controls / Active encounter have moved several times now (own
+// left-rail card -> folded into Active encounter -> horizontal header
+// strip -> a shrunk mini-card next to that strip) -- per the user's own
+// framing, that's because the layout was still being actively explored,
+// not because earlier placements were wrong. This pass is the real
+// consolidation: the left rail is now the actual "run the encounter"
+// console -- a "Scene controls" card (turn indicator + Advance round /
+// Pause-or-Resume session / Start encounter / Reveal area / Reveal hidden
+// monster) stacked above an "Active encounter" card (the real Add-monster
+// input and full monster list, HP +/- and zone controls included, not a
+// shrunk stand-in). The header's icon strip and mini-card from the last
+// few passes are gone -- their content lives here now, all in one place,
+// matching the user's own reasoning ("that is what you use to run
+// encounters"). "Quick tables" (Random encounter/Reaction/Morale/
+// Treasure) and "Request a roll" moved out of the left rail entirely and
+// into a new on-demand dice modal, mirroring GameTable.jsx's dice/Attack/
+// Stabilize modal -- opened from a new dice icon in the composer footer,
+// same `Modal.jsx` component, so dice actions stop permanently occupying
+// rail space the same way GameTable.jsx already stopped doing for the
+// player page. The left rail widened (190px -> 260px) to fit the fuller
+// monster cards reasonably; the center column's own "Active encounter"
+// card is gone -- monsters still render as tokens on the map via
+// ZoneScene same as always, and the left rail is now the one place their
+// full stat list lives, so nothing is duplicated across rails/columns.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -133,6 +141,10 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [message, setMessage] = useState('')
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [composeMode, setComposeMode] = useState('public') // 'public' -> scene_log, 'private' -> gm_notes
+  // Quick tables / Request a roll used to sit permanently in the left rail
+  // and header; now behind an on-demand modal opened from the composer's
+  // dice icon, same pattern as GameTable.jsx's dice/Attack/Stabilize modal.
+  const [showDiceModal, setShowDiceModal] = useState(false)
   const [sessionActive, setSessionActive] = useState(false)
   const [togglingSession, setTogglingSession] = useState(false)
   const sceneLogRef = useRef(null)
@@ -573,90 +585,109 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         </div>
       </div>
 
-      {/* Scene controls -- used to be a Row list (first its own left-rail
-          card, then folded into the Active encounter card), now a
-          horizontal icon-button strip sitting in the header next to the
-          Torch/Mode/Danger/etc status cards, per direct user feedback. A
-          shrunk, still-functional version of the Active encounter card sits
-          to the right of the icons (ml-auto) -- Add input + a condensed
-          name/HP chip per monster -- per direct follow-up feedback (first
-          tried as a plain read-only status bar, then explicitly asked for
-          "that card... shrunk in there" instead). HP +/- and zone controls
-          stay out of this mini version -- too much for a shrunk row -- the
-          full Active encounter card (with those controls) is untouched in
-          the center column below; this is an additional quick-add/glance
-          spot, not a replacement for it. */}
-      <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 flex items-center gap-1.5 flex-wrap">
-        <Button icon={SkipForward} iconOnly onClick={advanceTurn} disabled={turnOrder.length === 0} title="Advance round" />
-        <Button
-          icon={sessionActive ? Pause : Play}
-          iconOnly
-          onClick={toggleSession}
-          disabled={togglingSession}
-          title={togglingSession ? 'Working…' : sessionActive ? 'Pause session' : 'Resume session'}
-        />
-        <Button icon={Dices} iconOnly onClick={requestRoll} disabled={requestingRoll} title="Request a roll" />
-        <Button icon={Swords} iconOnly onClick={startEncounter} title="Start encounter" />
-        <Button icon={EyeOff} iconOnly disabled title="Reveal area -- fog-of-war / area reveal isn't built yet, placeholder" />
-        {encounter.some((m) => m.hidden) && (
-          <Button
-            icon={Eye}
-            iconOnly
-            onClick={() => encounter.filter((m) => m.hidden).forEach((m) => revealMonster(m.id))}
-            title="Reveal hidden monster"
-          />
-        )}
-        <div className="ml-auto flex items-center gap-1.5 flex-wrap max-w-full text-xs bg-panel border border-line-soft rounded-lg px-2.5 py-1.5">
-          <span className="text-[10px] uppercase tracking-wide text-ink-dim shrink-0">Active encounter</span>
-          <input
-            value={monsterDraft}
-            onChange={(e) => setMonsterDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addMonster()}
-            placeholder="Monster name"
-            className="text-xs bg-bg border border-line rounded-md px-1.5 py-0.5 w-24 text-white shrink-0"
-          />
-          <Button icon={Plus} iconOnly onClick={addMonster} title="Add monster" />
-          {encounter.length === 0 ? (
-            <span className="text-ink-dim shrink-0">No monsters yet.</span>
-          ) : (
-            encounter.map((m) => (
-              <span
-                key={m.id}
-                title={m.hidden ? `${m.name} (hidden)` : m.name}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] shrink-0 ${
-                  m.hidden ? 'border-danger/60' : 'border-line'
-                }`}
-              >
-                {m.hidden && <EyeOff size={9} className="text-danger-text" />}
-                <span className="text-white">{m.name}</span>
-                <span className="text-ink-dim">{m.hp}/{m.max_hp}</span>
-              </span>
-            ))
-          )}
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto w-full px-6 pb-4">
-          <div className="grid grid-cols-1 md:grid-cols-[190px_1fr_220px] gap-3 mb-3 items-start">
-            {/* LEFT RAIL: quick tables only now -- scene controls moved up
-                into the header (see the icon-button strip above), and party
-                status lives in the right rail, in the same position as
-                GameTable.jsx's player-page Party card, per direct user
-                feedback that card placement should match the player page
-                as closely as possible. */}
+          <div className="grid grid-cols-1 md:grid-cols-[260px_1fr_220px] gap-3 mb-3 items-start">
+            {/* LEFT RAIL: the actual "run the encounter" console -- Scene
+                controls (turn indicator + Advance round / Pause-or-Resume /
+                Start encounter / Reveal area / Reveal hidden monster) above
+                the real Active encounter card (Add-monster input + full
+                monster list, HP +/- and zone controls included), per direct
+                user feedback that this is what the GM actually uses to run
+                encounters, so it should all live together in one place.
+                Quick tables and Request a roll moved out to the dice modal
+                (see the Footer's dice button below) so the rail stays about
+                running the encounter, not dice shortcuts. Party status lives
+                in the right rail, matching GameTable.jsx's player-page Party
+                card position. */}
             <div className="flex flex-col gap-3">
-              <Card title="Quick tables">
+              <Card title="Scene controls">
                 <div className="flex flex-col gap-1.5">
-                  <Row icon={Shuffle} label="Random encounter" onClick={() => rollQuickTable('Random encounter check', '1d6')} disabled={quickRolling} />
-                  <Row icon={Users} label="Reaction" onClick={() => rollQuickTable('Reaction roll', '2d6')} disabled={quickRolling} />
-                  <Row icon={Gauge} label={moraleChecking ? 'Rolling…' : 'Morale'} onClick={moraleCheck} disabled={moraleChecking || encounter.length === 0} />
-                  <Row icon={Gem} label="Treasure" onClick={() => rollQuickTable('Treasure roll', '1d100')} disabled={quickRolling} />
+                  <p className="text-[11px] text-ink-dim px-0.5">
+                    {actingEntry ? (
+                      <><span className="text-ink font-medium">{actingEntry.name}</span>&rsquo;s turn</>
+                    ) : (
+                      'No initiative rolled yet.'
+                    )}
+                  </p>
+                  <Row icon={SkipForward} label="Advance round" onClick={advanceTurn} disabled={turnOrder.length === 0} />
+                  <Row
+                    icon={sessionActive ? Pause : Play}
+                    label={togglingSession ? 'Working…' : sessionActive ? 'Pause session' : 'Resume session'}
+                    onClick={toggleSession}
+                    disabled={togglingSession}
+                  />
+                  <Row icon={Swords} label="Start encounter" onClick={startEncounter} />
+                  <Row icon={EyeOff} label="Reveal area" disabled title="Fog-of-war / area reveal isn't built yet -- placeholder" />
+                  {encounter.some((m) => m.hidden) && (
+                    <Row
+                      icon={Eye}
+                      label="Reveal hidden monster"
+                      onClick={() => encounter.filter((m) => m.hidden).forEach((m) => revealMonster(m.id))}
+                    />
+                  )}
+                </div>
+              </Card>
+
+              <Card
+                title="Active encounter"
+                titleRight={
+                  <div className="flex gap-1.5">
+                    <input
+                      value={monsterDraft}
+                      onChange={(e) => setMonsterDraft(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addMonster()}
+                      placeholder="Monster name"
+                      className="text-xs bg-bg border border-line rounded-md px-2 py-1 w-24 text-white"
+                    />
+                    <Button icon={Plus} iconOnly onClick={addMonster} title="Add monster" />
+                  </div>
+                }
+              >
+                <div className="flex flex-col gap-1.5">
+                  {encounter.length === 0 && <p className="text-xs text-ink-dim">No monsters yet -- add one above.</p>}
+                  {encounter.map((m) => (
+                    <div
+                      key={m.id}
+                      className={`flex flex-col gap-1 text-xs p-2 bg-panel2/60 rounded-md border ${
+                        m.hidden ? 'border-danger/60' : 'border-line'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-white">{m.name}</span>
+                          <span className="text-ink-dim">ac {m.ac}</span>
+                          {m.hidden && <Badge tone="purple">Hidden</Badge>}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => adjustHp(m, -1)} className="px-1.5 border border-line rounded text-ink">-</button>
+                          <span className="min-w-[44px] text-center text-ink">{m.hp} / {m.max_hp} hp</span>
+                          <button onClick={() => adjustHp(m, 1)} className="px-1.5 border border-line rounded text-ink">+</button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="text-[10px] text-ink-dim mr-0.5">Zone</span>
+                        {['close', 'near', 'far'].map((z) => (
+                          <button
+                            key={z}
+                            onClick={() => setMonsterZone(m.id, z)}
+                            className={`text-[10px] px-1.5 py-0.5 rounded border capitalize ${
+                              (m.zone || 'near') === z ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink-dim'
+                            }`}
+                          >
+                            {z}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </Card>
             </div>
 
-            {/* CENTER: map, active encounter, scene log -- all always visible now */}
+            {/* CENTER: map + scene log -- Active encounter moved to the left
+                rail above, so monsters live there now; they still render as
+                tokens on the map via ZoneScene same as always. */}
             <div className="flex flex-col gap-3 min-w-0">
               {/* Map and Active encounter used to be Scene/Map/Encounter tabs
                   (pick one, see it, lose the others); the tab switcher is
@@ -728,61 +759,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 <p className="text-[11px] text-ink-dim mt-2">
                   Right-click a token on the map to set its zone -- Close, Near, or Far from the party.
                 </p>
-              </Card>
-
-              <Card
-                title="Active encounter"
-                titleRight={
-                  <div className="flex gap-1.5">
-                    <input
-                      value={monsterDraft}
-                      onChange={(e) => setMonsterDraft(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addMonster()}
-                      placeholder="Monster name"
-                      className="text-xs bg-bg border border-line rounded-md px-2 py-1 w-32 text-white"
-                    />
-                    <Button icon={Plus} onClick={addMonster}>Add</Button>
-                  </div>
-                }
-              >
-                <div className="flex flex-col gap-1.5">
-                  {encounter.length === 0 && <p className="text-xs text-ink-dim">No monsters yet -- add one above.</p>}
-                  {encounter.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`flex flex-col gap-1 text-xs p-2 bg-panel2/60 rounded-md border ${
-                        m.hidden ? 'border-danger/60' : 'border-line'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-medium text-white">{m.name}</span>
-                          <span className="text-ink-dim">ac {m.ac}</span>
-                          {m.hidden && <Badge tone="purple">Hidden</Badge>}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => adjustHp(m, -1)} className="px-1.5 border border-line rounded text-ink">-</button>
-                          <span className="min-w-[44px] text-center text-ink">{m.hp} / {m.max_hp} hp</span>
-                          <button onClick={() => adjustHp(m, 1)} className="px-1.5 border border-line rounded text-ink">+</button>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-ink-dim mr-0.5">Zone</span>
-                        {['close', 'near', 'far'].map((z) => (
-                          <button
-                            key={z}
-                            onClick={() => setMonsterZone(m.id, z)}
-                            className={`text-[10px] px-1.5 py-0.5 rounded border capitalize ${
-                              (m.zone || 'near') === z ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink-dim'
-                            }`}
-                          >
-                            {z}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </Card>
 
               <Card title="Scene log">
@@ -960,6 +936,21 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         </div>
       </div>
 
+      {/* Dice tables -- Quick tables (Random encounter/Reaction/Morale/
+          Treasure) and Request a roll used to live permanently in the left
+          rail and header; now they're behind this on-demand modal opened
+          from the composer's dice button, mirroring GameTable.jsx's dice/
+          Attack/Stabilize modal exactly (same shared Modal.jsx). */}
+      <Modal open={showDiceModal} onClose={() => setShowDiceModal(false)} title="Dice tables">
+        <div className="flex flex-col gap-1.5">
+          <Row icon={Shuffle} label="Random encounter" onClick={() => rollQuickTable('Random encounter check', '1d6')} disabled={quickRolling} />
+          <Row icon={Users} label="Reaction" onClick={() => rollQuickTable('Reaction roll', '2d6')} disabled={quickRolling} />
+          <Row icon={Gauge} label={moraleChecking ? 'Rolling…' : 'Morale'} onClick={moraleCheck} disabled={moraleChecking || encounter.length === 0} />
+          <Row icon={Gem} label="Treasure" onClick={() => rollQuickTable('Treasure roll', '1d100')} disabled={quickRolling} />
+          <Row icon={Dices} label={requestingRoll ? 'Requesting…' : 'Request a roll'} onClick={requestRoll} disabled={requestingRoll} />
+        </div>
+      </Modal>
+
       <Footer>
         <div className="max-w-6xl mx-auto w-full px-6 pt-2.5 flex items-center gap-1.5">
           <button
@@ -979,7 +970,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             <Lock size={11} /> Private note
           </button>
         </div>
-        <div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto_180px] gap-3 items-center">
+        <div className="max-w-6xl mx-auto w-full px-6 py-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto_auto_180px] gap-3 items-center">
           <input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -987,6 +978,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             placeholder={composeMode === 'private' ? 'Note only you can see' : 'Narrate something to the party'}
             className="min-w-0 bg-panel border border-line rounded-md px-3 py-2 text-sm text-white"
           />
+          <Button iconOnly icon={Dices} onClick={() => setShowDiceModal(true)} title="Dice tables -- quick rolls & request a roll" />
           <Button iconOnly icon={Mic} disabled title="Voice input isn't wired up yet -- placeholder" />
           {onOpenLibrary && <Button icon={HelpCircle} onClick={onOpenLibrary}>Ask a rule</Button>}
           <Button iconOnly icon={Paperclip} disabled title="Attachments aren't wired up yet -- placeholder" />
