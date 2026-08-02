@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Eye, EyeOff, Plus, Upload, Dices, SkipForward, Flame, AlertTriangle, RotateCw, Timer, Sun, CloudFog,
   Target, Mic, Paperclip, Megaphone, Lock, Pause, Play, HelpCircle, Swords, Shuffle, Gauge, Users, Gem,
-  Skull, StickyNote,
+  Skull, StickyNote, Trash2,
 } from 'lucide-react'
 
 import ZoneScene from './ZoneScene.jsx'
@@ -174,6 +174,25 @@ return 'bg-danger'
 // matching means matching, not matching-plus-extra. The outer `Card`
 // wrapper (title="Party") stays, for consistency with this rail's other
 // cards; only the per-character content changed.
+//
+// MAP CARD, another round of direct feedback: no more "Map" title -- a
+// map is self-explanatory, per direct instruction, so the Card here
+// renders with no title row at all. Preview player view / Secrets /
+// Light / Fog / Traps / Replace map, previously a row of buttons above
+// the map (mixed labelled/icon-only), are now all icon-only and overlaid
+// directly on the scene image itself (top-left, mirroring how Clocks
+// already overlay top-right) rather than occupying card-header space.
+// Replace map (still `Upload`) also gained a genuine new counterpart:
+// Remove map (`Trash2`, disabled when no map is set) actually clears the
+// campaign's map reference via a new `removeMap` handler (confirmed via
+// window.confirm, matching this file's existing window.prompt style for
+// consequential actions) -- `ZoneScene` already falls back to its
+// placeholder scene when `mapUrl` is empty, the same state a campaign is
+// in before any map's ever been uploaded, so no new fallback UI was
+// needed. `removeMap` doesn't delete the file from storage, only the
+// reference -- `uploadMap` above never cleaned up old files on replace
+// either, so this keeps the same scope rather than introducing new
+// storage-management responsibility no other map action here has.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -536,6 +555,26 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     setMapInfo((m) => ({ ...(m || {}), map_path: path, map_url: null }))
   }
 
+  // Clears the campaign's map reference so ZoneScene falls back to its
+  // placeholder scene, same as before any map was ever uploaded. Doesn't
+  // delete the file from storage -- uploadMap above never cleaned up old
+  // files on replace either, same as-is scope. Reuses the uploadMap's
+  // uploading/uploadError state since the two actions are mutually
+  // exclusive campaign-map mutations.
+  const removeMap = async () => {
+    if (!campaignId || !campaignMapPath(mapInfo)) return
+    if (!window.confirm('Remove the map image? The scene will show the placeholder view until a new one is uploaded.')) return
+    setUploading(true)
+    setUploadError(null)
+    const { error } = await supabase.from('campaigns').update({ map_path: null, map_url: null }).eq('id', campaignId)
+    setUploading(false)
+    if (error) {
+      setUploadError(error.message)
+      return
+    }
+    setMapInfo((m) => ({ ...(m || {}), map_path: null, map_url: null }))
+  }
+
   const sendMessage = async () => {
     if (!message.trim() || !campaignId) return
     const text = message.trim()
@@ -785,9 +824,33 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               <Card
                 className="md:flex-[2] md:min-h-0 md:flex md:flex-col"
                 bodyClassName="md:flex-1 md:min-h-0 md:flex md:flex-col"
-                title="Map"
-                titleRight={
-                  <div className="flex items-center gap-1 flex-wrap justify-end">
+              >
+                {(uploadError || mapAccessError) && (
+                  <p className="text-xs text-danger-text mb-2">{uploadError || mapAccessError}</p>
+                )}
+                {/* No card title here -- a map is self-explanatory, per
+                    direct user feedback. Preview player view / Secrets /
+                    Light / Fog / Traps / Replace map / Remove map used to
+                    be a labelled-or-icon row above the map; they're now an
+                    icon strip overlaid directly on the scene image itself
+                    (top-left, opposite Clocks' top-right spot), matching
+                    the same overlay treatment Clocks already got. Zone
+                    assignment (Close/Near/Far) is now a right-click menu on
+                    each token -- see ZoneScene.jsx's onSetZone -- replacing
+                    the old always-visible per-character/monster button list
+                    below the map. */}
+                <div className="relative md:flex-1 md:min-h-0">
+                  <ZoneScene
+                    mapUrl={mapUrl}
+                    mapAccessError={mapAccessError}
+                    party={party}
+                    monsters={encounter}
+                    litCharacterId={lightSources.find((s) => s.lit)?.character_id || null}
+                    onSelectToken={(id, type, name) => selectEntity(type, id, name)}
+                    selectedTokenId={selectedEntity?.id || null}
+                    onSetZone={(type, id, zone) => (type === 'character' ? setCharacterZone(id, zone) : setMonsterZone(id, zone))}
+                  />
+                  <div className="absolute top-2 left-2 max-w-[calc(100%-1rem)] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-1.5 flex items-center gap-1 flex-wrap">
                     {onSwitchToPlayerView && (
                       <Button variant="primary" icon={Eye} iconOnly onClick={onSwitchToPlayerView} title="Preview player view" />
                     )}
@@ -802,33 +865,21 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                       className="hidden"
                       onChange={(e) => uploadMap(e.target.files?.[0])}
                     />
-                    <Button icon={Upload} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                      {uploading ? 'Uploading...' : campaignMapPath(mapInfo) ? 'Replace map image' : 'Upload map image'}
-                    </Button>
+                    <Button
+                      icon={Upload}
+                      iconOnly
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      title={uploading ? 'Uploading…' : campaignMapPath(mapInfo) ? 'Replace map image' : 'Upload map image'}
+                    />
+                    <Button
+                      icon={Trash2}
+                      iconOnly
+                      onClick={removeMap}
+                      disabled={uploading || !campaignMapPath(mapInfo)}
+                      title="Remove map image"
+                    />
                   </div>
-                }
-              >
-                {(uploadError || mapAccessError) && (
-                  <p className="text-xs text-danger-text mb-2">{uploadError || mapAccessError}</p>
-                )}
-                {/* Clocks overlaid on the scene image itself, matching
-                    GameTable.jsx's player-page treatment, instead of a
-                    separate "Clocks & threats" list card. Zone assignment
-                    (Close/Near/Far) is now a right-click menu on each token
-                    -- see ZoneScene.jsx's onSetZone -- replacing the old
-                    always-visible per-character/monster button list below
-                    the map. */}
-                <div className="relative md:flex-1 md:min-h-0">
-                  <ZoneScene
-                    mapUrl={mapUrl}
-                    mapAccessError={mapAccessError}
-                    party={party}
-                    monsters={encounter}
-                    litCharacterId={lightSources.find((s) => s.lit)?.character_id || null}
-                    onSelectToken={(id, type, name) => selectEntity(type, id, name)}
-                    selectedTokenId={selectedEntity?.id || null}
-                    onSetZone={(type, id, zone) => (type === 'character' ? setCharacterZone(id, zone) : setMonsterZone(id, zone))}
-                  />
                   {activeClocks.length > 0 && (
                     <div className="absolute top-2 right-2 max-w-[180px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-2.5">
                       <p className="text-[10px] text-ink-dim mb-1.5 uppercase tracking-wide">Clocks</p>
