@@ -204,7 +204,7 @@ export default function DiceRoller({
                 <option value="">Target...</option>
                 {monsters.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {m.name}{m.hp_visible && m.hp != null ? ` \u2014 ${m.hp}/${m.max_hp} HP` : ''}
                   </option>
                 ))}
               </select>

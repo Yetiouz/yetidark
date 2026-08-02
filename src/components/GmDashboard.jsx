@@ -287,7 +287,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('encounter_monsters')
-      .select('id, name, ac, hp, max_hp, hidden, zone, dex_mod')
+      .select('id, name, ac, hp, max_hp, hidden, hp_visible, zone, dex_mod')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setEncounter(data || []) })
@@ -358,6 +358,17 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     await supabase.from('encounter_monsters').update({ hidden: nextHidden }).eq('id', monster.id)
   }
 
+  // Second, independent visibility toggle (M1's locked "presence vs. HP
+  // known" decision) -- same direct GM-only write path as toggleMonsterHidden
+  // above, controlling a separate column so a monster can be visible on the
+  // map while its HP total stays unknown to the party, or vice versa.
+  const toggleMonsterHpVisible = async (monster) => {
+    if (!monster) return
+    const nextHpVisible = !monster.hp_visible
+    setEncounter((list) => list.map((m) => (m.id === monster.id ? { ...m, hp_visible: nextHpVisible } : m)))
+    await supabase.from('encounter_monsters').update({ hp_visible: nextHpVisible }).eq('id', monster.id)
+  }
+
   // Party card parity with GameTable.jsx: death check, rolled on a dying
   // character's subsequent turn. Same RPC (`resolve_dying_turn`) the
   // player page already calls -- it takes an explicit character_id rather
@@ -389,7 +400,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     const ac = parseInt(monsterForm.ac, 10) || 10
     const hp = Math.max(1, parseInt(monsterForm.hp, 10) || 1)
     const dexMod = parseInt(monsterForm.dexMod, 10) || 0
-    await supabase.from('encounter_monsters').insert({ campaign_id: campaignId, name, ac, hp, max_hp: hp, hidden: false, dex_mod: dexMod })
+    await supabase.from('encounter_monsters').insert({ campaign_id: campaignId, name, ac, hp, max_hp: hp, hidden: false, hp_visible: false, dex_mod: dexMod })
     setAddingMonster(false)
     setShowAddMonster(false)
   }
@@ -1064,6 +1075,11 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     {selectedMonster && (
                       <button onClick={() => toggleMonsterHidden(selectedMonster)} title="Toggle hidden/visible">
                         <Badge tone={selectedMonster.hidden ? 'purple' : 'green'}>{selectedMonster.hidden ? 'Hidden' : 'Visible'}</Badge>
+                      </button>
+                    )}
+                    {selectedMonster && (
+                      <button onClick={() => toggleMonsterHpVisible(selectedMonster)} title="Toggle HP known to party">
+                        <Badge tone={selectedMonster.hp_visible ? 'green' : 'purple'}>{selectedMonster.hp_visible ? 'HP known' : 'HP hidden'}</Badge>
                       </button>
                     )}
                     <button onClick={() => setSelectedEntity(null)} className="text-[10px] text-ink-dim hover:text-ink shrink-0">

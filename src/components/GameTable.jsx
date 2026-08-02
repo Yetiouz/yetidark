@@ -226,7 +226,7 @@ supabase
 
 supabase
 .from('encounter_monsters')
-.select('id, name, zone, hidden')
+.select('id, name, zone, hidden, hp, max_hp, hp_visible')
 .eq('campaign_id', campaignId)
 .then(({ data }) => { if (!cancelled) setMonsters(data || []) })
 

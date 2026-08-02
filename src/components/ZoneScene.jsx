@@ -54,7 +54,7 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
 
   const tokens = [
     ...party.map((p) => ({ id: p.id, name: p.name, color: p.color || '#3b82f6', zone: p.zone || 'near', type: 'character' })),
-    ...monsters.map((m) => ({ id: m.id, name: m.name, color: '#737373', zone: m.zone || 'near', type: 'monster' })),
+    ...monsters.map((m) => ({ id: m.id, name: m.name, color: '#737373', zone: m.zone || 'near', type: 'monster', hp: m.hp, maxHp: m.max_hp, hpVisible: m.hp_visible })),
   ]
   const grouped = groupByZone(tokens)
 
@@ -139,6 +139,9 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
                 {litCharacterId === t.id && <Flame size={9} className="absolute -top-1.5 -right-1.5" style={{ color: '#f5a524' }} />}
               </div>
               <span className={`text-[9px] whitespace-nowrap ${selected ? 'text-primary-text font-medium' : 'text-ink-dim'}`}>{t.name}</span>
+              {t.type === 'monster' && t.hpVisible && t.hp != null && (
+                <span className="text-[8px] text-ink-faint whitespace-nowrap">{t.hp}/{t.maxHp} HP</span>
+              )}
             </button>
           )
         })}
