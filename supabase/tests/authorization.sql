@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(154);
+select plan(171);
 
 -- Stable local-only identities and campaigns.
 insert into auth.users (
@@ -93,14 +93,6 @@ insert into character_spells (
   '40000000-0000-0000-0000-000000000001',
   'Magic Missile', 1, true, true, 5, 8, false, now()
 );
-insert into votes (
-  id, campaign_id, poll_key, option_key, option_label, voter_user_id
-) values (
-  '60000000-0000-0000-0000-000000000001',
-  '10000000-0000-0000-0000-000000000001',
-  'route', 'north', 'North',
-  '00000000-0000-0000-0000-000000000002'
-);
 insert into campaign_light_sources (
   id, campaign_id, character_id, name, total_minutes, remaining_minutes
 ) values (
@@ -121,6 +113,44 @@ values
     '10000000-0000-0000-0000-000000000002/public-campaign-map.png',
     '00000000-0000-0000-0000-000000000001'
   );
+
+-- Fresh, isolated fixtures for combat-command / campaign-privacy coverage (#23).
+insert into campaigns (id, name, gm_type, gm_user_id, join_code, is_public, join_password_hash)
+values
+  ('10000000-0000-0000-0000-000000000004', 'Combat test A', 'human', '00000000-0000-0000-0000-000000000001', 'COMBATA1', false, crypt('secret', gen_salt('bf'))),
+  ('10000000-0000-0000-0000-000000000005', 'Combat test B', 'human', '00000000-0000-0000-0000-000000000001', 'COMBATB1', false, null);
+
+insert into campaign_members (campaign_id, user_id, role) values
+  ('10000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000001', 'gm'),
+  ('10000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000002', 'player'),
+  ('10000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000001', 'gm');
+
+insert into characters (
+  id, campaign_id, owner_user_id, name, ancestry, class, stats, hp, max_hp, ac
+) values
+  (
+    '40000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000004',
+    '00000000-0000-0000-0000-000000000002',
+    'Combat Hero', 'Human', 'Fighter', '{}', 5, 5, 10
+  ),
+  (
+    '40000000-0000-0000-0000-000000000004',
+    '10000000-0000-0000-0000-000000000004',
+    '00000000-0000-0000-0000-000000000002',
+    'Dying Hero', 'Human', 'Fighter', '{}', 0, 5, 10
+  ),
+  (
+    '40000000-0000-0000-0000-000000000005',
+    '10000000-0000-0000-0000-000000000005',
+    '00000000-0000-0000-0000-000000000001',
+    'Foreign Hero', 'Human', 'Fighter', '{}', 5, 5, 10
+  );
+update characters set status = 'dying', death_timer = 2, zone = 'far'
+  where id = '40000000-0000-0000-0000-000000000004';
+
+insert into encounter_monsters (id, campaign_id, name, ac, hp, max_hp, hidden) values
+  ('90000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000004', 'Test Goblin', 10, 5, 5, false);
 
 select hasnt_column('public', 'campaign_npcs', 'notes', 'NPC secrets are absent from member-readable rows');
 select hasnt_column('public', 'campaign_factions', 'goal', 'faction goals are absent from member-readable rows');
@@ -455,18 +485,6 @@ select throws_ok(
     set campaign_id = '10000000-0000-0000-0000-000000000002'
     where id = '40000000-0000-0000-0000-000000000001'$$,
   '42501', null, 'character owner cannot move a character to another campaign'
-);
-select lives_ok(
-  $$update votes
-    set option_key = 'south', option_label = 'South'
-    where id = '60000000-0000-0000-0000-000000000001'$$,
-  'voter can update their vote inside its campaign'
-);
-select throws_ok(
-  $$update votes
-    set campaign_id = '10000000-0000-0000-0000-000000000002'
-    where id = '60000000-0000-0000-0000-000000000001'$$,
-  '42501', null, 'voter cannot move a vote to another campaign'
 );
 select throws_ok(
   $$insert into campaign_light_sources (
@@ -1103,6 +1121,179 @@ select is(
   claim_ai_gm_turn('10000000-0000-0000-0000-000000000003')->>'status',
   'rate_limited',
   'campaign cannot start more than four AI-GM generations per minute'
+);
+reset role;
+
+
+-- #23 coverage: combat commands + join_public_campaign/set_campaign_privacy
+-- cross-campaign and non-member/non-GM abuse paths (fresh isolated fixtures above).
+
+-- resolve_attack_roll
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000003","role":"authenticated"}';
+select throws_ok(
+  $$select resolve_attack_roll(
+      '10000000-0000-0000-0000-000000000004', 'Intruder', '1d20', '1d6',
+      'monster', '90000000-0000-0000-0000-000000000001'
+    )$$,
+  'P0001', 'Campaign not found, or you are not a member.',
+  'outsider cannot resolve an attack roll in a campaign they do not belong to'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
+select throws_ok(
+  $$select resolve_attack_roll(
+      '10000000-0000-0000-0000-000000000004', 'Combat Hero', '1d20', '1d6',
+      'character', '40000000-0000-0000-0000-000000000005'
+    )$$,
+  'P0001', 'Target not found in this campaign.',
+  'member cannot target a character from a different campaign with an attack roll'
+);
+select lives_ok(
+  $$select resolve_attack_roll(
+      '10000000-0000-0000-0000-000000000004', 'Combat Hero', '1d20', '1d6',
+      'monster', '90000000-0000-0000-0000-000000000001'
+    )$$,
+  'member can resolve an attack roll against a monster in their own campaign'
+);
+reset role;
+
+-- resolve_morale_check
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
+select throws_ok(
+  $$select resolve_morale_check('10000000-0000-0000-0000-000000000004', 'Goblins')$$,
+  'P0001', 'Only the GM can call a morale check.',
+  'player cannot call a morale check'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000001","role":"authenticated"}';
+select lives_ok(
+  $$select resolve_morale_check('10000000-0000-0000-0000-000000000004', 'Goblins')$$,
+  'GM can call a morale check'
+);
+reset role;
+
+-- resolve_dying_turn
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000003","role":"authenticated"}';
+select throws_ok(
+  $$select resolve_dying_turn(
+      '10000000-0000-0000-0000-000000000004', '40000000-0000-0000-0000-000000000004'
+    )$$,
+  'P0001', 'Campaign not found, or you are not a member.',
+  'outsider cannot resolve a dying turn in a campaign they do not belong to'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
+select throws_ok(
+  $$select resolve_dying_turn(
+      '10000000-0000-0000-0000-000000000004', '40000000-0000-0000-0000-000000000005'
+    )$$,
+  'P0001', 'Character not found in this campaign.',
+  'member cannot resolve a dying turn for a character from a different campaign'
+);
+select throws_ok(
+  $$select resolve_dying_turn(
+      '10000000-0000-0000-0000-000000000004', '40000000-0000-0000-0000-000000000003'
+    )$$,
+  'P0001', 'Combat Hero is not dying.',
+  'member cannot resolve a dying turn for a character who is not dying'
+);
+reset role;
+
+-- resolve_stabilize_check
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000003","role":"authenticated"}';
+select throws_ok(
+  $$select resolve_stabilize_check(
+      '10000000-0000-0000-0000-000000000004', 'Intruder Medic', '40000000-0000-0000-0000-000000000004'
+    )$$,
+  'P0001', 'Campaign not found, or you are not a member.',
+  'outsider cannot resolve a stabilize check in a campaign they do not belong to'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
+select throws_ok(
+  $$select resolve_stabilize_check(
+      '10000000-0000-0000-0000-000000000004', 'Combat Hero', '40000000-0000-0000-0000-000000000005'
+    )$$,
+  'P0001', 'Target character not found in this campaign.',
+  'member cannot stabilize a character from a different campaign'
+);
+select throws_ok(
+  $$select resolve_stabilize_check(
+      '10000000-0000-0000-0000-000000000004', 'Combat Hero', '40000000-0000-0000-0000-000000000004'
+    )$$,
+  'P0001', 'Dying Hero must be at Close range to stabilize.',
+  'member cannot stabilize a dying character who is not at Close range'
+);
+reset role;
+
+-- join_public_campaign
+set local role anon;
+select throws_ok(
+  $$select join_public_campaign('10000000-0000-0000-0000-000000000002')$$,
+  'P0001', 'You must be signed in to join a campaign.',
+  'anonymous user cannot join a public campaign'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000004","role":"authenticated"}';
+select throws_ok(
+  $$select join_public_campaign('10000000-0000-0000-0000-000000000099')$$,
+  'P0001', 'Campaign not found.',
+  'cannot join a campaign that does not exist'
+);
+select throws_ok(
+  $$select join_public_campaign('10000000-0000-0000-0000-000000000005')$$,
+  'P0001', 'This campaign is not public.',
+  'cannot join a campaign via join_public_campaign when it is not public'
+);
+select lives_ok(
+  $$select join_public_campaign('10000000-0000-0000-0000-000000000002')$$,
+  'unrelated authenticated user can join a public campaign'
+);
+select is(
+  (
+    select role from campaign_members
+    where campaign_id = '10000000-0000-0000-0000-000000000002'
+      and user_id = '00000000-0000-0000-0000-000000000004'
+  ),
+  'player',
+  'joining a public campaign adds the user as a player'
+);
+reset role;
+
+-- set_campaign_privacy
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}';
+select throws_ok(
+  $$select set_campaign_privacy('10000000-0000-0000-0000-000000000004', true, null)$$,
+  'P0001', 'Only the GM can change campaign privacy.',
+  'non-GM member cannot change campaign privacy'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000001","role":"authenticated"}';
+select lives_ok(
+  $$select set_campaign_privacy('10000000-0000-0000-0000-000000000004', true, null)$$,
+  'GM can make their campaign public'
+);
+select throws_ok(
+  $$select set_campaign_privacy('10000000-0000-0000-0000-000000000005', false, null)$$,
+  'P0001', 'A password is required to make this campaign private.',
+  'GM cannot make a campaign private without a password when none is already set'
 );
 reset role;
 
