@@ -267,7 +267,7 @@ export default function CampaignLobby({
           <div className="flex flex-col gap-3">
             {members.map((m) => (
               <div key={m.userId} className="border border-line-soft rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full bg-primary-bg flex items-center justify-center text-xs font-medium text-primary-text">
                       {m.displayName[0].toUpperCase()}
@@ -287,7 +287,7 @@ export default function CampaignLobby({
                 </div>
 
                 {m.character ? (
-                  <div className="flex items-center justify-between bg-bg rounded-md px-3 py-2 mt-1.5">
+                  <div className="flex items-center justify-between bg-bg rounded-md px-3 py-2 mt-2">
                     <div>
                       <p className="text-sm text-ink">{m.character.name}</p>
                       <p className="text-xs text-ink-dim">
@@ -298,13 +298,13 @@ export default function CampaignLobby({
                     <Button
                       variant="outline"
                       onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(m.character.id)}
-                      className="text-xs px-2.5 py-1 shrink-0"
+                      className="text-xs px-3 py-1 shrink-0"
                     >
                       View character
                     </Button>
                   </div>
                 ) : m.userId === user?.id ? (
-                  <div className="flex gap-2 mt-1.5">
+                  <div className="flex gap-2 mt-2">
                     <Button variant="primary" onClick={onCreateCharacter} className="flex-1">
                       Create character
                     </Button>
@@ -319,7 +319,7 @@ export default function CampaignLobby({
 
           <button
             onClick={inviteAnotherPlayer}
-            className="w-full mt-3 text-sm border border-dashed border-line rounded-lg py-2.5 flex items-center justify-center gap-1.5 text-ink-dim hover:bg-panel2"
+            className="w-full mt-3 text-sm border border-dashed border-line rounded-lg py-3 flex items-center justify-center gap-2 text-ink-dim hover:bg-panel2"
           >
             <UserPlus size={14} /> {copiedInvite ? 'Join code copied' : 'Invite another player'}
           </button>
@@ -331,33 +331,33 @@ export default function CampaignLobby({
               {checks.map((c) => (
                 <div key={c.key} className="flex items-start gap-2 text-xs">
                   {c.done ? (
-                    <CheckCircle2 size={14} className="text-positive-text mt-0.5 shrink-0" />
+                    <CheckCircle2 size={14} className="text-positive-text mt-1 shrink-0" />
                   ) : (
-                    <AlertTriangle size={14} className="text-warning-text mt-0.5 shrink-0" />
+                    <AlertTriangle size={14} className="text-warning-text mt-1 shrink-0" />
                   )}
                   <div>
                     <p className={c.done ? 'text-ink' : 'text-warning-text'}>{c.label}</p>
-                    {c.detail && <p className="text-ink-faint mt-0.5">{c.detail}</p>}
+                    {c.detail && <p className="text-ink-faint mt-1">{c.detail}</p>}
                   </div>
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-ink-faint mb-1.5">
+            <p className="text-[11px] text-ink-faint mb-2">
               {checksComplete} of {checks.length} checks complete
             </p>
             <ProgressBar value={checksComplete} max={checks.length} tone="green" />
           </Card>
 
           <Card title="Invite players">
-            <div className="flex items-center justify-between text-xs mb-2.5">
-              <span className="text-ink-dim flex items-center gap-1.5">
+            <div className="flex items-center justify-between text-xs mb-3">
+              <span className="text-ink-dim flex items-center gap-2">
                 <Key size={13} /> Join code
               </span>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-ink tracking-wide">{campaign.join_code}</span>
                 <button
                   onClick={copyJoinCode}
-                  className="text-[11px] px-2 py-0.5 border border-line rounded text-ink-dim hover:bg-panel2 flex items-center gap-1"
+                  className="text-[11px] px-2 py-1 border border-line rounded text-ink-dim hover:bg-panel2 flex items-center gap-1"
                 >
                   {copiedCode ? <Check size={11} /> : <Copy size={11} />} {copiedCode ? 'Copied' : 'Copy'}
                 </button>
@@ -384,7 +384,7 @@ export default function CampaignLobby({
               <div className="flex items-center justify-between">
                 <span className="text-ink-dim">GM</span>
                 {campaign.gm_type === 'ai' ? (
-                  <span className="px-2 py-0.5 rounded bg-ai-bg text-ai-text flex items-center gap-1">
+                  <span className="px-2 py-1 rounded bg-ai-bg text-ai-text flex items-center gap-1">
                     <Bot size={11} /> AI GM
                   </span>
                 ) : (
@@ -432,7 +432,7 @@ export default function CampaignLobby({
                 {campaign.modes_of_play?.length ? (
                   <div className="flex flex-wrap gap-1">
                     {campaign.modes_of_play.map((k) => (
-                      <span key={k} className="px-1.5 py-0.5 rounded bg-panel2 text-ink-dim">
+                      <span key={k} className="px-2 py-1 rounded bg-panel2 text-ink-dim">
                         {MODE_LABELS[k] || k}
                       </span>
                     ))}

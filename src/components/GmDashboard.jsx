@@ -7,6 +7,7 @@ import {
 
 import ZoneScene from './ZoneScene.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
+import StatTile from './ui/StatTile.jsx'
 import Card from './ui/Card.jsx'
 import Badge from './ui/Badge.jsx'
 import Button from './ui/Button.jsx'
@@ -640,13 +641,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pt-6 pb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <p className="text-white font-medium">{campaignName}</p>
           <Badge tone="purple">GM view</Badge>
           <Badge tone="green">Live now</Badge>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center -space-x-1.5 mr-1">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center -space-x-2 mr-1">
             {party.slice(0, 4).map((p) => (
               <div
                 key={p.id}
@@ -677,35 +678,32 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       </div>
 
       <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
-        <div className={`rounded-lg px-3 py-2 border ${litTorch ? 'border-warning/60 bg-warning/5' : 'bg-panel border-line-soft'}`}>
-          <p className="text-[10px] tracking-wide text-ink-dim mb-0.5 flex items-center gap-1">
-            <Flame size={10} /> TORCH{litTorch ? ` — ${(party.find((p) => p.id === litTorch.character_id)?.name || '').toUpperCase()}` : ''}
-          </p>
+        <StatTile
+          label={`TORCH${litTorch ? ` — ${(party.find((p) => p.id === litTorch.character_id)?.name || '').toUpperCase()}` : ''}`}
+          icon={Flame}
+          highlight={!!litTorch}
+        >
           {litTorch ? (
             <>
               <p className="text-sm font-semibold text-warning-text">{formatMinutes(litTorch.remaining)}</p>
-              <ProgressBar value={litTorch.remaining} max={litTorch.total_minutes} tone="amber" heightClassName="h-1" className="mt-1.5" />
+              <ProgressBar value={litTorch.remaining} max={litTorch.total_minutes} tone="amber" heightClassName="h-1" className="mt-2" />
             </>
           ) : (
             <p className="text-sm text-ink-dim">Unlit</p>
           )}
-        </div>
-        <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-          <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">MODE</p>
+        </StatTile>
+        <StatTile label="MODE">
           <span className={`text-sm font-semibold ${gmSceneMode === 'Combat' ? 'text-danger-text' : 'text-primary-text'}`}>{gmSceneMode}</span>
-        </div>
-        <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-          <p className="text-[10px] tracking-wide text-ink-dim mb-0.5 flex items-center gap-1"><AlertTriangle size={10} /> DANGER</p>
+        </StatTile>
+        <StatTile label="DANGER" icon={AlertTriangle}>
           <p className="text-sm font-semibold text-ink-faint" title="Danger level isn't tracked yet -- placeholder slot">&mdash;</p>
-        </div>
-        <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-          <p className="text-[10px] tracking-wide text-ink-dim mb-0.5 flex items-center gap-1"><RotateCw size={10} /> CRAWLING ROUND</p>
+        </StatTile>
+        <StatTile label="CRAWLING ROUND" icon={RotateCw}>
           <p className="text-sm font-semibold text-ink-faint" title="Crawling-round tracking isn't wired up yet -- placeholder slot">&mdash;</p>
-        </div>
-        <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-          <p className="text-[10px] tracking-wide text-ink-dim mb-0.5 flex items-center gap-1"><Timer size={10} /> NEXT ENCOUNTER CHECK</p>
+        </StatTile>
+        <StatTile label="NEXT ENCOUNTER CHECK" icon={Timer}>
           <p className="text-sm font-semibold text-ink-faint" title="Next-encounter-check tracking isn't wired up yet -- placeholder slot">&mdash;</p>
-        </div>
+        </StatTile>
       </div>
 
       <div className="flex-1 overflow-y-auto md:overflow-hidden md:min-h-0">
@@ -725,8 +723,8 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 card position. */}
             <div className="flex flex-col gap-3 md:h-full md:min-h-0 md:overflow-y-auto">
               <Card title="Scene controls">
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-[11px] text-ink-dim px-0.5">
+                <div className="flex flex-col gap-2">
+                  <p className="text-[11px] text-ink-dim px-1">
                     {actingEntry ? (
                       <><span className="text-ink font-medium">{actingEntry.name}</span>&rsquo;s turn</>
                     ) : (
@@ -755,7 +753,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               <Card
                 title="Active encounter"
                 titleRight={
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-2">
                     <input
                       value={monsterDraft}
                       onChange={(e) => setMonsterDraft(e.target.value)}
@@ -767,7 +765,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   </div>
                 }
               >
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-2">
                   {encounter.length === 0 && <p className="text-xs text-ink-dim">No monsters yet -- add one above.</p>}
                   {encounter.map((m) => (
                     <div
@@ -777,24 +775,24 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1 flex-wrap">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-white">{m.name}</span>
                           <span className="text-ink-dim">ac {m.ac}</span>
                           {m.hidden && <Badge tone="purple">Hidden</Badge>}
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => adjustHp(m, -1)} className="px-1.5 border border-line rounded text-ink">-</button>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => adjustHp(m, -1)} className="px-2 border border-line rounded text-ink">-</button>
                           <span className="min-w-[44px] text-center text-ink">{m.hp} / {m.max_hp} hp</span>
-                          <button onClick={() => adjustHp(m, 1)} className="px-1.5 border border-line rounded text-ink">+</button>
+                          <button onClick={() => adjustHp(m, 1)} className="px-2 border border-line rounded text-ink">+</button>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-wrap">
-                        <span className="text-[10px] text-ink-dim mr-0.5">Zone</span>
+                        <span className="text-[10px] text-ink-dim mr-1">Zone</span>
                         {['close', 'near', 'far'].map((z) => (
                           <button
                             key={z}
                             onClick={() => setMonsterZone(m.id, z)}
-                            className={`text-[10px] px-1.5 py-0.5 rounded border capitalize ${
+                            className={`text-[10px] px-2 py-1 rounded border capitalize ${
                               (m.zone || 'near') === z ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink-dim'
                             }`}
                           >
@@ -850,7 +848,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     selectedTokenId={selectedEntity?.id || null}
                     onSetZone={(type, id, zone) => (type === 'character' ? setCharacterZone(id, zone) : setMonsterZone(id, zone))}
                   />
-                  <div className="absolute top-2 left-2 max-w-[calc(100%-1rem)] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-1.5 flex items-center gap-1 flex-wrap">
+                  <div className="absolute top-2 left-2 max-w-[calc(100%-1rem)] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-2 flex items-center gap-1 flex-wrap">
                     {onSwitchToPlayerView && (
                       <Button variant="primary" icon={Eye} iconOnly onClick={onSwitchToPlayerView} title="Preview player view" />
                     )}
@@ -881,14 +879,14 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     />
                   </div>
                   {activeClocks.length > 0 && (
-                    <div className="absolute top-2 right-2 max-w-[180px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-2.5">
-                      <p className="text-[10px] text-ink-dim mb-1.5 uppercase tracking-wide">Clocks</p>
-                      <div className="flex flex-col gap-1.5">
+                    <div className="absolute top-2 right-2 max-w-[180px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-3">
+                      <p className="text-[10px] text-ink-dim mb-2 uppercase tracking-wide">Clocks</p>
+                      <div className="flex flex-col gap-2">
                         {activeClocks.map((c) => (
                           <div key={c.id}>
                             <div className="flex items-center justify-between mb-1">
                               <span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-ink' : 'text-ink-dim'}`}>{c.name}</span>
-                              <span className="text-[10px] text-ink-dim shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
+                              <span className="text-[10px] text-ink-dim shrink-0 ml-2">{c.segments_filled}/{c.segments_total}</span>
                             </div>
                             <ProgressBar mode="segmented" segments={c.segments_total} filled={c.segments_filled} tone="amber" />
                           </div>
@@ -926,7 +924,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             <div className="flex flex-col gap-3 md:h-full md:min-h-0 md:overflow-y-auto">
               {encounter.length > 0 && (
                 <Card title="Encounter">
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-2">
                     {encounter.map((m) => (
                       <Row
                         key={m.id}
@@ -944,7 +942,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               <Card
                 title="Party"
                 titleRight={actingIsMonster && (
-                  <span className="text-[10px] text-primary-text bg-primary/10 border border-primary/30 rounded-full px-2 py-0.5 truncate max-w-[55%]">
+                  <span className="text-[10px] text-primary-text bg-primary/10 border border-primary/30 rounded-full px-2 py-1 truncate max-w-[55%]">
                     {actingEntry.name}&rsquo;s turn
                   </span>
                 )}
@@ -963,7 +961,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         className="w-full text-left disabled:cursor-default"
                       >
                         <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
                             {p.avatar_url ? (
                               <img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-line shrink-0" />
                             ) : (
@@ -976,7 +974,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                             )}
                             <span className="text-xs font-medium text-white truncate">{p.name}</span>
                             {isActing && (
-                              <span className="text-[9px] uppercase tracking-wide text-primary-text bg-primary/20 rounded-full px-1.5 py-0.5 shrink-0">Acting</span>
+                              <span className="text-[9px] uppercase tracking-wide text-primary-text bg-primary/20 rounded-full px-2 py-1 shrink-0">Acting</span>
                             )}
                           </div>
                           <span className="text-[11px] text-ink-dim shrink-0">{p.hp}/{p.max_hp}</span>
@@ -984,8 +982,8 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         <ProgressBar value={p.hp} max={p.max_hp} barClassName={hpBarColor(p.hp, p.max_hp)} trackBg="bg-danger/40" heightClassName="h-1" />
                       </button>
                       {lightRemaining !== null && (
-                        <div className="mt-1.5">
-                          <div className="flex items-center justify-between mb-0.5">
+                        <div className="mt-2">
+                          <div className="flex items-center justify-between mb-1">
                             <span className="text-[9px] text-warning-text flex items-center gap-1"><Flame size={9} /> Torch</span>
                             <span className="text-[9px] text-ink-dim">{formatMinutes(lightRemaining)}</span>
                           </div>
@@ -993,7 +991,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         </div>
                       )}
                       {p.status && p.status !== 'alive' && (
-                        <span className={`inline-block mt-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+                        <span className={`inline-block mt-2 text-[9px] uppercase tracking-wide px-2 py-1 rounded-full border ${
                           p.status === 'dying' ? 'border-danger text-danger-text' : p.status === 'stable' ? 'border-warning text-warning-text' : 'border-line text-ink-dim'
                         }`}>
                           {p.status === 'dying' ? `Dying (${p.death_timer ?? '?'})` : p.status}
@@ -1003,7 +1001,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         <button
                           onClick={() => rollDeathCheck(p.id)}
                           disabled={deathCheckPendingId === p.id}
-                          className="mt-1.5 w-full text-[11px] border border-danger/60 text-danger-text rounded-md py-1 hover:bg-danger/40 disabled:opacity-50"
+                          className="mt-2 w-full text-[11px] border border-danger/60 text-danger-text rounded-md py-1 hover:bg-danger/40 disabled:opacity-50"
                         >
                           {deathCheckPendingId === p.id ? 'Rolling…' : 'Roll death check'}
                         </button>
@@ -1031,10 +1029,10 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               >
                 {selectedEntity ? (
                   <div className="flex flex-col gap-2">
-                    <span className="text-sm text-white font-medium truncate flex items-center gap-1.5">
+                    <span className="text-sm text-white font-medium truncate flex items-center gap-2">
                       <Target size={12} className="text-ink-dim" /> {selectedEntity.name}
                     </span>
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-2">
                       {notes.filter((n) => n.entity_type === selectedEntity.type && n.entity_id === selectedEntity.id).length === 0 && (
                         <p className="text-[11px] text-ink-dim">No notes on {selectedEntity.name} yet.</p>
                       )}
@@ -1042,14 +1040,14 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         .filter((n) => n.entity_type === selectedEntity.type && n.entity_id === selectedEntity.id)
                         .map((n) => (
                           <div key={n.id} className="text-xs p-2 bg-panel2/60 rounded-md">
-                            <p className={`mb-1.5 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
+                            <p className={`mb-2 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
                             {!n.revealed && (
                               <Button onClick={() => revealNote(n.id)} className="text-[11px] px-2 py-1">Reveal to party</Button>
                             )}
                           </div>
                         ))}
                     </div>
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-2">
                       <input
                         value={entityNoteDraft}
                         onChange={(e) => setEntityNoteDraft(e.target.value)}
@@ -1075,7 +1073,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
           from the composer's dice button, mirroring GameTable.jsx's dice/
           Attack/Stabilize modal exactly (same shared Modal.jsx). */}
       <Modal open={showDiceModal} onClose={() => setShowDiceModal(false)} title="Dice tables">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Row icon={Shuffle} label="Random encounter" onClick={() => rollQuickTable('Random encounter check', '1d6')} disabled={quickRolling} />
           <Row icon={Users} label="Reaction" onClick={() => rollQuickTable('Reaction roll', '2d6')} disabled={quickRolling} />
           <Row icon={Gauge} label={moraleChecking ? 'Rolling…' : 'Morale'} onClick={moraleCheck} disabled={moraleChecking || encounter.length === 0} />
@@ -1092,18 +1090,18 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
           -- just relocated, no behavior changes. Entity-specific notes stay
           in the Selected card, unaffected. */}
       <Modal open={showNotesModal} onClose={() => setShowNotesModal(false)} title="GM notes (private, general)">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {notes.filter((n) => !n.entity_type).length === 0 && <p className="text-xs text-ink-dim">No general notes yet -- notes on a specific character or monster show in the Selected card instead.</p>}
           {notes.filter((n) => !n.entity_type).map((n) => (
             <div key={n.id} className="text-xs p-2 bg-panel2/60 rounded-md">
-              <p className={`mb-1.5 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
+              <p className={`mb-2 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
               {!n.revealed && (
                 <Button onClick={() => revealNote(n.id)} className="text-[11px] px-2 py-1">Reveal to party</Button>
               )}
             </div>
           ))}
         </div>
-        <div className="flex gap-1.5 mt-2">
+        <div className="flex gap-2 mt-2">
           <input
             value={noteDraft}
             onChange={(e) => setNoteDraft(e.target.value)}
@@ -1116,10 +1114,10 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       </Modal>
 
       <Footer>
-        <div className="max-w-6xl mx-auto w-full px-6 pt-2.5 flex items-center gap-1.5">
+        <div className="max-w-6xl mx-auto w-full px-6 pt-3 flex items-center gap-2">
           <button
             onClick={() => setComposeMode('public')}
-            className={`text-[11px] border rounded-md px-2 py-1 flex items-center gap-1.5 ${
+            className={`text-[11px] border rounded-md px-2 py-1 flex items-center gap-2 ${
               composeMode === 'public' ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink-dim hover:bg-panel2'
             }`}
           >
@@ -1127,7 +1125,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
           </button>
           <button
             onClick={() => setComposeMode('private')}
-            className={`text-[11px] border rounded-md px-2 py-1 flex items-center gap-1.5 ${
+            className={`text-[11px] border rounded-md px-2 py-1 flex items-center gap-2 ${
               composeMode === 'private' ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink-dim hover:bg-panel2'
             }`}
           >

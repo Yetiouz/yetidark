@@ -16,7 +16,7 @@ export default function Tabs({ tabs, activeKey, onChange }) {
             role="tab"
             aria-selected={active}
             onClick={() => onChange(tab.key)}
-            className={`text-xs font-medium pb-2.5 -mb-px border-b-2 transition-colors ${
+            className={`text-xs font-medium pb-3 -mb-px border-b-2 transition-colors ${
               active
                 ? 'text-primary-text border-primary'
                 : 'text-ink-dim border-transparent hover:text-ink'

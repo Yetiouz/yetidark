@@ -16,7 +16,7 @@ export default function Row({ icon: Icon, label, right, selected = false, disabl
       onClick={onClick}
       disabled={onClick ? disabled : undefined}
       title={title}
-      className={`w-full flex items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition-colors ${
+      className={`w-full flex items-center gap-2 rounded-lg border px-2 py-2 text-left transition-colors ${
         selected
           ? 'border-primary bg-primary-bg'
           : disabled

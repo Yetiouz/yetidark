@@ -3,6 +3,7 @@ import { Dices, Send, AlertCircle, Bot, Loader2, Flame, HelpCircle, Swords, Back
 import ZoneScene from './ZoneScene.jsx'
 import Row from './ui/Row.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
+import StatTile from './ui/StatTile.jsx'
 import Footer from './ui/Footer.jsx'
 import Modal from './ui/Modal.jsx'
 import CampaignToolbar from './CampaignToolbar.jsx'
@@ -666,8 +667,8 @@ const renderChatBubble = (entry) => {
 if (entry.type === 'ai_gm') {
 return (
 <div key={entry.id} className="flex justify-start">
-<div className="max-w-[85%] bg-ai/10 border border-ai/20 rounded-xl px-3.5 py-2.5">
-<p className="font-medium text-ai-text flex items-center gap-1.5 mb-1 text-xs">
+<div className="max-w-[85%] bg-ai/10 border border-ai/20 rounded-xl px-4 py-3">
+<p className="font-medium text-ai-text flex items-center gap-2 mb-1 text-xs">
 <Bot size={12} /> AI GM
 </p>
 <p className="text-sm text-ink whitespace-pre-wrap">{entry.text}</p>
@@ -694,8 +695,8 @@ return (
 const isMine = entry.sender_user_id === user?.id
 return (
 <div key={entry.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-<div className={`max-w-[75%] rounded-xl px-3.5 py-2 ${isMine ? 'bg-primary/20' : 'bg-panel2'}`}>
-{!isMine && <p className="text-[11px] font-medium text-ink-dim mb-0.5">{entry.sender_name}</p>}
+<div className={`max-w-[75%] rounded-xl px-4 py-2 ${isMine ? 'bg-primary/20' : 'bg-panel2'}`}>
+{!isMine && <p className="text-[11px] font-medium text-ink-dim mb-1">{entry.sender_name}</p>}
 <p className="text-sm text-ink whitespace-pre-wrap">{entry.text}</p>
 </div>
 </div>
@@ -705,12 +706,12 @@ return (
 return (
 <div className="h-screen flex flex-col overflow-hidden">
 <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pt-6 pb-3 flex items-center justify-between">
-<div className="flex items-center gap-2.5">
+<div className="flex items-center gap-3">
 <p className="text-white font-medium">{campaignName}</p>
-<span className="text-[10px] px-1.5 py-0.5 rounded bg-positive/20 text-positive-text border border-positive/40">Live now</span>
+<span className="text-[10px] px-2 py-1 rounded bg-positive/20 text-positive-text border border-positive/40">Live now</span>
 </div>
-<div className="flex items-center gap-1.5">
-<div className="flex items-center -space-x-1.5 mr-1">
+<div className="flex items-center gap-2">
+<div className="flex items-center -space-x-2 mr-1">
 {party.slice(0, 4).map((p) => (
 <div
 key={p.id}
@@ -728,7 +729,7 @@ onOpenLibrary={onOpenLibrary}
 onOpenTracker={onOpenTracker}
 onOpenSettings={onOpenSettings}
 after={isGm && gmType !== 'ai' && onOpenGmView && (
-<button onClick={onOpenGmView} className="text-xs border border-line rounded-md px-2.5 py-1 text-ink hover:bg-panel2">
+<button onClick={onOpenGmView} className="text-xs border border-line rounded-md px-3 py-1 text-ink hover:bg-panel2">
 GM view
 </button>
 )}
@@ -738,27 +739,22 @@ GM view
 
 {myCharacter && (
 <div className="shrink-0 max-w-6xl mx-auto w-full px-6 pb-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
-<div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-<p className="text-[10px] tracking-wide text-ink-dim mb-0.5">HP</p>
+<StatTile label="HP">
 <p className="text-lg font-semibold text-white">
 <span className={myCharacter.hp <= myCharacter.max_hp * 0.3 ? 'text-danger-text' : 'text-positive-text'}>{myCharacter.hp}</span>
 <span className="text-ink-dim"> / {myCharacter.max_hp}</span>
 </p>
-</div>
-<div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-<p className="text-[10px] tracking-wide text-ink-dim mb-0.5">AC</p>
+</StatTile>
+<StatTile label="AC">
 <p className="text-lg font-semibold text-white">{myCharacter.ac}</p>
-</div>
-<div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-<p className="text-[10px] tracking-wide text-ink-dim mb-0.5">Gear</p>
+</StatTile>
+<StatTile label="Gear">
 <p className="text-lg font-semibold text-warning-text">{gearUsed}<span className="text-ink-dim"> / {gearCapacity}</span></p>
-</div>
-<div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-<p className="text-[10px] tracking-wide text-ink-dim mb-0.5 flex items-center gap-1"><Sparkles size={10} /> LUCK</p>
+</StatTile>
+<StatTile label="LUCK" icon={Sparkles}>
 <p className="text-lg font-semibold text-ink-faint" title="Luck isn't tracked yet -- placeholder slot">&mdash;</p>
-</div>
-<div className={`rounded-lg px-3 py-2 border ${litSources[0]?.lit ? 'border-warning/60 bg-warning/5' : 'bg-panel border-line-soft'}`}>
-<p className="text-[10px] tracking-wide text-ink-dim mb-0.5 flex items-center gap-1"><Flame size={10} /> TORCH</p>
+</StatTile>
+<StatTile label="TORCH" icon={Flame} highlight={litSources[0]?.lit}>
 {litSources[0]?.lit ? (
 <p className="text-sm font-semibold text-warning-text">
 {formatMinutes(litSources[0].remaining)}
@@ -767,7 +763,7 @@ GM view
 ) : (
 <p className="text-sm text-ink-dim">Unlit</p>
 )}
-</div>
+</StatTile>
 </div>
 )}
 
@@ -775,7 +771,7 @@ GM view
 <div className="max-w-6xl mx-auto w-full px-6 pb-4 md:h-full md:flex md:flex-col md:min-h-0">
 {gmType === 'ai' && aiTurnError && (
 <div className="mb-3 flex items-start gap-2 text-danger-text text-xs bg-danger/10 border border-danger/20 rounded-md px-3 py-2">
-<AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+<AlertCircle size={14} className="mt-1 flex-shrink-0" />
 <p>{aiTurnError}</p>
 </div>
 )}
@@ -799,7 +795,7 @@ splits 2:1 between the map and the Scene log per explicit user request. */}
 
 <div className="bg-panel rounded-lg p-3">
 <p className="text-xs text-ink-dim mb-2">Quick actions</p>
-<div className="flex flex-col gap-1.5">
+<div className="flex flex-col gap-2">
 {myGear.filter((g) => g.equipped).length === 0 && (
 <p className="text-[11px] text-ink-dim">No equipped gear yet.</p>
 )}
@@ -853,7 +849,7 @@ rather than however tall their content happens to be. */}
 <div className="flex flex-col gap-3 min-w-0 md:h-full md:min-h-0">
 {showMapPane && (
 <div className="bg-panel rounded-lg p-4 md:flex-[2] md:min-h-0 md:flex md:flex-col">
-<div className="flex items-center justify-between mb-2.5">
+<div className="flex items-center justify-between mb-3">
 <span className="text-xs text-ink-dim">Scene</span>
 <div className="flex items-center gap-1">
 {[ZoomIn, ZoomOut, Sun].map((Icon, i) => (
@@ -882,14 +878,14 @@ monsters={monsters}
 litCharacterId={litCharacterId}
 />
 {activeClocks.length > 0 && (
-<div className="absolute top-2 right-2 max-w-[180px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-2.5">
-<p className="text-[10px] text-ink-dim mb-1.5 uppercase tracking-wide">Clocks</p>
-<div className="flex flex-col gap-1.5">
+<div className="absolute top-2 right-2 max-w-[180px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-3">
+<p className="text-[10px] text-ink-dim mb-2 uppercase tracking-wide">Clocks</p>
+<div className="flex flex-col gap-2">
 {activeClocks.map((c) => (
 <div key={c.id}>
 <div className="flex items-center justify-between mb-1">
 <span className={`text-[11px] truncate ${c.segments_filled > 0 ? 'text-ink' : 'text-ink-dim'}`}>{c.name}</span>
-<span className="text-[10px] text-ink-dim shrink-0 ml-1.5">{c.segments_filled}/{c.segments_total}</span>
+<span className="text-[10px] text-ink-dim shrink-0 ml-2">{c.segments_filled}/{c.segments_total}</span>
 </div>
 <ProgressBar mode="segmented" segments={c.segments_total} filled={c.segments_filled} tone="amber" />
 </div>
@@ -936,34 +932,34 @@ rollState
 {rollState ? rollState.value : <Dices size={22} />}
 </div>
 {rollState && (
-<p className="text-[11px] text-ink-dim mt-1.5">
+<p className="text-[11px] text-ink-dim mt-2">
 {rollState.label}
 {rollState.isRolling ? ' rolling…' : rollState.isCrit ? ' — crit!' : rollState.isFumble ? ' — fumble!' : ''}
 </p>
 )}
 </div>
 
-<div className="grid grid-cols-3 gap-1.5 mb-2.5">
+<div className="grid grid-cols-3 gap-2 mb-3">
 {dice.map((sides) => (
 <button
 key={sides}
 onClick={() => rollQuickDie(sides)}
 disabled={rollState?.isRolling}
-className="text-xs py-1.5 border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
+className="text-xs py-2 border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
 >
 d{sides}
 </button>
 ))}
 </div>
 
-<div className="pt-2.5 border-t border-line-soft">
-<p className="text-[11px] text-ink-dim mb-1.5">Custom roll (notation, advantage/disadvantage, reason)</p>
-<div className="flex gap-1.5 mb-1.5">
+<div className="pt-3 border-t border-line-soft">
+<p className="text-[11px] text-ink-dim mb-2">Custom roll (notation, advantage/disadvantage, reason)</p>
+<div className="flex gap-2 mb-2">
 <input
 value={notationInput}
 onChange={(e) => setNotationInput(e.target.value)}
 placeholder="1d20+3"
-className="w-20 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
+className="w-20 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
 />
 <div className="flex flex-1 gap-1">
 {['flat', 'advantage', 'disadvantage'].map((m) => (
@@ -979,32 +975,32 @@ rollMode === m ? 'border-primary text-primary-text bg-primary/10' : 'border-line
 ))}
 </div>
 </div>
-<div className="flex gap-1.5 mb-1.5">
+<div className="flex gap-2 mb-2">
 <input
 value={reasonInput}
 onChange={(e) => setReasonInput(e.target.value)}
 placeholder="reason (optional)"
-className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
+className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
 />
 <button
 onClick={rollCustom}
 disabled={rollState?.isRolling}
-className="text-xs px-2.5 border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
+className="text-xs px-3 border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
 >
 Roll
 </button>
 </div>
 {rollError && (
-<div className="flex items-center gap-1.5 text-danger-text mb-1.5">
+<div className="flex items-center gap-2 text-danger-text mb-2">
 <AlertCircle size={12} />
 <p className="text-[11px]">{rollError}</p>
 </div>
 )}
 </div>
 
-<div className="pt-2.5 border-t border-line-soft">
-<p className="text-[11px] text-ink-dim mb-1.5">Rolled it yourself? Log it here.</p>
-<div className="flex gap-1.5">
+<div className="pt-3 border-t border-line-soft">
+<p className="text-[11px] text-ink-dim mb-2">Rolled it yourself? Log it here.</p>
+<div className="flex gap-2">
 <select
 value={manualDie}
 onChange={(e) => setManualDie(e.target.value)}
@@ -1019,7 +1015,7 @@ type="number"
 value={manualValue}
 onChange={(e) => setManualValue(e.target.value)}
 placeholder="14"
-className="w-14 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
+className="w-14 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
 />
 <button onClick={logManualRoll} className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2">
 Log
@@ -1038,25 +1034,25 @@ Log
 <select
 value={attackTargetId}
 onChange={(e) => setAttackTargetId(e.target.value)}
-className="w-full text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white mb-1.5"
+className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1 text-white mb-2"
 >
 <option value="">Target...</option>
 {monsters.map((m) => (
 <option key={m.id} value={m.id}>{m.name}</option>
 ))}
 </select>
-<div className="flex gap-1.5 mb-1.5">
+<div className="flex gap-2 mb-2">
 <input
 value={attackNotation}
 onChange={(e) => setAttackNotation(e.target.value)}
 placeholder="1d20+3"
-className="w-16 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
+className="w-16 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
 />
 <input
 value={damageNotation}
 onChange={(e) => setDamageNotation(e.target.value)}
 placeholder="1d6+1"
-className="w-16 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
+className="w-16 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
 />
 <button
 onClick={resolveAttack}
@@ -1067,7 +1063,7 @@ className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2
 </button>
 </div>
 {attackError && (
-<div className="flex items-center gap-1.5 text-danger-text">
+<div className="flex items-center gap-2 text-danger-text">
 <AlertCircle size={12} />
 <p className="text-[11px]">{attackError}</p>
 </div>
@@ -1085,19 +1081,19 @@ className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2
 <select
 value={stabilizeTargetId}
 onChange={(e) => setStabilizeTargetId(e.target.value)}
-className="w-full text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white mb-1.5"
+className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1 text-white mb-2"
 >
 <option value="">Target...</option>
 {party.filter((p) => p.status === 'dying').map((p) => (
 <option key={p.id} value={p.id}>{p.name}{(p.zone || 'near') !== 'close' ? ' (not Close)' : ''}</option>
 ))}
 </select>
-<div className="flex gap-1.5 mb-1.5">
+<div className="flex gap-2 mb-2">
 <input
 value={stabilizeNotation}
 onChange={(e) => setStabilizeNotation(e.target.value)}
 placeholder="1d20+1"
-className="w-16 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-white"
+className="w-16 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
 />
 <button
 onClick={resolveStabilize}
@@ -1108,7 +1104,7 @@ className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2
 </button>
 </div>
 {stabilizeError && (
-<div className="flex items-center gap-1.5 text-danger-text">
+<div className="flex items-center gap-2 text-danger-text">
 <AlertCircle size={12} />
 <p className="text-[11px]">{stabilizeError}</p>
 </div>
@@ -1123,7 +1119,7 @@ className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2
 {showLogPane && (
 <div className="bg-panel rounded-lg p-4 md:flex-1 md:min-h-0 md:flex md:flex-col">
 <p className="text-xs text-ink-dim mb-2">{gmType === 'ai' ? 'AI GM' : 'Scene log'}</p>
-<div ref={sceneLogRef} className="min-h-[160px] max-h-[280px] md:min-h-0 md:max-h-none md:flex-1 overflow-y-auto flex flex-col gap-2.5 pr-1">
+<div ref={sceneLogRef} className="min-h-[160px] max-h-[280px] md:min-h-0 md:max-h-none md:flex-1 overflow-y-auto flex flex-col gap-3 pr-1">
 {log.length === 0 && (
 <p className="text-xs text-ink-dim text-center mt-4">
 {gmType === 'ai'
@@ -1134,12 +1130,12 @@ className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2
 {log.map((entry) => renderChatBubble(entry))}
 {aiTurnPending && (
 <div className="flex justify-start">
-<div className="max-w-[85%] bg-panel2/70 border border-line rounded-xl px-3.5 py-2.5">
-<p className="font-medium text-ink flex items-center gap-1.5 mb-1 text-xs">
+<div className="max-w-[85%] bg-panel2/70 border border-line rounded-xl px-4 py-3">
+<p className="font-medium text-ink flex items-center gap-2 mb-1 text-xs">
 <Loader2 size={12} className="animate-spin" /> Pending adjudication
 </p>
 <p className="text-xs text-ink-dim mb-2">The AI GM is resolving what happens next.</p>
-<div className="flex gap-1.5">
+<div className="flex gap-2">
 {['No roll', 'Request check', 'Clarify'].map((label) => (
 <button
 key={label}
@@ -1162,7 +1158,7 @@ className="text-[11px] border border-line rounded-md px-2 py-1 text-ink-faint cu
 {/* RIGHT RAIL: current scene / known details / objective / party */}
 <div className="flex flex-col gap-3 md:h-full md:min-h-0 md:overflow-y-auto">
 <div className="bg-panel rounded-lg p-3">
-<p className="text-xs text-ink-dim mb-1.5">Current scene</p>
+<p className="text-xs text-ink-dim mb-2">Current scene</p>
 <span className={`inline-block text-xs px-2 py-1 rounded-md border ${
 sceneMode === 'Combat' ? 'border-danger/60 text-danger-text bg-danger/10' : 'border-primary/60 text-primary-text bg-primary/10'
 }`}>
@@ -1175,10 +1171,10 @@ sceneMode === 'Combat' ? 'border-danger/60 text-danger-text bg-danger/10' : 'bor
 {gmNotes.length === 0 ? (
 <p className="text-[11px] text-ink-dim">Nothing revealed yet.</p>
 ) : (
-<div className="flex flex-col gap-1.5">
+<div className="flex flex-col gap-2">
 {gmNotes.map((n) => (
-<div key={n.id} className="flex items-start gap-1.5 text-[11px] text-ink border border-line-soft rounded-md px-2 py-1.5">
-<HelpCircle size={11} className="text-ink-dim mt-0.5 shrink-0" />
+<div key={n.id} className="flex items-start gap-2 text-[11px] text-ink border border-line-soft rounded-md px-2 py-2">
+<HelpCircle size={11} className="text-ink-dim mt-1 shrink-0" />
 <span>{n.text}</span>
 </div>
 ))}
@@ -1188,7 +1184,7 @@ sceneMode === 'Combat' ? 'border-danger/60 text-danger-text bg-danger/10' : 'bor
 
 {objective && (
 <div className="bg-panel rounded-lg p-3">
-<p className="text-xs text-ink-dim mb-1.5">Objective</p>
+<p className="text-xs text-ink-dim mb-2">Objective</p>
 <p className="text-sm text-ink">{objective.title}</p>
 </div>
 )}
@@ -1203,7 +1199,7 @@ card. */}
 {/* actingEntry can be a monster, which has no row of its own below --
 this is the only place that turn gets surfaced. */}
 {actingIsMonster && (
-<span className="text-[10px] text-primary-text bg-primary/10 border border-primary/30 rounded-full px-2 py-0.5 truncate max-w-[55%]">
+<span className="text-[10px] text-primary-text bg-primary/10 border border-primary/30 rounded-full px-2 py-1 truncate max-w-[55%]">
 {actingEntry.name}&rsquo;s turn
 </span>
 )}
@@ -1222,7 +1218,7 @@ disabled={!onOpenCharacterSheet}
 className="w-full text-left disabled:cursor-default"
 >
 <div className="flex items-center justify-between mb-1">
-<div className="flex items-center gap-1.5 min-w-0">
+<div className="flex items-center gap-2 min-w-0">
 {p.avatar_url ? (
 <img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-line shrink-0" />
 ) : (
@@ -1235,7 +1231,7 @@ style={{ backgroundColor: p.color || '#3f3f46' }}
 )}
 <span className="text-xs font-medium text-white truncate">{p.name}</span>
 {isActing && (
-<span className="text-[9px] uppercase tracking-wide text-primary-text bg-primary/20 rounded-full px-1.5 py-0.5 shrink-0">Acting</span>
+<span className="text-[9px] uppercase tracking-wide text-primary-text bg-primary/20 rounded-full px-2 py-1 shrink-0">Acting</span>
 )}
 </div>
 <span className="text-[11px] text-ink-dim shrink-0">{p.hp}/{p.max_hp}</span>
@@ -1243,8 +1239,8 @@ style={{ backgroundColor: p.color || '#3f3f46' }}
 <ProgressBar value={p.hp} max={p.max_hp} barClassName={hpBarColor(p.hp, p.max_hp)} trackBg="bg-danger/40" heightClassName="h-1" />
 </button>
 {lightRemaining !== null && (
-<div className="mt-1.5">
-<div className="flex items-center justify-between mb-0.5">
+<div className="mt-2">
+<div className="flex items-center justify-between mb-1">
 <span className="text-[9px] text-warning-text flex items-center gap-1"><Flame size={9} /> Torch</span>
 <span className="text-[9px] text-ink-dim">{formatMinutes(lightRemaining)}</span>
 </div>
@@ -1252,7 +1248,7 @@ style={{ backgroundColor: p.color || '#3f3f46' }}
 </div>
 )}
 {p.status && p.status !== 'alive' && (
-<span className={`inline-block mt-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+<span className={`inline-block mt-2 text-[9px] uppercase tracking-wide px-2 py-1 rounded-full border ${
 p.status === 'dying' ? 'border-danger text-danger-text' : p.status === 'stable' ? 'border-warning text-warning-text' : 'border-line text-ink-dim'
 }`}>
 {p.status === 'dying' ? `Dying (${p.death_timer ?? '?'})` : p.status}
@@ -1262,7 +1258,7 @@ p.status === 'dying' ? 'border-danger text-danger-text' : p.status === 'stable' 
 <button
 onClick={() => rollDeathCheck(p.id)}
 disabled={deathCheckPendingId === p.id}
-className="mt-1.5 w-full text-[11px] border border-danger/60 text-danger-text rounded-md py-1 hover:bg-danger/40 disabled:opacity-50"
+className="mt-2 w-full text-[11px] border border-danger/60 text-danger-text rounded-md py-1 hover:bg-danger/40 disabled:opacity-50"
 >
 {deathCheckPendingId === p.id ? 'Rolling…' : 'Roll death check'}
 </button>
@@ -1304,7 +1300,7 @@ className="text-sm border border-line-soft rounded-md px-3 py-2 text-ink-faint c
 <button
 onClick={onOpenLibrary}
 title="Ask a rule"
-className="text-sm border border-line rounded-md px-3 py-2 flex items-center gap-1.5 text-ink hover:bg-panel2 whitespace-nowrap"
+className="text-sm border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2 whitespace-nowrap"
 >
 <HelpCircle size={15} /> Ask a rule
 </button>
@@ -1313,7 +1309,7 @@ className="text-sm border border-line rounded-md px-3 py-2 flex items-center gap
 <button
 onClick={sendAndAskAiGm}
 disabled={aiTurnPending}
-className="text-sm border border-ai/40 bg-ai/10 rounded-md px-3.5 py-2 flex items-center justify-center gap-1.5 text-ai-text hover:bg-ai/20 disabled:opacity-60 whitespace-nowrap"
+className="text-sm border border-ai/40 bg-ai/10 rounded-md px-4 py-2 flex items-center justify-center gap-2 text-ai-text hover:bg-ai/20 disabled:opacity-60 whitespace-nowrap"
 >
 {aiTurnPending ? <Loader2 size={15} className="animate-spin" /> : message.trim() ? <Send size={15} /> : <Bot size={15} />}
 {aiTurnPending ? 'Thinking…' : message.trim() ? 'Send' : 'Continue'}
@@ -1321,7 +1317,7 @@ className="text-sm border border-ai/40 bg-ai/10 rounded-md px-3.5 py-2 flex item
 ) : (
 <button
 onClick={sendMessage}
-className="text-sm border border-line rounded-md px-3.5 py-2 flex items-center justify-center gap-1.5 text-ink hover:bg-panel2"
+className="text-sm border border-line rounded-md px-4 py-2 flex items-center justify-center gap-2 text-ink hover:bg-panel2"
 >
 <Send size={15} /> Send
 </button>

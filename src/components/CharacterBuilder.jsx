@@ -880,7 +880,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
       <div className="flex flex-col items-center text-center mb-3">
         <button
           onClick={() => portraitInputRef.current?.click()}
-          className="w-16 h-16 rounded-full overflow-hidden bg-bg border border-line flex items-center justify-center hover:border-ink-faint mb-1.5"
+          className="w-16 h-16 rounded-full overflow-hidden bg-bg border border-line flex items-center justify-center hover:border-ink-faint mb-2"
         >
           {portraitPreview ? (
             <img src={portraitPreview} alt="Portrait preview" className="w-full h-full object-cover" />
@@ -890,7 +890,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
         </button>
         <button
           onClick={() => portraitInputRef.current?.click()}
-          className="text-[11px] text-ink-faint hover:text-ink-dim flex items-center gap-1 mb-2.5"
+          className="text-[11px] text-ink-faint hover:text-ink-dim flex items-center gap-1 mb-3"
         >
           <Upload size={11} /> {portraitPreview ? 'Replace portrait' : 'Add portrait'}
         </button>
@@ -898,11 +898,11 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Unnamed adventurer"
-          className="w-full text-sm bg-bg border border-line rounded-md px-2.5 py-1.5 text-ink text-center"
+          className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-ink text-center"
         />
       </div>
 
-      <div className="grid grid-cols-4 gap-1.5 text-center mb-3 pb-3 border-b border-line-soft">
+      <div className="grid grid-cols-4 gap-2 text-center mb-3 pb-3 border-b border-line-soft">
         <div>
           <p className="text-[10px] text-ink-faint">Level</p>
           <p className="text-sm text-ink">1</p>
@@ -921,7 +921,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
         </div>
       </div>
 
-      <p className="text-xs text-ink-dim mb-1.5">Current choices</p>
+      <p className="text-xs text-ink-dim mb-2">Current choices</p>
       <div className="flex flex-col gap-1 text-[11px]">
         <div className="flex justify-between">
           <span className="text-ink-faint">Ancestry</span>
@@ -948,7 +948,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-line-soft px-6 py-3.5 flex items-center justify-between gap-4">
+      <div className="shrink-0 border-b border-line-soft px-6 py-4 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs text-ink-dim truncate">{campaignName}</p>
           <h1 className="text-ink font-medium">Create a character</h1>
@@ -968,7 +968,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
               <div>
                 <h2 className="text-ink text-sm font-medium mb-1">How do you want to roll your stats?</h2>
                 <p className="text-xs text-ink-faint mb-4">You can still edit any number by hand on the next step either way.</p>
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => setRollMethod('digital')}
                     className={`text-left p-4 rounded-lg border ${
@@ -998,7 +998,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                   {rollMethod === 'digital' && (
                     <button
                       onClick={rollAll}
-                      className="text-xs border border-line rounded-md px-2.5 py-1 flex items-center gap-1.5 text-ink hover:bg-panel2"
+                      className="text-xs border border-line rounded-md px-3 py-1 flex items-center gap-2 text-ink hover:bg-panel2"
                     >
                       <Dices size={13} /> Roll all
                     </button>
@@ -1009,9 +1009,9 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                     ? '"Roll all" fills these in for you, or type in numbers straight off your own dice.'
                     : 'Roll 3d6 for each stat on your own dice, then type each total in below.'}
                 </p>
-                <div className="grid grid-cols-6 gap-1.5 mb-1.5">
+                <div className="grid grid-cols-6 gap-2 mb-2">
                   {STAT_KEYS.map((k) => (
-                    <div key={k} className="bg-bg rounded-md p-1.5 text-center">
+                    <div key={k} className="bg-bg rounded-md p-2 text-center">
                       <p className="text-[10px] text-ink-dim mb-1">{STAT_LABELS[k]}</p>
                       <input
                         type="number"
@@ -1019,7 +1019,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                         max="18"
                         value={stats[k] ?? ''}
                         onChange={(e) => setStat(k, e.target.value)}
-                        className="w-full bg-panel border border-line rounded text-center text-sm text-ink py-0.5"
+                        className="w-full bg-panel border border-line rounded text-center text-sm text-ink py-1"
                       />
                       <p className="text-[10px] text-ink-faint mt-1">
                         {stats[k] == null
@@ -1042,7 +1042,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
             {step === 2 && (
               <div>
                 <h2 className="text-ink text-sm font-medium mb-3">Pick your ancestry</h2>
-                <div className="grid grid-cols-3 gap-1.5 mb-1.5">
+                <div className="grid grid-cols-3 gap-2 mb-2">
                   {ANCESTRIES.map((a) => (
                     <button
                       key={a.name}
@@ -1059,7 +1059,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                 </div>
                 <p className="text-[11px] text-ink-dim">
                   <span className="text-ink-dim">{selectedAncestry.traitName}.</span> {selectedAncestry.trait}
-                  <span className="block text-ink-faint mt-0.5">Languages: {selectedAncestry.languages}</span>
+                  <span className="block text-ink-faint mt-1">Languages: {selectedAncestry.languages}</span>
                 </p>
               </div>
             )}
@@ -1069,8 +1069,8 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                 <h2 className="text-ink text-sm font-medium mb-3">Pick your class</h2>
                 {classesBySource().map((group) => (
                   <div key={group.label} className="mb-3">
-                    <p className="text-[10px] uppercase tracking-wide text-ink-faint mb-1.5">{group.label}</p>
-                    <div className="grid grid-cols-4 gap-1.5">
+                    <p className="text-[10px] uppercase tracking-wide text-ink-faint mb-2">{group.label}</p>
+                    <div className="grid grid-cols-4 gap-2">
                       {group.classes.map((c) => (
                         <button
                           key={c.name}
@@ -1099,7 +1099,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                         {selectedAncestry?.hpRollAdvantage ? ' with advantage' : ''}; Constitution and ancestry modifiers are applied automatically.
                       </p>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <input
                         type="number"
                         min="1"
@@ -1111,7 +1111,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                       />
                       <button
                         onClick={rollHitDie}
-                        className="text-xs border border-line rounded-md px-2.5 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2"
+                        className="text-xs border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2"
                       >
                         <Dices size={13} /> Roll{selectedAncestry?.hpRollAdvantage ? ' twice' : ''}
                       </button>
@@ -1127,20 +1127,20 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                 </div>
                 <ul className="mb-3">
                   {selectedClass.features.map((f) => (
-                    <li key={f.name} className="text-[11px] text-ink-dim bg-bg rounded-md px-2.5 py-1.5 mb-1">
+                    <li key={f.name} className="text-[11px] text-ink-dim bg-bg rounded-md px-3 py-2 mb-1">
                       <span className="text-ink-dim">{f.name}.</span> {f.description}
                     </li>
                   ))}
                 </ul>
 
                 {charClass === 'Fighter' && (
-                  <div className="grid grid-cols-2 gap-1.5">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <p className="text-[11px] text-ink-dim mb-1">Grit stat</p>
                       <select
                         value={gritStat}
                         onChange={(e) => setGritStat(e.target.value)}
-                        className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
+                        className="w-full text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink"
                       >
                         <option>Strength</option>
                         <option>Dexterity</option>
@@ -1151,7 +1151,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                       <select
                         value={masteryWeapon}
                         onChange={(e) => setMasteryWeapon(e.target.value)}
-                        className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
+                        className="w-full text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink"
                       >
                         {classWeapons.map((w) => (
                           <option key={w}>{w}</option>
@@ -1167,7 +1167,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                       value={deity}
                       onChange={(e) => setDeity(e.target.value)}
                       placeholder="Name of the god you serve"
-                      className="w-full text-xs bg-bg border border-line rounded-md px-2.5 py-1.5 text-ink"
+                      className="w-full text-xs bg-bg border border-line rounded-md px-3 py-2 text-ink"
                     />
                   </div>
                 )}
@@ -1177,12 +1177,12 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
             {step === 4 && (
               <div>
                 <h2 className="text-ink text-sm font-medium mb-3">Alignment &amp; background</h2>
-                <div className="grid grid-cols-3 gap-1.5 mb-3">
+                <div className="grid grid-cols-3 gap-2 mb-3">
                   {ALIGNMENTS.map((a) => (
                     <button
                       key={a}
                       onClick={() => setAlignment(a)}
-                      className={`text-xs py-1.5 rounded-md border ${
+                      className={`text-xs py-2 rounded-md border ${
                         alignment === a
                           ? 'bg-panel2 border-primary text-ink'
                           : 'border-line text-ink hover:bg-panel2'
@@ -1192,7 +1192,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-1.5 mb-4">
+                <div className="flex gap-2 mb-4">
                   <input
                     value={background}
                     onChange={(e) => setBackground(e.target.value)}
@@ -1201,7 +1201,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                   />
                   <button
                     onClick={rollBackground}
-                    className="text-xs border border-line rounded-md px-2.5 py-1 flex items-center gap-1.5 text-ink hover:bg-panel2 shrink-0"
+                    className="text-xs border border-line rounded-md px-3 py-1 flex items-center gap-2 text-ink hover:bg-panel2 shrink-0"
                   >
                     <Dices size={13} /> Roll (d20)
                   </button>
@@ -1213,7 +1213,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                 </div>
                 <ul>
                   {talents.map((t, i) => (
-                    <li key={i} className="text-[11px] text-ink-dim bg-bg rounded-md px-2.5 py-1.5 mb-1">
+                    <li key={i} className="text-[11px] text-ink-dim bg-bg rounded-md px-3 py-2 mb-1">
                       ({t.formula}: {t.roll}) {t.description}
                     </li>
                   ))}
@@ -1224,11 +1224,11 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
             {step === 5 && (
               <div>
                 <h2 className="text-ink text-sm font-medium mb-3">Weapon &amp; armor</h2>
-                <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+                <div className="grid grid-cols-2 gap-2 mb-2">
                   <select
                     value={weaponChoice}
                     onChange={(e) => setWeaponChoice(e.target.value)}
-                    className="text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
+                    className="text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink"
                   >
                     {classWeapons.map((wname) => {
                       const w = WEAPONS.find((x) => x.name === wname)
@@ -1243,7 +1243,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                     <select
                       value={armorChoice}
                       onChange={(e) => setArmorChoice(e.target.value)}
-                      className="text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
+                      className="text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink"
                     >
                       <option value="">No armor</option>
                       {classArmors.map((aname) => {
@@ -1260,7 +1260,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
                   )}
                 </div>
                 {selectedClass.shieldAllowed && (
-                  <label className="flex items-center gap-1.5 text-[11px] text-ink-dim mb-2">
+                  <label className="flex items-center gap-2 text-[11px] text-ink-dim mb-2">
                     <input type="checkbox" checked={shieldChoice} onChange={(e) => setShieldChoice(e.target.checked)} />
                     Carry a shield (+2 AC, 1 slot, occupies one hand)
                   </label>
@@ -1274,34 +1274,34 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
             {step === 6 && (
               <div>
                 <h2 className="text-ink text-sm font-medium mb-3">Review</h2>
-                <div className="bg-bg rounded-md px-3.5 py-3 mb-3">
+                <div className="bg-bg rounded-md px-4 py-3 mb-3">
                   <p className="text-sm font-medium text-ink">
                     {name.trim() || `${ancestry} ${charClass.toLowerCase()}`}
                   </p>
-                  <p className="text-[11px] text-ink-dim mt-0.5">
+                  <p className="text-[11px] text-ink-dim mt-1">
                     {ancestry} {charClass.toLowerCase()} &middot; level 1 &middot; {alignment}
                     {background ? ` · ${background.split(' -- ')[0]}` : ''}
                   </p>
-                  <p className="text-[11px] text-ink-dim mt-0.5">
+                  <p className="text-[11px] text-ink-dim mt-1">
                     {computedHp ?? 'unrolled'} hp (1d{selectedClass.hitDie}: {hpRoll ?? '—'}{hpBonus ? ` + ${hpBonus} stout` : ''}
                     {conMod ? ` ${conMod >= 0 ? '+' : ''}${conMod} con` : ''}) &middot; ac {computedAc} &middot; {coin} gp
                   </p>
-                  <p className="text-[11px] text-ink-faint mt-0.5">
+                  <p className="text-[11px] text-ink-faint mt-1">
                     {weaponChoice}
                     {armorChoice ? `, ${armorChoice}` : ''}
                     {shieldChoice && selectedClass.shieldAllowed ? ', shield' : ''}, backpack &amp; adventuring kit
                   </p>
                 </div>
-                <p className="text-xs text-ink-dim mb-1.5">Talents</p>
+                <p className="text-xs text-ink-dim mb-2">Talents</p>
                 <ul className="mb-3">
                   {talents.map((t, i) => (
-                    <li key={i} className="text-[11px] text-ink-dim bg-bg rounded-md px-2.5 py-1.5 mb-1">
+                    <li key={i} className="text-[11px] text-ink-dim bg-bg rounded-md px-3 py-2 mb-1">
                       ({t.formula}: {t.roll}) {t.description}
                     </li>
                   ))}
                 </ul>
                 {error && (
-                  <div className="flex items-center gap-1.5 text-danger-text">
+                  <div className="flex items-center gap-2 text-danger-text">
                     <AlertCircle size={12} />
                     <p className="text-[11px]">{error}</p>
                   </div>
@@ -1320,7 +1320,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
             <button
               onClick={goBack}
               disabled={step === 0}
-              className="text-sm border border-line rounded-md px-3 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2 disabled:opacity-40 disabled:hover:bg-transparent"
+              className="text-sm border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <ChevronLeft size={14} /> Back
             </button>
@@ -1331,7 +1331,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
               <button
                 onClick={goNext}
                 disabled={(step === 1 && !hasCompleteStatRolls) || (step === 3 && !hasValidHpRoll)}
-                className="text-sm bg-primary hover:bg-primary/90 disabled:opacity-50 text-ink rounded-md px-3.5 py-1.5 flex items-center gap-1.5"
+                className="text-sm bg-primary hover:bg-primary/90 disabled:opacity-50 text-ink rounded-md px-4 py-2 flex items-center gap-2"
               >
                 Continue <ChevronRight size={14} />
               </button>
@@ -1339,7 +1339,7 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
               <button
                 onClick={start}
                 disabled={saving || !hasValidHpRoll}
-                className="text-sm bg-primary hover:bg-primary/90 disabled:opacity-50 text-ink rounded-md px-3.5 py-1.5"
+                className="text-sm bg-primary hover:bg-primary/90 disabled:opacity-50 text-ink rounded-md px-4 py-2"
               >
                 {saving ? 'Saving...' : 'Start playing'}
               </button>

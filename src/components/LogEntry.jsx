@@ -33,8 +33,8 @@ export default function LogEntry({ entry, as = 'span' }) {
 
   if (entry.type === 'ai_gm') {
     return (
-      <Tag className={`${blockClass ? blockClass + ' ' : ''}bg-ai/10 border border-ai/20 rounded-md px-2.5 py-2 -mx-0.5`}>
-        <span className="font-medium text-ai-text flex items-center gap-1.5 mb-1">
+      <Tag className={`${blockClass ? blockClass + ' ' : ''}bg-ai/10 border border-ai/20 rounded-md px-3 py-2 -mx-1`}>
+        <span className="font-medium text-ai-text flex items-center gap-2 mb-1">
           <Bot size={12} /> AI GM
         </span>
         <span className="text-ink whitespace-pre-wrap">{entry.text}</span>
@@ -44,11 +44,11 @@ export default function LogEntry({ entry, as = 'span' }) {
 
   if (entry.type === 'roll') {
     return (
-      <Tag className={`${rollFlexClass} items-center gap-1.5 flex-wrap`}>
+      <Tag className={`${rollFlexClass} items-center gap-2 flex-wrap`}>
         <span className="font-medium text-white">{entry.sender_name}:</span>
         <span className="text-ink">{entry.text}</span>
         <span
-          className={`text-[10px] px-1.5 py-0.5 rounded ${
+          className={`text-[10px] px-2 py-1 rounded ${
             entry.roll_source === 'app'
               ? 'bg-primary/20 text-primary-text'
               : 'bg-panel2 border border-line text-ink-dim'

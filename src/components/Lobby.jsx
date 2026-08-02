@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Swords, Key, Plus, Crown, Bot, Users, LogOut, AlertCircle, Settings } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import Card from './ui/Card.jsx'
 
 // Campaign creation moved out to CampaignBuilder.jsx (a full step-by-step
 // wizard) -- onCreateCampaign just switches App.jsx to that view instead
@@ -145,13 +146,13 @@ export default function Lobby({ session, onEnterCampaign, onCreateCampaign, onSi
   return (
     <div className="max-w-3xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-primary-bg flex items-center justify-center">
             <Swords size={18} className="text-primary-text" />
           </div>
           <span className="text-ink font-medium">Delve</span>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <span className="text-sm text-ink-dim">{user?.email}</span>
           <button
             onClick={onOpenProfile}
@@ -186,13 +187,13 @@ export default function Lobby({ session, onEnterCampaign, onCreateCampaign, onSi
         <div className="flex gap-2">
           <button
             onClick={() => setShowJoin((s) => !s)}
-            className="text-sm border border-line rounded-md px-3 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2"
+            className="text-sm border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2"
           >
             <Key size={15} /> Join with code
           </button>
           <button
             onClick={onCreateCampaign}
-            className="text-sm border border-line rounded-md px-3 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2"
+            className="text-sm border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2"
           >
             <Plus size={15} /> New campaign
           </button>
@@ -201,7 +202,7 @@ export default function Lobby({ session, onEnterCampaign, onCreateCampaign, onSi
 
       {error && (
         <div className="mb-3 flex items-start gap-2 text-danger-text text-xs">
-          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+          <AlertCircle size={14} className="mt-1 flex-shrink-0" />
           <p>{error}</p>
         </div>
       )}
@@ -242,13 +243,13 @@ export default function Lobby({ session, onEnterCampaign, onCreateCampaign, onSi
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {campaigns.map((c) => (
-            <div key={c.id} className="bg-panel border border-line-soft rounded-xl p-4">
+            <Card key={c.id}>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-ink font-medium">{c.name}</p>
                 {c.gm_type === 'ai' ? (
-                  <span className="text-xs px-2 py-0.5 rounded bg-ai-bg text-ai-text">AI GM</span>
+                  <span className="text-xs px-2 py-1 rounded bg-ai-bg text-ai-text">AI GM</span>
                 ) : (
-                  <span className="text-xs px-2 py-0.5 rounded bg-positive-bg text-positive-text">
+                  <span className="text-xs px-2 py-1 rounded bg-positive-bg text-positive-text">
                     {c.status === 'active' ? 'Live now' : c.status}
                   </span>
                 )}
@@ -257,7 +258,7 @@ export default function Lobby({ session, onEnterCampaign, onCreateCampaign, onSi
                 {c.system} &middot; session {c.session_number}
               </p>
               <div className="flex items-center justify-between text-xs text-ink-dim mb-3">
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-2">
                   {c.gm_type === 'human' ? <Crown size={14} /> : <Bot size={14} />}
                   {c.gm_type === 'human'
                     ? c.gmName
@@ -275,7 +276,7 @@ export default function Lobby({ session, onEnterCampaign, onCreateCampaign, onSi
               >
                 Jump in
               </button>
-            </div>
+            </Card>
           ))}
 
           {campaigns.length === 0 && (
@@ -291,20 +292,20 @@ export default function Lobby({ session, onEnterCampaign, onCreateCampaign, onSi
           <h2 className="text-ink text-base font-medium mb-3">Public campaigns</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {publicCampaigns.map((c) => (
-              <div key={c.id} className="bg-panel border border-line-soft rounded-xl p-4">
+              <Card key={c.id}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-ink font-medium">{c.name}</p>
                   {c.gm_type === 'ai' ? (
-                    <span className="text-xs px-2 py-0.5 rounded bg-ai-bg text-ai-text">AI GM</span>
+                    <span className="text-xs px-2 py-1 rounded bg-ai-bg text-ai-text">AI GM</span>
                   ) : (
-                    <span className="text-xs px-2 py-0.5 rounded bg-primary-bg text-primary-text">Public</span>
+                    <span className="text-xs px-2 py-1 rounded bg-primary-bg text-primary-text">Public</span>
                   )}
                 </div>
                 <p className="text-sm text-ink-dim mb-3">
                   {c.system} &middot; session {c.session_number}
                 </p>
                 <div className="flex items-center justify-between text-xs text-ink-dim mb-3">
-                  <span className="flex items-center gap-1.5">
+                  <span className="flex items-center gap-2">
                     {c.gm_type === 'human' ? <Crown size={14} /> : <Bot size={14} />}
                     {c.gm_type === 'human'
                       ? c.gmName
@@ -323,7 +324,7 @@ export default function Lobby({ session, onEnterCampaign, onCreateCampaign, onSi
                 >
                   Join
                 </button>
-              </div>
+              </Card>
             ))}
           </div>
         </div>

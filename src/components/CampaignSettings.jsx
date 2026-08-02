@@ -169,17 +169,17 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
               <span className="font-mono text-ink tracking-wide">{joinCode}</span>
               <button
                 onClick={copyJoinCode}
-                className="text-[11px] px-2 py-0.5 border border-line rounded text-ink-dim hover:bg-panel2"
+                className="text-[11px] px-2 py-1 border border-line rounded text-ink-dim hover:bg-panel2"
               >
                 {copied ? 'Copied' : 'Copy'}
               </button>
             </div>
           </div>
 
-          <div className="flex gap-2 mb-2.5">
+          <div className="flex gap-2 mb-3">
             <button
               onClick={() => setIsPublic(true)}
-              className={`flex-1 text-xs py-1.5 rounded-md border ${
+              className={`flex-1 text-xs py-2 rounded-md border ${
                 isPublic ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim'
               }`}
             >
@@ -187,14 +187,14 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
             </button>
             <button
               onClick={() => setIsPublic(false)}
-              className={`flex-1 text-xs py-1.5 rounded-md border ${
+              className={`flex-1 text-xs py-2 rounded-md border ${
                 !isPublic ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim'
               }`}
             >
               Private
             </button>
           </div>
-          <p className="text-[11px] text-ink-faint mb-2.5">
+          <p className="text-[11px] text-ink-faint mb-3">
             {isPublic
               ? 'Anyone signed in can see and join this campaign from the lobby.'
               : 'Hidden from the public list -- joinable only with the code and password below.'}
@@ -206,7 +206,7 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
               value={privacyPassword}
               onChange={(e) => setPrivacyPassword(e.target.value)}
               placeholder="Set a new password (leave blank to keep the current one)"
-              className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink mb-2.5"
+              className="w-full text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink mb-3"
             />
           )}
 
@@ -215,7 +215,7 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
           <button
             onClick={savePrivacy}
             disabled={privacySaving}
-            className="text-xs border border-line rounded-md px-3 py-1.5 text-ink hover:bg-panel2 disabled:opacity-50"
+            className="text-xs border border-line rounded-md px-3 py-2 text-ink hover:bg-panel2 disabled:opacity-50"
           >
             {privacySaving ? 'Saving...' : privacySaved ? 'Saved' : 'Save privacy settings'}
           </button>
@@ -224,7 +224,7 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
 
       <div className="bg-panel rounded-lg p-4 mb-4">
         <p className="text-xs text-ink-dim mb-2">Modes of play</p>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {MODES_OF_PLAY.map((mode) => (
             <label key={mode.key} className="flex items-start gap-2 text-xs">
               {isGm ? (
@@ -270,7 +270,7 @@ export default function CampaignSettings({ campaignId, session, campaignName = '
         <button
           onClick={save}
           disabled={saving}
-          className="text-xs border border-line rounded-md px-3 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2 disabled:opacity-50"
+          className="text-xs border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2 disabled:opacity-50"
         >
           <Save size={13} /> {saving ? 'Saving...' : 'Save settings'}
         </button>

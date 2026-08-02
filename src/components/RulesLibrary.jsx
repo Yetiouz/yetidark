@@ -214,7 +214,7 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
 
       {docs.length > 0 && (
         <div className="mb-4">
-          <div className="relative mb-2.5">
+          <div className="relative mb-3">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
             <input
               value={query}
@@ -234,17 +234,17 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
               setShowAdd((s) => !s)
               resetAddForm()
             }}
-            className="text-xs border border-line rounded-md px-2.5 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2"
+            className="text-xs border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2"
           >
             <Plus size={13} /> Add reference
           </button>
 
           {showAdd && (
-            <div className="mt-2.5 bg-panel border border-line-soft rounded-xl p-3 flex flex-col gap-2.5">
+            <div className="mt-3 bg-panel border border-line-soft rounded-xl p-3 flex flex-col gap-3">
               <div className="flex gap-2">
                 <button
                   onClick={() => setAddKind('file')}
-                  className={`flex-1 text-xs py-1.5 rounded-md border ${
+                  className={`flex-1 text-xs py-2 rounded-md border ${
                     addKind === 'file' ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim'
                   }`}
                 >
@@ -252,7 +252,7 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
                 </button>
                 <button
                   onClick={() => setAddKind('link')}
-                  className={`flex-1 text-xs py-1.5 rounded-md border ${
+                  className={`flex-1 text-xs py-2 rounded-md border ${
                     addKind === 'link' ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim'
                   }`}
                 >
@@ -269,13 +269,13 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
                 value={titleDraft}
                 onChange={(e) => setTitleDraft(e.target.value)}
                 placeholder="Title (e.g. Shadowdark Quickstart Set)"
-                className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
+                className="w-full text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink"
               />
               <input
                 value={descDraft}
                 onChange={(e) => setDescDraft(e.target.value)}
                 placeholder="Description (optional)"
-                className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
+                className="w-full text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink"
               />
 
               {addKind === 'file' ? (
@@ -293,12 +293,12 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
                     value={urlDraft}
                     onChange={(e) => setUrlDraft(e.target.value)}
                     placeholder="https://..."
-                    className="flex-1 text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
+                    className="flex-1 text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink"
                   />
                   <button
                     onClick={addLinkDoc}
                     disabled={uploading || !titleDraft.trim() || !urlDraft.trim()}
-                    className="text-xs border border-line rounded-md px-3 py-1.5 text-ink hover:bg-panel2 disabled:opacity-50"
+                    className="text-xs border border-line rounded-md px-3 py-2 text-ink hover:bg-panel2 disabled:opacity-50"
                   >
                     {uploading ? 'Saving...' : 'Save'}
                   </button>
@@ -314,7 +314,7 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
         </div>
       )}
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         {docs.length === 0 && (
           <p className="text-xs text-ink-faint">
             {isGm ? 'No reference material yet -- add one above.' : 'The GM hasn\'t added any reference material yet.'}
@@ -334,8 +334,8 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
             key={doc.id}
             className="flex items-center justify-between gap-2 bg-panel border border-line-soft rounded-lg p-3"
           >
-            <button onClick={() => openDoc(doc)} className="flex items-start gap-2.5 text-left flex-1 min-w-0">
-              <div className="w-7 h-7 rounded-md bg-panel2 flex items-center justify-center shrink-0 mt-0.5">
+            <button onClick={() => openDoc(doc)} className="flex items-start gap-3 text-left flex-1 min-w-0">
+              <div className="w-7 h-7 rounded-md bg-panel2 flex items-center justify-center shrink-0 mt-1">
                 {doc.kind === 'file' ? (
                   <FileText size={14} className="text-ink-dim" />
                 ) : (
@@ -343,7 +343,7 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-sm text-ink truncate flex items-center gap-1.5">
+                <p className="text-sm text-ink truncate flex items-center gap-2">
                   {doc.title}
                   {doc.kind === 'link' && <ExternalLink size={11} className="text-ink-faint shrink-0" />}
                 </p>

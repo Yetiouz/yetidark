@@ -417,9 +417,9 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       {avatarError && <p className="text-xs text-danger-text mb-3">{avatarError}</p>}
 
       <h2 className="text-sm font-semibold text-ink uppercase tracking-wide border-b border-line-soft pb-2 mb-4">Overview</h2>
-      <div className="grid grid-cols-6 gap-1.5 mb-4">
+      <div className="grid grid-cols-6 gap-2 mb-4">
         {STAT_KEYS.map((k) => (
-          <div key={k} className="bg-panel rounded-md p-1.5 text-center">
+          <div key={k} className="bg-panel rounded-md p-2 text-center">
             <p className="text-[10px] text-ink-dim mb-1">{STAT_LABELS[k]}</p>
             <p className="text-sm text-ink">{stats[k] ?? '-'}</p>
             <p className="text-[10px] text-ink-faint mt-1">
@@ -429,38 +429,38 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5 mb-4">
+      <div className="grid grid-cols-3 gap-3 mb-4">
         <div className="bg-panel rounded-lg p-3">
-          <p className="text-[11px] text-ink-dim mb-1.5">HP</p>
+          <p className="text-[11px] text-ink-dim mb-2">HP</p>
           <div className="flex items-center justify-between">
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('hp', -1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">-</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('hp', -1)} className="px-2 border border-line rounded text-ink-dim disabled:opacity-40">-</button>}
             <span className="text-sm text-ink">{character.hp} / {character.max_hp}</span>
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('hp', 1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">+</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('hp', 1)} className="px-2 border border-line rounded text-ink-dim disabled:opacity-40">+</button>}
           </div>
-          <p className="text-[11px] text-ink-faint mt-1.5">ac {character.ac}</p>
+          <p className="text-[11px] text-ink-faint mt-2">ac {character.ac}</p>
         </div>
 
         <div className="bg-panel rounded-lg p-3">
-          <p className="text-[11px] text-ink-dim mb-1.5">XP</p>
+          <p className="text-[11px] text-ink-dim mb-2">XP</p>
           <div className="flex items-center justify-between">
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('xp', -1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">-</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('xp', -1)} className="px-2 border border-line rounded text-ink-dim disabled:opacity-40">-</button>}
             <span className="text-sm text-ink">{character.xp}</span>
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('xp', 1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">+</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('xp', 1)} className="px-2 border border-line rounded text-ink-dim disabled:opacity-40">+</button>}
           </div>
         </div>
 
         <div className="bg-panel rounded-lg p-3">
-          <p className="text-[11px] text-ink-dim mb-1.5">Coin</p>
+          <p className="text-[11px] text-ink-dim mb-2">Coin</p>
           <div className="flex items-center justify-between">
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('coin', -1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">-</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('coin', -1)} className="px-2 border border-line rounded text-ink-dim disabled:opacity-40">-</button>}
             <span className="text-sm text-ink">{character.coin} gp</span>
-            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('coin', 1)} className="px-1.5 border border-line rounded text-ink-dim disabled:opacity-40">+</button>}
+            {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('coin', 1)} className="px-2 border border-line rounded text-ink-dim disabled:opacity-40">+</button>}
           </div>
         </div>
       </div>
       {canEdit && (
         <div className="mb-4">
-          <label className="text-[11px] text-ink-dim block mb-1.5">
+          <label className="text-[11px] text-ink-dim block mb-2">
             Reason for next HP, XP, or coin change
           </label>
           <input
@@ -505,33 +505,33 @@ export default function CharacterSheet({ characterId, session, onBack }) {
               rather than show a fabricated slot count, the card is present
               (matching the artifact's shape) but honestly says it isn't set
               up yet -- same treatment as the Treasure/Party sidebar below. */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div className={`rounded-lg px-3 py-2 border ${gearFull ? 'border-warning/60 bg-warning/5' : 'bg-panel border-line-soft'}`}>
-              <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">GEAR</p>
+              <p className="text-[10px] tracking-wide text-ink-dim mb-1">GEAR</p>
               <p className={`text-lg font-semibold ${gearFull ? 'text-warning-text' : 'text-white'}`}>
                 {usedSlots}<span className="text-ink-dim text-sm font-normal"> / {maxSlots}</span>
               </p>
               {gearFull && (
-                <div className="mt-1.5 h-1 rounded-full bg-warning/20 overflow-hidden">
+                <div className="mt-2 h-1 rounded-full bg-warning/20 overflow-hidden">
                   <div className="h-full w-full bg-warning rounded-full" />
                 </div>
               )}
             </div>
             <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-              <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">COIN</p>
+              <p className="text-[10px] tracking-wide text-ink-dim mb-1">COIN</p>
               <p className="text-lg font-semibold text-white">{character.coin}<span className="text-ink-dim text-sm font-normal"> gp</span></p>
             </div>
             <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-              <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">TORCHES</p>
+              <p className="text-[10px] tracking-wide text-ink-dim mb-1">TORCHES</p>
               <p className="text-lg font-semibold text-white">{torchCount}</p>
             </div>
             <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-              <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">RATIONS</p>
+              <p className="text-[10px] tracking-wide text-ink-dim mb-1">RATIONS</p>
               <p className="text-lg font-semibold text-white">{rationCount}</p>
             </div>
             <div className="bg-panel border border-dashed border-line-soft rounded-lg px-3 py-2">
-              <p className="text-[10px] tracking-wide text-ink-dim mb-0.5">PARTY STORAGE</p>
-              <p className="text-xs text-ink-faint mt-1.5">Not set up</p>
+              <p className="text-[10px] tracking-wide text-ink-dim mb-1">PARTY STORAGE</p>
+              <p className="text-xs text-ink-faint mt-2">Not set up</p>
             </div>
           </div>
 
@@ -563,7 +563,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                         ? `AC ${item.base_ac}${item.dex_applies ? ' + dex' : ''}`
                         : null
                     return (
-                      <div key={item.id} className="bg-panel2/40 border border-line-soft rounded-lg p-2.5">
+                      <div key={item.id} className="bg-panel2/40 border border-line-soft rounded-lg p-3">
                         <div className="flex items-start gap-2">
                           <span className="w-7 h-7 rounded-md bg-panel2 flex items-center justify-center shrink-0">
                             {isDefense ? <Shield size={13} className="text-ink-dim" /> : <Package size={13} className="text-ink-dim" />}
@@ -575,7 +575,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                             <p className="text-[10px] text-ink-dim">Equipped</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
                           {tag && <Badge tone="blue">{tag}</Badge>}
                           {canEdit && (
                             <>
@@ -611,14 +611,14 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                 {carriedGear.length > 0 && visibleCarried.length === 0 && (
                   <p className="text-xs text-ink-faint">No items match &ldquo;{filterQuery.trim()}&rdquo;.</p>
                 )}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {visibleCarried.map((item) => (
                     <Row
                       key={item.id}
                       icon={Package}
                       label={item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name}
                       right={
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
                           {/* notes is a real, existing character_gear column
                               -- surfacing it as a tag (e.g. a GM-set "Cult
                               marker") is honest, unlike a fabricated item
@@ -654,7 +654,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                 Library's distinct empty states), not filled-in mock data. */}
             <div className="flex flex-col gap-3">
               <Card title="Treasure found">
-                <div className="flex items-start gap-2.5">
+                <div className="flex items-start gap-3">
                   <span className="w-8 h-8 rounded-md bg-panel2 flex items-center justify-center shrink-0">
                     <Gem size={14} className="text-ink-faint" />
                   </span>
@@ -665,7 +665,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
               </Card>
 
               <Card title="Party inventory">
-                <div className="flex items-start gap-2.5">
+                <div className="flex items-start gap-3">
                   <span className="w-8 h-8 rounded-md bg-panel2 flex items-center justify-center shrink-0">
                     <Users size={14} className="text-ink-faint" />
                   </span>
@@ -678,14 +678,14 @@ export default function CharacterSheet({ characterId, session, onBack }) {
           </div>
 
           {canEdit && addingGear && (
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               <input
                 value={gearDraft}
                 onChange={(e) => setGearDraft(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (addGear(), setAddingGear(false))}
                 placeholder="Item name"
                 autoFocus
-                className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink"
+                className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink"
               />
               <Button icon={Plus} onClick={() => { addGear(); setAddingGear(false) }} className="shrink-0">
                 Add
@@ -697,17 +697,17 @@ export default function CharacterSheet({ characterId, session, onBack }) {
               Filter are real, working operations over already-loaded data
               (see visibleCarried above) -- not decorative buttons. */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-soft pt-3">
-            <p className="text-[11px] text-ink-faint flex items-center gap-1.5">
+            <p className="text-[11px] text-ink-faint flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-positive inline-block" />
               Changes save automatically
             </p>
             {canEdit && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <Button variant="outline" icon={ArrowUpDown} tooltip={sortLabel} onClick={cycleSort}>
                   Sort
                 </Button>
                 {filterOpen ? (
-                  <div className="flex items-center gap-1.5 bg-bg border border-line rounded-md pl-2 pr-1 h-8">
+                  <div className="flex items-center gap-2 bg-bg border border-line rounded-md pl-2 pr-1 h-8">
                     <Search size={12} className="text-ink-faint shrink-0" />
                     <input
                       value={filterQuery}
@@ -752,17 +752,17 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       </div>
 
       <div className="bg-panel rounded-lg p-4 mb-4">
-        <p className="text-xs text-ink-dim mb-2.5 flex items-center gap-1.5">
+        <p className="text-xs text-ink-dim mb-3 flex items-center gap-2">
           <Shield size={12} /> Class &amp; Ancestry Features
         </p>
         {features.length === 0 && <p className="text-xs text-ink-faint">None yet.</p>}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {features.map((f) => (
-            <div key={f.id} className="text-xs p-2.5 bg-panel2/60 rounded-md border border-line">
+            <div key={f.id} className="text-xs p-3 bg-panel2/60 rounded-md border border-line">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <span className="text-ink font-medium">{f.name}</span>
-                  <span className="text-[10px] text-ink-faint ml-1.5">({f.source})</span>
+                  <span className="text-[10px] text-ink-faint ml-2">({f.source})</span>
                 </div>
                 {canEdit && (
                   <button onClick={() => removeFeature(f)} className="text-ink-faint hover:text-danger-text shrink-0">
@@ -772,7 +772,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
               </div>
               <p className="text-ink-dim mt-1">{f.description}</p>
               {f.uses_max != null && (
-                <div className="flex items-center gap-2 mt-1.5">
+                <div className="flex items-center gap-2 mt-2">
                   <span className="text-[11px] text-ink-dim">
                     {f.uses_current ?? 0} / {f.uses_max} uses
                   </span>
@@ -780,7 +780,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                     <button
                       onClick={() => spendFeatureUse(f)}
                       disabled={(f.uses_current ?? 0) <= 0}
-                      className="text-[11px] border border-line rounded px-1.5 py-0.5 text-ink-dim disabled:opacity-40"
+                      className="text-[11px] border border-line rounded px-2 py-1 text-ink-dim disabled:opacity-40"
                     >
                       Spend
                     </button>
@@ -793,8 +793,8 @@ export default function CharacterSheet({ characterId, session, onBack }) {
       </div>
 
       <div className="bg-panel rounded-lg p-4">
-        <div className="flex items-center justify-between gap-3 mb-2.5">
-          <p className="text-xs text-ink-dim flex items-center gap-1.5">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <p className="text-xs text-ink-dim flex items-center gap-2">
             <Sparkles size={12} /> Spells
           </p>
           {canEdit && (
@@ -808,14 +808,14 @@ export default function CharacterSheet({ characterId, session, onBack }) {
           )}
         </div>
         {restError && <p className="text-[11px] text-danger-text mb-2">{restError}</p>}
-        <div className="flex flex-col gap-1.5 mb-3">
+        <div className="flex flex-col gap-2 mb-3">
           {spells.length === 0 && <p className="text-xs text-ink-faint">None known yet.</p>}
           {spells.map((spell) => (
-            <div key={spell.id} className="text-xs p-2.5 bg-panel2/60 rounded-md border border-line">
+            <div key={spell.id} className="text-xs p-3 bg-panel2/60 rounded-md border border-line">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-ink font-medium ${spell.lost ? 'line-through text-ink-faint' : ''}`}>{spell.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-ai-bg text-ai-text border border-ai-line">
+                  <span className="text-[10px] px-2 py-1 rounded bg-ai-bg text-ai-text border border-ai-line">
                     tier {spell.tier}
                   </span>
                   {(spell.range || spell.duration) && (
@@ -832,7 +832,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
               </div>
               {spell.description && <p className="text-ink-dim mt-1">{spell.description}</p>}
               <div className="flex items-center gap-3 mt-2">
-                <label className="flex items-center gap-1.5 text-[11px] text-ink-dim">
+                <label className="flex items-center gap-2 text-[11px] text-ink-dim">
                   {canEdit ? (
                     <input type="checkbox" checked={spell.prepared} onChange={() => togglePrepared(spell)} />
                   ) : (
@@ -850,13 +850,13 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                 )}
               </div>
               {spell.last_check_natural != null && (
-                <p className={`text-[11px] mt-1.5 ${spell.last_check_succeeded ? 'text-positive-text' : 'text-warning-text'}`}>
+                <p className={`text-[11px] mt-2 ${spell.last_check_succeeded ? 'text-positive-text' : 'text-warning-text'}`}>
                   Last check: natural {spell.last_check_natural}, total {spell.last_check_total}
                   {spell.last_check_natural === 1 ? ' · mishap' : spell.last_check_succeeded ? ' · success' : ' · failure'}
                 </p>
               )}
               {canEdit && !spell.lost && (
-                <div className="flex items-center gap-1.5 mt-2">
+                <div className="flex items-center gap-2 mt-2">
                   <input
                     type="number"
                     min="1"
@@ -864,14 +864,14 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                     value={spellCheckDrafts[spell.id]?.naturalRoll ?? ''}
                     onChange={(e) => updateSpellCheckDraft(spell.id, 'naturalRoll', e.target.value)}
                     placeholder="natural d20"
-                    className="w-24 text-[11px] bg-bg border border-line rounded px-1.5 py-1 text-ink"
+                    className="w-24 text-[11px] bg-bg border border-line rounded px-2 py-1 text-ink"
                   />
                   <input
                     type="number"
                     value={spellCheckDrafts[spell.id]?.total ?? ''}
                     onChange={(e) => updateSpellCheckDraft(spell.id, 'total', e.target.value)}
                     placeholder={`total vs DC ${10 + spell.tier}`}
-                    className="w-28 text-[11px] bg-bg border border-line rounded px-1.5 py-1 text-ink"
+                    className="w-28 text-[11px] bg-bg border border-line rounded px-2 py-1 text-ink"
                   />
                   <button
                     onClick={() => recordSpellCheck(spell)}
@@ -886,8 +886,8 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         </div>
 
         {canEdit && (
-          <div className="pt-3 border-t border-line-soft flex flex-col gap-1.5">
-            <div className="flex gap-1.5">
+          <div className="pt-3 border-t border-line-soft flex flex-col gap-2">
+            <div className="flex gap-2">
               <input
                 value={spellDraft.name}
                 onChange={(e) => setSpellDraft((d) => ({ ...d, name: e.target.value }))}
@@ -897,7 +897,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
               <select
                 value={spellDraft.tier}
                 onChange={(e) => setSpellDraft((d) => ({ ...d, tier: e.target.value }))}
-                className="text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-ink"
+                className="text-xs bg-bg border border-line rounded-md px-2 py-1 text-ink"
               >
                 {[1, 2, 3, 4, 5].map((t) => (
                   <option key={t} value={t}>
@@ -906,7 +906,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                 ))}
               </select>
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               <input
                 value={spellDraft.range}
                 onChange={(e) => setSpellDraft((d) => ({ ...d, range: e.target.value }))}
@@ -920,7 +920,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                 className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1 text-ink"
               />
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               <input
                 value={spellDraft.description}
                 onChange={(e) => setSpellDraft((d) => ({ ...d, description: e.target.value }))}

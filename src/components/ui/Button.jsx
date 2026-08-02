@@ -47,7 +47,7 @@ export default function Button({
       onClick={onClick}
       disabled={disabled}
       title={tooltip ? undefined : title}
-      className={`text-sm rounded-md px-3.5 py-1.5 flex items-center justify-center gap-1.5 transition-colors ${variantClasses} ${className}`}
+      className={`text-sm rounded-md px-4 py-2 flex items-center justify-center gap-2 transition-colors ${variantClasses} ${className}`}
     >
       {Icon && <Icon size={14} />}
       {children}
@@ -59,7 +59,7 @@ export default function Button({
   return (
     <div className="relative group inline-block">
       {button}
-      <div className="absolute right-0 top-full mt-1.5 whitespace-nowrap text-xs bg-panel2 border border-line rounded-md px-2.5 py-1.5 text-ink-dim opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+      <div className="absolute right-0 top-full mt-2 whitespace-nowrap text-xs bg-panel2 border border-line rounded-md px-3 py-2 text-ink-dim opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
         {tooltip}
       </div>
     </div>

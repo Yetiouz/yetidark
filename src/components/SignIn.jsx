@@ -51,7 +51,7 @@ export default function SignIn() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="w-80 bg-panel border border-line-soft rounded-xl p-8">
         <div className="flex flex-col items-center mb-6">
-          <div className="w-9 h-9 rounded-lg bg-primary-bg flex items-center justify-center mb-2.5">
+          <div className="w-9 h-9 rounded-lg bg-primary-bg flex items-center justify-center mb-3">
             <Swords size={20} className="text-primary-text" />
           </div>
           <span className="text-ink font-medium">Delve</span>
@@ -77,7 +77,7 @@ export default function SignIn() {
             </div>
 
             <form onSubmit={submit}>
-              <label className="text-xs text-ink-dim block mb-1.5">Email</label>
+              <label className="text-xs text-ink-dim block mb-2">Email</label>
               <input
                 type="email"
                 required
@@ -97,12 +97,12 @@ export default function SignIn() {
 
             {error && (
               <div className="mt-3 flex items-start gap-2 text-danger-text">
-                <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                <AlertCircle size={14} className="mt-1 flex-shrink-0" />
                 <p className="text-xs">{error}</p>
               </div>
             )}
-            <div className="mt-4 pt-3.5 border-t border-line-soft flex items-start gap-2">
-              <MailCheck size={15} className="text-positive-text mt-0.5 flex-shrink-0" />
+            <div className="mt-4 pt-4 border-t border-line-soft flex items-start gap-2">
+              <MailCheck size={15} className="text-positive-text mt-1 flex-shrink-0" />
               <p className="text-xs text-ink-dim">
                 No password to remember — we'll email you a link that signs you in instantly.
               </p>
@@ -111,7 +111,7 @@ export default function SignIn() {
         ) : (
           <div className="text-center">
             <MailCheck size={28} className="text-positive-text mx-auto mb-3" />
-            <p className="text-sm text-ink mb-1.5">Check your email</p>
+            <p className="text-sm text-ink mb-2">Check your email</p>
             <p className="text-xs text-ink-dim">
               We sent a sign-in link to {email}. Click it to come back here signed in.
             </p>

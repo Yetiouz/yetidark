@@ -123,7 +123,7 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
                 e.preventDefault()
                 setZoneMenu({ id: t.id, type: t.type, name: t.name, x: t.x, y: t.y })
               }}
-              className={`absolute flex flex-col items-center gap-0.5 bg-transparent border-0 p-0 ${clickable ? 'cursor-pointer' : 'cursor-default'}`}
+              className={`absolute flex flex-col items-center gap-1 bg-transparent border-0 p-0 ${clickable ? 'cursor-pointer' : 'cursor-default'}`}
               style={{ left: `${t.x}%`, top: `${t.y}%`, transform: 'translate(-50%, -50%)' }}
             >
               <div
@@ -162,13 +162,13 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
               className="absolute z-20 bg-panel border border-line-soft rounded-lg shadow-lg py-1 flex flex-col min-w-[96px]"
               style={{ left: `${zoneMenu.x}%`, top: `${zoneMenu.y}%`, transform: 'translate(-50%, 10px)' }}
             >
-              <p className="text-[10px] text-ink-dim px-2.5 pt-1 pb-1.5 mb-1 border-b border-line-soft truncate">{zoneMenu.name}</p>
+              <p className="text-[10px] text-ink-dim px-3 pt-1 pb-2 mb-1 border-b border-line-soft truncate">{zoneMenu.name}</p>
               {['close', 'near', 'far'].map((z) => (
                 <button
                   key={z}
                   type="button"
                   onClick={() => { onSetZone(zoneMenu.type, zoneMenu.id, z); setZoneMenu(null) }}
-                  className="text-xs text-left px-2.5 py-1 capitalize text-ink hover:bg-panel2"
+                  className="text-xs text-left px-3 py-1 capitalize text-ink hover:bg-panel2"
                 >
                   {z}
                 </button>

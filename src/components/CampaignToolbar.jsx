@@ -8,12 +8,12 @@ import { Settings, ScrollText, BookOpen, Users } from 'lucide-react'
 // screens.
 export default function CampaignToolbar({ onOpenLog, onOpenLibrary, onOpenTracker, onOpenSettings, after }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-2">
       {onOpenLog && (
         <button
           onClick={onOpenLog}
           title="Campaign log"
-          className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
+          className="text-xs border border-line rounded-md p-2 text-ink hover:bg-panel2"
         >
           <ScrollText size={14} />
         </button>
@@ -22,7 +22,7 @@ export default function CampaignToolbar({ onOpenLog, onOpenLibrary, onOpenTracke
         <button
           onClick={onOpenLibrary}
           title="Rules library"
-          className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
+          className="text-xs border border-line rounded-md p-2 text-ink hover:bg-panel2"
         >
           <BookOpen size={14} />
         </button>
@@ -31,7 +31,7 @@ export default function CampaignToolbar({ onOpenLog, onOpenLibrary, onOpenTracke
         <button
           onClick={onOpenTracker}
           title="NPCs, factions & treasure"
-          className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
+          className="text-xs border border-line rounded-md p-2 text-ink hover:bg-panel2"
         >
           <Users size={14} />
         </button>
@@ -40,7 +40,7 @@ export default function CampaignToolbar({ onOpenLog, onOpenLibrary, onOpenTracke
         <button
           onClick={onOpenSettings}
           title="Campaign settings"
-          className="text-xs border border-line rounded-md p-1.5 text-ink hover:bg-panel2"
+          className="text-xs border border-line rounded-md p-2 text-ink hover:bg-panel2"
         >
           <Settings size={14} />
         </button>

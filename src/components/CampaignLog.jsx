@@ -281,7 +281,7 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
         {isGm && (
           <button
             onClick={toggleSession}
-            className={`text-xs rounded-md px-3 py-1.5 flex items-center gap-1.5 border ${
+            className={`text-xs rounded-md px-3 py-2 flex items-center gap-2 border ${
               sessionActive
                 ? 'border-positive text-positive-text bg-positive-bg hover:bg-positive-bg'
                 : 'border-line text-ink-dim hover:bg-panel2'
@@ -299,10 +299,10 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
       </div>
 
       <div className="bg-panel rounded-lg p-4 mb-4">
-        <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center justify-between mb-3">
           <p className="text-xs text-ink-dim">Threads</p>
           {isGm && (
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               <input
                 value={threadDraft}
                 onChange={(e) => setThreadDraft(e.target.value)}
@@ -316,7 +316,7 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {threads.length === 0 && <p className="text-xs text-ink-faint">No open threads yet.</p>}
           {threads.map((thread) => (
             <div key={thread.id} className="text-xs p-2 bg-panel2/60 rounded-md border border-line">
@@ -326,14 +326,14 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
                   <select
                     value={thread.status}
                     onChange={(e) => setThreadStatus(thread, e.target.value)}
-                    className={`text-[10px] rounded px-1.5 py-0.5 border-0 ${STATUS_COLOR[thread.status]}`}
+                    className={`text-[10px] rounded px-2 py-1 border-0 ${STATUS_COLOR[thread.status]}`}
                   >
                     {THREAD_STATUSES.map((s) => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
                 ) : (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_COLOR[thread.status]}`}>{thread.status}</span>
+                  <span className={`text-[10px] px-2 py-1 rounded ${STATUS_COLOR[thread.status]}`}>{thread.status}</span>
                 )}
               </div>
               {thread.description && <p className="text-ink-dim">{thread.description}</p>}
@@ -343,10 +343,10 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
       </div>
 
       <div className="bg-panel rounded-lg p-4 mb-4">
-        <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center justify-between mb-3">
           <p className="text-xs text-ink-dim">Clocks</p>
           {isGm && (
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               <input
                 value={clockDraft}
                 onChange={(e) => setClockDraft(e.target.value)}
@@ -364,11 +364,11 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
           {clocks.length === 0 && <p className="text-xs text-ink-faint">No clocks running.</p>}
           {clocks.map((clock) => (
             <div key={clock.id} className="text-xs p-2 bg-panel2/60 rounded-md border border-line">
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-2">
                 <span className="text-ink font-medium">{clock.name}</span>
                 <span className="text-ink-faint">{clock.segments_filled} / {clock.segments_total}</span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <ProgressBar
                   mode="segmented"
                   segments={clock.segments_total}
@@ -379,8 +379,8 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
                 />
                 {isGm && (
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => adjustClock(clock, -1)} className="px-1.5 border border-line rounded text-ink-dim">-</button>
-                    <button onClick={() => adjustClock(clock, 1)} className="px-1.5 border border-line rounded text-ink-dim">+</button>
+                    <button onClick={() => adjustClock(clock, -1)} className="px-2 border border-line rounded text-ink-dim">-</button>
+                    <button onClick={() => adjustClock(clock, 1)} className="px-2 border border-line rounded text-ink-dim">+</button>
                     <button onClick={() => removeClock(clock)} className="text-ink-faint hover:text-danger-text">
                       <Trash2 size={13} />
                     </button>
@@ -395,12 +395,12 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
       <div className="bg-panel rounded-lg p-4">
         <p className="text-xs text-ink-dim mb-2">Timeline</p>
         {isGm && (
-          <div className="flex gap-1.5 mb-2.5">
+          <div className="flex gap-2 mb-3">
             <input
               type="number"
               value={currentSessionNumber}
               onChange={(e) => setCurrentSessionNumber(parseInt(e.target.value, 10) || 1)}
-              className="w-14 text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-ink"
+              className="w-14 text-xs bg-bg border border-line rounded-md px-2 py-1 text-ink"
             />
             <input
               value={entryDraft}
@@ -414,7 +414,7 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
             </button>
           </div>
         )}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {timeline.length === 0 && <p className="text-xs text-ink-faint">No sessions logged yet.</p>}
           {timeline.map((e) => (
             <div key={e.id} className="text-xs p-2 bg-panel2/60 rounded-md">
@@ -426,10 +426,10 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
       </div>
 
       <div className="bg-panel rounded-lg p-4 mt-4">
-        <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center justify-between mb-3">
           <p className="text-xs text-ink-dim">Light sources</p>
           {isGm && (
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               <input
                 value={lightNameDraft}
                 onChange={(e) => setLightNameDraft(e.target.value)}
@@ -439,7 +439,7 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
               <select
                 value={lightCharacterDraft}
                 onChange={(e) => setLightCharacterDraft(e.target.value)}
-                className="text-xs bg-bg border border-line rounded-md px-1.5 py-1 text-ink"
+                className="text-xs bg-bg border border-line rounded-md px-2 py-1 text-ink"
               >
                 <option value="">Party (unassigned)</option>
                 {party.map((c) => (
@@ -453,11 +453,11 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
           )}
         </div>
         {!sessionActive && (
-          <p className="text-[11px] text-ink-faint mb-2.5">
+          <p className="text-[11px] text-ink-faint mb-3">
             Session is paused -- lit sources won't burn down until it's resumed.
           </p>
         )}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {lightSources.length === 0 && <p className="text-xs text-ink-faint">No light sources tracked yet.</p>}
           {lightSources.map((source) => {
             const owner = party.find((c) => c.id === source.character_id)
@@ -475,7 +475,7 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
                   </div>
                 </div>
                 {canWrite && (
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => toggleLit(source)}
                       className={`text-[11px] px-2 py-1 rounded border ${

@@ -18,9 +18,9 @@ const CIRCLE_CLASSES = {
 
 export default function Stepper({ steps, onStepClick }) {
   return (
-    <div className="hidden md:flex items-center gap-1.5 overflow-x-auto">
+    <div className="hidden md:flex items-center gap-2 overflow-x-auto">
       {steps.map(({ label, state }, i) => (
-        <div key={label} className="flex items-center gap-1.5 shrink-0">
+        <div key={label} className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => onStepClick && onStepClick(i)}
             className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] border shrink-0 ${

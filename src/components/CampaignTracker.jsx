@@ -179,7 +179,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
     await supabase.from(table).delete().eq('id', id)
   }
 
-  const inputCls = 'text-xs bg-bg border border-line rounded-md px-2 py-1.5 text-ink'
+  const inputCls = 'text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink'
 
   if (loading) {
     return (
@@ -206,7 +206,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
         <div className="mb-3">
           <button
             onClick={() => setShowAdd((s) => !s)}
-            className="text-xs border border-line rounded-md px-2.5 py-1.5 flex items-center gap-1.5 text-ink hover:bg-panel2"
+            className="text-xs border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2"
           >
             <Plus size={13} /> Add {TABS.find((t) => t.key === tab)?.label.replace(/s$/, '')}
           </button>
@@ -225,7 +225,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
             {['Alive', 'Dead', 'Missing', 'Unknown'].map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <input className={inputCls} placeholder="Notes" value={npcDraft.notes} onChange={(e) => setNpcDraft({ ...npcDraft, notes: e.target.value })} />
-          <button onClick={addNpc} disabled={saving || !npcDraft.name.trim()} className="col-span-2 text-xs border border-line rounded-md py-1.5 text-ink hover:bg-panel2 disabled:opacity-50">
+          <button onClick={addNpc} disabled={saving || !npcDraft.name.trim()} className="col-span-2 text-xs border border-line rounded-md py-2 text-ink hover:bg-panel2 disabled:opacity-50">
             {saving ? 'Saving...' : 'Save NPC'}
           </button>
         </div>
@@ -241,7 +241,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
           <input className={inputCls} placeholder="Disposition to party" value={factionDraft.disposition} onChange={(e) => setFactionDraft({ ...factionDraft, disposition: e.target.value })} />
           <input className={inputCls} placeholder="Current status / clock" value={factionDraft.status_clock} onChange={(e) => setFactionDraft({ ...factionDraft, status_clock: e.target.value })} />
           <input className={inputCls} placeholder="Notes" value={factionDraft.notes} onChange={(e) => setFactionDraft({ ...factionDraft, notes: e.target.value })} />
-          <button onClick={addFaction} disabled={saving || !factionDraft.name.trim()} className="col-span-2 text-xs border border-line rounded-md py-1.5 text-ink hover:bg-panel2 disabled:opacity-50">
+          <button onClick={addFaction} disabled={saving || !factionDraft.name.trim()} className="col-span-2 text-xs border border-line rounded-md py-2 text-ink hover:bg-panel2 disabled:opacity-50">
             {saving ? 'Saving...' : 'Save faction'}
           </button>
         </div>
@@ -261,14 +261,14 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
             <option value="no">Not identified</option>
           </select>
           <input className={inputCls} placeholder="Notes" value={treasureDraft.notes} onChange={(e) => setTreasureDraft({ ...treasureDraft, notes: e.target.value })} />
-          <button onClick={addTreasure} disabled={saving || !treasureDraft.item.trim()} className="col-span-2 text-xs border border-line rounded-md py-1.5 text-ink hover:bg-panel2 disabled:opacity-50">
+          <button onClick={addTreasure} disabled={saving || !treasureDraft.item.trim()} className="col-span-2 text-xs border border-line rounded-md py-2 text-ink hover:bg-panel2 disabled:opacity-50">
             {saving ? 'Saving...' : 'Save item'}
           </button>
         </div>
       )}
 
       {tab === 'npcs' && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {npcs.length === 0 && <p className="text-xs text-ink-faint">No NPCs logged yet.</p>}
           {npcs.map((n) => (
             <div key={n.id} className="bg-panel border border-line-soft rounded-lg p-3">
@@ -277,10 +277,10 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                   {n.name}
                   {n.ancestry && <span className="text-ink-faint font-normal"> &middot; {n.ancestry}</span>}
                 </p>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <Badge tone={NPC_STATUS_TONE[n.status] || 'neutral'}>{n.status}</Badge>
                   {isGm && (
-                    <button onClick={() => deleteRow('campaign_npcs', n.id)} className="text-ink-faint hover:text-danger-text p-0.5">
+                    <button onClick={() => deleteRow('campaign_npcs', n.id)} className="text-ink-faint hover:text-danger-text p-1">
                       <Trash2 size={12} />
                     </button>
                   )}
@@ -289,7 +289,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
               <p className="text-xs text-ink-dim">
                 {[n.role, n.location, n.alignment].filter(Boolean).join(' · ')}
               </p>
-              {n.attitude && <p className="text-xs text-ink-faint mt-0.5">Attitude: {n.attitude}</p>}
+              {n.attitude && <p className="text-xs text-ink-faint mt-1">Attitude: {n.attitude}</p>}
               {isGm && npcSecrets[n.id]?.notes && <p className="text-xs text-ink-faint mt-1">{npcSecrets[n.id].notes}</p>}
             </div>
           ))}
@@ -297,7 +297,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
       )}
 
       {tab === 'factions' && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {factions.length === 0 && <p className="text-xs text-ink-faint">No factions logged yet.</p>}
           {factions.map((f) => (
             <div key={f.id} className="bg-panel border border-line-soft rounded-lg p-3">
@@ -306,10 +306,10 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                   {f.name}
                   {f.type && <span className="text-ink-faint font-normal"> &middot; {f.type}</span>}
                 </p>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   {f.disposition && <Badge tone="neutral">{f.disposition}</Badge>}
                   {isGm && (
-                    <button onClick={() => deleteRow('campaign_factions', f.id)} className="text-ink-faint hover:text-danger-text p-0.5">
+                    <button onClick={() => deleteRow('campaign_factions', f.id)} className="text-ink-faint hover:text-danger-text p-1">
                       <Trash2 size={12} />
                     </button>
                   )}
@@ -318,8 +318,8 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
               <p className="text-xs text-ink-dim">
                 {[f.leader && `Led by ${f.leader}`, f.territory].filter(Boolean).join(' · ')}
               </p>
-              {isGm && factionSecrets[f.id]?.goal && <p className="text-xs text-ink-faint mt-0.5">Goal: {factionSecrets[f.id].goal}</p>}
-              {f.status_clock && <p className="text-xs text-ink-faint mt-0.5">Status: {f.status_clock}</p>}
+              {isGm && factionSecrets[f.id]?.goal && <p className="text-xs text-ink-faint mt-1">Goal: {factionSecrets[f.id].goal}</p>}
+              {f.status_clock && <p className="text-xs text-ink-faint mt-1">Status: {f.status_clock}</p>}
               {isGm && factionSecrets[f.id]?.notes && <p className="text-xs text-ink-faint mt-1">{factionSecrets[f.id].notes}</p>}
             </div>
           ))}
@@ -327,7 +327,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
       )}
 
       {tab === 'treasure' && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {treasure.length === 0 && <p className="text-xs text-ink-faint">No treasure logged yet.</p>}
           {treasure.map((t) => (
             <div key={t.id} className="bg-panel border border-line-soft rounded-lg p-3">
@@ -336,12 +336,12 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                   {t.item}
                   {t.qty_value && <span className="text-ink-faint font-normal"> &middot; {t.qty_value}</span>}
                 </p>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   {t.session_number != null && <Badge tone="neutral">Session {t.session_number}</Badge>}
                   {t.identified === true && <Badge tone="green">Identified</Badge>}
                   {t.identified === false && <Badge tone="neutral">Unidentified</Badge>}
                   {isGm && (
-                    <button onClick={() => deleteRow('campaign_treasure', t.id)} className="text-ink-faint hover:text-danger-text p-0.5">
+                    <button onClick={() => deleteRow('campaign_treasure', t.id)} className="text-ink-faint hover:text-danger-text p-1">
                       <Trash2 size={12} />
                     </button>
                   )}

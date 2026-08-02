@@ -35,7 +35,7 @@ export default function ProgressBar({
 
   if (mode === 'segmented') {
     return (
-      <div className={`flex gap-0.5 ${className}`}>
+      <div className={`flex gap-1 ${className}`}>
         {Array.from({ length: segments }).map((_, i) => (
           <span key={i} className={`${heightClassName} flex-1 rounded-sm ${i < filled ? fillClass : trackBg}`} />
         ))}

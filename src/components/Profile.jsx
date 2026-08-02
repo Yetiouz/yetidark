@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { User, LogOut, Check, AlertCircle, Crown, Bot, Users as UsersIcon, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
+import Card from './ui/Card.jsx'
 
 export default function Profile({ session, onSignOut, onBack }) {
   const user = session?.user
@@ -96,7 +97,7 @@ export default function Profile({ session, onSignOut, onBack }) {
   return (
     <div className="max-w-xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-primary-bg flex items-center justify-center">
             <User size={16} className="text-primary-text" />
           </div>
@@ -105,15 +106,15 @@ export default function Profile({ session, onSignOut, onBack }) {
         {onBack && (
           <button
             onClick={onBack}
-            className="text-xs border border-line rounded-md px-2.5 py-1 text-ink-dim hover:bg-panel2"
+            className="text-xs border border-line rounded-md px-3 py-1 text-ink-dim hover:bg-panel2"
           >
             Back to lobby
           </button>
         )}
       </div>
 
-      <div className="bg-panel border border-line-soft rounded-xl p-4 mb-4">
-        <p className="text-xs text-ink-dim mb-1.5">Display name</p>
+      <Card className="mb-4">
+        <p className="text-xs text-ink-dim mb-2">Display name</p>
         {loadingProfile ? (
           <p className="text-sm text-ink-faint">Loading...</p>
         ) : (
@@ -126,7 +127,7 @@ export default function Profile({ session, onSignOut, onBack }) {
             <button
               onClick={saveName}
               disabled={saving || displayName.trim() === savedName}
-              className="text-sm border border-line rounded-md px-3 py-2 text-ink hover:bg-panel2 disabled:opacity-40 flex items-center gap-1.5"
+              className="text-sm border border-line rounded-md px-3 py-2 text-ink hover:bg-panel2 disabled:opacity-40 flex items-center gap-2"
             >
               {saved ? <Check size={14} className="text-positive-text" /> : null}
               {saving ? 'Saving...' : saved ? 'Saved' : 'Save'}
@@ -134,7 +135,7 @@ export default function Profile({ session, onSignOut, onBack }) {
           </div>
         )}
         {error && (
-          <div className="flex items-center gap-1.5 text-danger-text mt-2">
+          <div className="flex items-center gap-2 text-danger-text mt-2">
             <AlertCircle size={12} />
             <p className="text-xs">{error}</p>
           </div>
@@ -148,23 +149,23 @@ export default function Profile({ session, onSignOut, onBack }) {
           {onSignOut && (
             <button
               onClick={onSignOut}
-              className="text-xs border border-line rounded-md px-2.5 py-1.5 flex items-center gap-1.5 text-ink-dim hover:bg-panel2"
+              className="text-xs border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink-dim hover:bg-panel2"
             >
               <LogOut size={13} /> Sign out
             </button>
           )}
         </div>
-      </div>
+      </Card>
 
       <p className="text-xs text-ink-dim mb-2">Your campaigns</p>
-      <div className="flex flex-col gap-1.5 mb-4">
+      <div className="flex flex-col gap-2 mb-4">
         {loadingMemberships ? (
           <p className="text-sm text-ink-faint">Loading...</p>
         ) : memberships.length === 0 ? (
           <p className="text-sm text-ink-faint">Not in any campaigns yet.</p>
         ) : (
           memberships.map((m) => (
-            <div key={m.campaign_id} className="flex items-center gap-2.5 bg-panel rounded-md px-3 py-2">
+            <div key={m.campaign_id} className="flex items-center gap-3 bg-panel rounded-md px-3 py-2">
               {m.campaigns.gm_type === 'ai' ? (
                 <Bot size={14} className="text-ai-text flex-shrink-0" />
               ) : (
@@ -190,14 +191,14 @@ export default function Profile({ session, onSignOut, onBack }) {
       </div>
 
       <p className="text-xs text-ink-dim mb-2">Your characters</p>
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         {loadingCharacters ? (
           <p className="text-sm text-ink-faint">Loading...</p>
         ) : characters.length === 0 ? (
           <p className="text-sm text-ink-faint">No characters yet.</p>
         ) : (
           characters.map((c) => (
-            <div key={c.id} className="flex items-center gap-2.5 bg-panel rounded-md px-3 py-2">
+            <div key={c.id} className="flex items-center gap-3 bg-panel rounded-md px-3 py-2">
               <UsersIcon size={14} className="text-ink-dim flex-shrink-0" />
               <div className="flex-1">
                 <p className="text-sm text-ink">{c.name}</p>
