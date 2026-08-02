@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Eye, EyeOff, Plus, Upload, Dices, SkipForward, Flame, AlertTriangle, RotateCw, Timer, Sun, CloudFog,
   Target, Mic, Paperclip, Megaphone, Lock, Pause, Play, HelpCircle, Swords, Shuffle, Gauge, Users, Gem,
+  Skull, StickyNote,
 } from 'lucide-react'
 
 import ZoneScene from './ZoneScene.jsx'
@@ -135,6 +136,19 @@ return source.remaining_minutes
 // normal stacked, page-scrolling grid, same reasoning as the player page:
 // three independently-tall columns only make sense locked to one screen
 // height once they're side by side.
+//
+// RIGHT RAIL, another round of direct feedback: the standalone "Trap
+// details" placeholder card is gone -- traps are now a disabled icon
+// toggle in the Map card's icon row (next to Secrets/Light/Fog, same
+// still-a-placeholder honesty as those, per PR #79/#81), rather than a
+// whole card for a feature that isn't built yet. "GM notes (private,
+// general)" is gone from the rail too -- it's now an on-demand modal
+// opened via a new icon in the header next to Campaign log/Rules library,
+// same idea as the dice modal above (all the same note state/handlers,
+// just relocated). And the rail order changed: Selected now sits last,
+// below Party, a deliberate departure from matching GameTable.jsx's rail
+// order (Party last) that PR #80 established -- this was a direct,
+// explicit instruction, not an oversight.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -156,6 +170,11 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   // and header; now behind an on-demand modal opened from the composer's
   // dice icon, same pattern as GameTable.jsx's dice/Attack/Stabilize modal.
   const [showDiceModal, setShowDiceModal] = useState(false)
+  // GM notes (general, private) used to be a permanently-visible right-rail
+  // card; now behind an on-demand modal opened from a header icon next to
+  // Campaign log/Rules library, same on-demand-icon pattern as the dice
+  // modal above and PR #86's left-rail consolidation.
+  const [showNotesModal, setShowNotesModal] = useState(false)
   const [sessionActive, setSessionActive] = useState(false)
   const [togglingSession, setTogglingSession] = useState(false)
   const sceneLogRef = useRef(null)
@@ -552,6 +571,12 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               </div>
             ))}
           </div>
+          {/* GM notes moved here from a permanent right-rail card, per
+              direct user feedback -- an icon next to Campaign log/Rules
+              library, same on-demand-icon idea as the dice modal below.
+              GM-only, so it lives beside CampaignToolbar rather than
+              inside it (that component is shared with the player page). */}
+          <Button icon={StickyNote} iconOnly onClick={() => setShowNotesModal(true)} title="GM notes (private, general)" />
           <CampaignToolbar
             onOpenLog={onOpenLog}
             onOpenLibrary={onOpenLibrary}
@@ -721,6 +746,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     <Button icon={EyeOff} iconOnly disabled title="Secrets isn't wired up yet -- placeholder" />
                     <Button icon={Sun} iconOnly disabled title="Light isn't wired up yet -- placeholder" />
                     <Button icon={CloudFog} iconOnly disabled title="Fog isn't wired up yet -- placeholder" />
+                    <Button icon={Skull} iconOnly disabled title="Traps isn't wired up yet -- placeholder; will show trigger/attack/damage details once traps become selectable map objects" />
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -792,68 +818,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               </Card>
             </div>
 
-            {/* RIGHT RAIL: selected entity / trap placeholder / encounter /
-                GM notes / party -- Party sits last, same position it has in
-                GameTable.jsx's right rail. */}
+            {/* RIGHT RAIL: encounter / party / selected. Trap details and GM
+                notes moved out (see the Map card's icon row and the header's
+                new notes icon, respectively). Selected now sits last, below
+                Party, per direct user feedback -- a deliberate departure
+                from matching GameTable.jsx's rail order (Party last) that
+                PR #80 established. */}
             <div className="flex flex-col gap-3 md:h-full md:min-h-0 md:overflow-y-auto">
-              <Card
-                title="Selected"
-                titleRight={selectedEntity && (
-                  <div className="flex items-center gap-2">
-                    {selectedMonster && (
-                      <button onClick={() => toggleMonsterHidden(selectedMonster)} title="Toggle hidden/visible">
-                        <Badge tone={selectedMonster.hidden ? 'purple' : 'green'}>{selectedMonster.hidden ? 'Hidden' : 'Visible'}</Badge>
-                      </button>
-                    )}
-                    <button onClick={() => setSelectedEntity(null)} className="text-[10px] text-ink-dim hover:text-ink shrink-0">
-                      Clear
-                    </button>
-                  </div>
-                )}
-              >
-                {selectedEntity ? (
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm text-white font-medium truncate flex items-center gap-1.5">
-                      <Target size={12} className="text-ink-dim" /> {selectedEntity.name}
-                    </span>
-                    <div className="flex flex-col gap-1.5">
-                      {notes.filter((n) => n.entity_type === selectedEntity.type && n.entity_id === selectedEntity.id).length === 0 && (
-                        <p className="text-[11px] text-ink-dim">No notes on {selectedEntity.name} yet.</p>
-                      )}
-                      {notes
-                        .filter((n) => n.entity_type === selectedEntity.type && n.entity_id === selectedEntity.id)
-                        .map((n) => (
-                          <div key={n.id} className="text-xs p-2 bg-panel2/60 rounded-md">
-                            <p className={`mb-1.5 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
-                            {!n.revealed && (
-                              <Button onClick={() => revealNote(n.id)} className="text-[11px] px-2 py-1">Reveal to party</Button>
-                            )}
-                          </div>
-                        ))}
-                    </div>
-                    <div className="flex gap-1.5">
-                      <input
-                        value={entityNoteDraft}
-                        onChange={(e) => setEntityNoteDraft(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && addEntityNote()}
-                        placeholder={`Note on ${selectedEntity.name}`}
-                        className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
-                      />
-                      <Button icon={Plus} iconOnly onClick={addEntityNote} title="Add note" />
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-ink-dim">Click a token on the map to inspect it and see notes tied to it. Traps and other map features aren't selectable yet -- character and monster tokens only.</p>
-                )}
-              </Card>
-
-              <Card title="Trap details">
-                <p className="text-[11px] text-ink-dim flex items-start gap-1.5">
-                  <AlertTriangle size={12} className="text-ink-faint shrink-0 mt-0.5" />
-                  Trap and hazard tracking isn't built yet -- once traps become selectable map objects, trigger/attack/damage details will show here instead of this placeholder.
-                </p>
-              </Card>
-
               {encounter.length > 0 && (
                 <Card title="Encounter">
                   <div className="flex flex-col gap-1.5">
@@ -870,30 +841,6 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   </div>
                 </Card>
               )}
-
-              <Card title="GM notes (private, general)">
-                <div className="flex flex-col gap-1.5">
-                  {notes.filter((n) => !n.entity_type).length === 0 && <p className="text-xs text-ink-dim">No general notes yet -- notes on a specific character or monster show in Selected above once you click their token.</p>}
-                  {notes.filter((n) => !n.entity_type).map((n) => (
-                    <div key={n.id} className="text-xs p-2 bg-panel2/60 rounded-md">
-                      <p className={`mb-1.5 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
-                      {!n.revealed && (
-                        <Button onClick={() => revealNote(n.id)} className="text-[11px] px-2 py-1">Reveal to party</Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-1.5 mt-2">
-                  <input
-                    value={noteDraft}
-                    onChange={(e) => setNoteDraft(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addNote()}
-                    placeholder="New note"
-                    className="flex-1 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
-                  />
-                  <Button icon={Plus} iconOnly onClick={addNote} title="Add note" />
-                </div>
-              </Card>
 
               <Card
                 title="Party"
@@ -954,6 +901,57 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   })}
                 </div>
               </Card>
+
+              <Card
+                title="Selected"
+                titleRight={selectedEntity && (
+                  <div className="flex items-center gap-2">
+                    {selectedMonster && (
+                      <button onClick={() => toggleMonsterHidden(selectedMonster)} title="Toggle hidden/visible">
+                        <Badge tone={selectedMonster.hidden ? 'purple' : 'green'}>{selectedMonster.hidden ? 'Hidden' : 'Visible'}</Badge>
+                      </button>
+                    )}
+                    <button onClick={() => setSelectedEntity(null)} className="text-[10px] text-ink-dim hover:text-ink shrink-0">
+                      Clear
+                    </button>
+                  </div>
+                )}
+              >
+                {selectedEntity ? (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm text-white font-medium truncate flex items-center gap-1.5">
+                      <Target size={12} className="text-ink-dim" /> {selectedEntity.name}
+                    </span>
+                    <div className="flex flex-col gap-1.5">
+                      {notes.filter((n) => n.entity_type === selectedEntity.type && n.entity_id === selectedEntity.id).length === 0 && (
+                        <p className="text-[11px] text-ink-dim">No notes on {selectedEntity.name} yet.</p>
+                      )}
+                      {notes
+                        .filter((n) => n.entity_type === selectedEntity.type && n.entity_id === selectedEntity.id)
+                        .map((n) => (
+                          <div key={n.id} className="text-xs p-2 bg-panel2/60 rounded-md">
+                            <p className={`mb-1.5 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
+                            {!n.revealed && (
+                              <Button onClick={() => revealNote(n.id)} className="text-[11px] px-2 py-1">Reveal to party</Button>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <input
+                        value={entityNoteDraft}
+                        onChange={(e) => setEntityNoteDraft(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && addEntityNote()}
+                        placeholder={`Note on ${selectedEntity.name}`}
+                        className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
+                      />
+                      <Button icon={Plus} iconOnly onClick={addEntityNote} title="Add note" />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-ink-dim">Click a token on the map to inspect it and see notes tied to it. Traps and other map features aren't selectable yet -- character and monster tokens only.</p>
+                )}
+              </Card>
             </div>
           </div>
         </div>
@@ -971,6 +969,37 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
           <Row icon={Gauge} label={moraleChecking ? 'Rolling…' : 'Morale'} onClick={moraleCheck} disabled={moraleChecking || encounter.length === 0} />
           <Row icon={Gem} label="Treasure" onClick={() => rollQuickTable('Treasure roll', '1d100')} disabled={quickRolling} />
           <Row icon={Dices} label={requestingRoll ? 'Requesting…' : 'Request a roll'} onClick={requestRoll} disabled={requestingRoll} />
+        </div>
+      </Modal>
+
+      {/* GM notes (general, private) -- used to be a permanently-visible
+          right-rail card; now behind this on-demand modal, opened from the
+          new sticky-note icon next to Campaign log/Rules library in the
+          header, per direct user feedback. Same state/handlers as before
+          (noteDraft, addNote, notes filtered to the general/untagged ones)
+          -- just relocated, no behavior changes. Entity-specific notes stay
+          in the Selected card, unaffected. */}
+      <Modal open={showNotesModal} onClose={() => setShowNotesModal(false)} title="GM notes (private, general)">
+        <div className="flex flex-col gap-1.5">
+          {notes.filter((n) => !n.entity_type).length === 0 && <p className="text-xs text-ink-dim">No general notes yet -- notes on a specific character or monster show in the Selected card instead.</p>}
+          {notes.filter((n) => !n.entity_type).map((n) => (
+            <div key={n.id} className="text-xs p-2 bg-panel2/60 rounded-md">
+              <p className={`mb-1.5 ${n.revealed ? 'text-ink-dim line-through' : 'text-ink'}`}>{n.text}</p>
+              {!n.revealed && (
+                <Button onClick={() => revealNote(n.id)} className="text-[11px] px-2 py-1">Reveal to party</Button>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-1.5 mt-2">
+          <input
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addNote()}
+            placeholder="New note"
+            className="flex-1 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
+          />
+          <Button icon={Plus} iconOnly onClick={addNote} title="Add note" />
         </div>
       </Modal>
 
