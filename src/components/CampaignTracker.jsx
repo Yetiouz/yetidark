@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import Tabs from './ui/Tabs.jsx'
 import Badge from './ui/Badge.jsx'
+import Card from './ui/Card.jsx'
 
 // NPCs / Factions / Treasure, ported from tracker.xlsx. "PC Roster" and
 // "Session Index" from that workbook aren't here -- they duplicate the
@@ -12,7 +13,17 @@ import Badge from './ui/Badge.jsx'
 //
 // Same instant-write pattern as CampaignLog.jsx (threads/clocks/timeline):
 // every add/edit/delete writes straight through, no local draft state to
-// guard against realtime overwrites.
+// guard against realtime overwrites -- the row list itself stays driven by
+// the realtime channel below, including after an edit's UPDATE lands.
+//
+// Click-to-edit (bug #3) reuses this exact add-draft shape rather than a
+// separate edit UI: clicking a row's pencil icon populates the same
+// npcDraft/factionDraft/treasureDraft state the "Add" button uses (full
+// current row + secret notes, not just the field that changed) and opens
+// the same form panel; saveNpc/saveFaction/saveTreasure branch on `editId`
+// to call .update() instead of .insert(). Because the draft always holds
+// every public column (never a sparse single-field patch), the update
+// payload can't silently null out the row's other fields.
 const TABS = [
   { key: 'npcs', label: 'NPCs' },
   { key: 'factions', label: 'Factions' },
@@ -44,6 +55,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
   const [treasureSecrets, setTreasureSecrets] = useState({})
 
   const [showAdd, setShowAdd] = useState(false)
+  const [editId, setEditId] = useState(null)
   const [npcDraft, setNpcDraft] = useState(emptyNpc)
   const [factionDraft, setFactionDraft] = useState(emptyFaction)
   const [treasureDraft, setTreasureDraft] = useState(emptyTreasure)
@@ -109,69 +121,172 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
   const switchTab = (key) => {
     setTab(key)
     setShowAdd(false)
+    setEditId(null)
   }
 
-  const addNpc = async () => {
+  // Shared close/reset for both the add and edit forms -- also what the
+  // "Add X" toggle calls when a form is already open, so it always fully
+  // discards whatever draft was in progress rather than leaving stale
+  // values behind for the next open.
+  const cancelForm = () => {
+    setShowAdd(false)
+    setEditId(null)
+    setNpcDraft(emptyNpc)
+    setFactionDraft(emptyFaction)
+    setTreasureDraft(emptyTreasure)
+  }
+
+  const toggleAdd = () => {
+    if (showAdd) {
+      cancelForm()
+      return
+    }
+    setEditId(null)
+    setNpcDraft(emptyNpc)
+    setFactionDraft(emptyFaction)
+    setTreasureDraft(emptyTreasure)
+    setShowAdd(true)
+  }
+
+  const startEditNpc = (n) => {
+    setEditId(n.id)
+    setNpcDraft({
+      name: n.name || '',
+      ancestry: n.ancestry || '',
+      role: n.role || '',
+      location: n.location || '',
+      alignment: n.alignment || '',
+      attitude: n.attitude || '',
+      status: n.status || 'Alive',
+      notes: npcSecrets[n.id]?.notes || '',
+    })
+    setShowAdd(true)
+  }
+
+  const startEditFaction = (f) => {
+    setEditId(f.id)
+    setFactionDraft({
+      name: f.name || '',
+      type: f.type || '',
+      leader: f.leader || '',
+      territory: f.territory || '',
+      goal: factionSecrets[f.id]?.goal || '',
+      disposition: f.disposition || '',
+      status_clock: f.status_clock || '',
+      notes: factionSecrets[f.id]?.notes || '',
+    })
+    setShowAdd(true)
+  }
+
+  const startEditTreasure = (t) => {
+    setEditId(t.id)
+    setTreasureDraft({
+      session_number: t.session_number != null ? String(t.session_number) : '',
+      item: t.item || '',
+      type: t.type || '',
+      qty_value: t.qty_value || '',
+      found_at: t.found_at || '',
+      held_by: t.held_by || '',
+      identified: t.identified === true ? 'yes' : t.identified === false ? 'no' : '',
+      notes: treasureSecrets[t.id]?.notes || '',
+    })
+    setShowAdd(true)
+  }
+
+  // Upserts (or clears) a GM-only secrets row for an edited parent row.
+  // Used only on the edit path -- add still does its original insert-only
+  // secret write below, unchanged.
+  const syncSecret = async (table, idColumn, id, fields, currentSecret, setSecrets) => {
+    const hasContent = Object.values(fields).some((v) => (v || '').trim())
+    if (hasContent) {
+      const trimmed = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.trim() || null]))
+      const { error } = await supabase.from(table).upsert({ [idColumn]: id, ...trimmed }, { onConflict: idColumn })
+      if (!error) setSecrets((current) => ({ ...current, [id]: { [idColumn]: id, ...trimmed } }))
+    } else if (currentSecret) {
+      const { error } = await supabase.from(table).delete().eq(idColumn, id)
+      if (!error) setSecrets((current) => { const next = { ...current }; delete next[id]; return next })
+    }
+  }
+
+  const saveNpc = async () => {
     if (!npcDraft.name.trim() || !campaignId) return
     setSaving(true)
     const { notes, ...publicNpc } = npcDraft
-    const { data: npc, error } = await supabase
-      .from('campaign_npcs')
-      .insert({ campaign_id: campaignId, ...publicNpc, name: npcDraft.name.trim() })
-      .select('id')
-      .single()
-    if (!error && npc && notes.trim()) {
-      const { error: secretError } = await supabase.from('campaign_npc_secrets').insert({ npc_id: npc.id, notes: notes.trim() })
-      if (secretError) await supabase.from('campaign_npcs').delete().eq('id', npc.id)
-      else setNpcSecrets((current) => ({ ...current, [npc.id]: { npc_id: npc.id, notes: notes.trim() } }))
+    const trimmedName = npcDraft.name.trim()
+
+    if (editId) {
+      const { error } = await supabase.from('campaign_npcs').update({ ...publicNpc, name: trimmedName }).eq('id', editId)
+      if (!error) await syncSecret('campaign_npc_secrets', 'npc_id', editId, { notes }, npcSecrets[editId], setNpcSecrets)
+    } else {
+      const { data: npc, error } = await supabase
+        .from('campaign_npcs')
+        .insert({ campaign_id: campaignId, ...publicNpc, name: trimmedName })
+        .select('id')
+        .single()
+      if (!error && npc && notes.trim()) {
+        const { error: secretError } = await supabase.from('campaign_npc_secrets').insert({ npc_id: npc.id, notes: notes.trim() })
+        if (secretError) await supabase.from('campaign_npcs').delete().eq('id', npc.id)
+        else setNpcSecrets((current) => ({ ...current, [npc.id]: { npc_id: npc.id, notes: notes.trim() } }))
+      }
     }
     setSaving(false)
-    setNpcDraft(emptyNpc)
-    setShowAdd(false)
+    cancelForm()
   }
 
-  const addFaction = async () => {
+  const saveFaction = async () => {
     if (!factionDraft.name.trim() || !campaignId) return
     setSaving(true)
     const { goal, notes, ...publicFaction } = factionDraft
-    const { data: faction, error } = await supabase
-      .from('campaign_factions')
-      .insert({ campaign_id: campaignId, ...publicFaction, name: factionDraft.name.trim() })
-      .select('id')
-      .single()
-    if (!error && faction && (goal.trim() || notes.trim())) {
-      const { error: secretError } = await supabase.from('campaign_faction_secrets').insert({
-        faction_id: faction.id,
-        goal: goal.trim() || null,
-        notes: notes.trim() || null,
-      })
-      if (secretError) await supabase.from('campaign_factions').delete().eq('id', faction.id)
-      else setFactionSecrets((current) => ({ ...current, [faction.id]: { faction_id: faction.id, goal: goal.trim(), notes: notes.trim() } }))
+    const trimmedName = factionDraft.name.trim()
+
+    if (editId) {
+      const { error } = await supabase.from('campaign_factions').update({ ...publicFaction, name: trimmedName }).eq('id', editId)
+      if (!error) await syncSecret('campaign_faction_secrets', 'faction_id', editId, { goal, notes }, factionSecrets[editId], setFactionSecrets)
+    } else {
+      const { data: faction, error } = await supabase
+        .from('campaign_factions')
+        .insert({ campaign_id: campaignId, ...publicFaction, name: trimmedName })
+        .select('id')
+        .single()
+      if (!error && faction && (goal.trim() || notes.trim())) {
+        const { error: secretError } = await supabase.from('campaign_faction_secrets').insert({
+          faction_id: faction.id,
+          goal: goal.trim() || null,
+          notes: notes.trim() || null,
+        })
+        if (secretError) await supabase.from('campaign_factions').delete().eq('id', faction.id)
+        else setFactionSecrets((current) => ({ ...current, [faction.id]: { faction_id: faction.id, goal: goal.trim(), notes: notes.trim() } }))
+      }
     }
     setSaving(false)
-    setFactionDraft(emptyFaction)
-    setShowAdd(false)
+    cancelForm()
   }
 
-  const addTreasure = async () => {
+  const saveTreasure = async () => {
     if (!treasureDraft.item.trim() || !campaignId) return
     setSaving(true)
     const { notes, ...publicTreasure } = treasureDraft
-    const { data: item, error } = await supabase.from('campaign_treasure').insert({
-      campaign_id: campaignId,
+    const trimmedItem = treasureDraft.item.trim()
+    const parsedFields = {
       ...publicTreasure,
-      item: treasureDraft.item.trim(),
+      item: trimmedItem,
       session_number: treasureDraft.session_number ? parseInt(treasureDraft.session_number, 10) : null,
       identified: treasureDraft.identified === '' ? null : treasureDraft.identified === 'yes',
-    }).select('id').single()
-    if (!error && item && notes.trim()) {
-      const { error: secretError } = await supabase.from('campaign_treasure_secrets').insert({ treasure_id: item.id, notes: notes.trim() })
-      if (secretError) await supabase.from('campaign_treasure').delete().eq('id', item.id)
-      else setTreasureSecrets((current) => ({ ...current, [item.id]: { treasure_id: item.id, notes: notes.trim() } }))
+    }
+
+    if (editId) {
+      const { error } = await supabase.from('campaign_treasure').update(parsedFields).eq('id', editId)
+      if (!error) await syncSecret('campaign_treasure_secrets', 'treasure_id', editId, { notes }, treasureSecrets[editId], setTreasureSecrets)
+    } else {
+      const { data: item, error } = await supabase.from('campaign_treasure').insert({ campaign_id: campaignId, ...parsedFields }).select('id').single()
+      if (!error && item && notes.trim()) {
+        const { error: secretError } = await supabase.from('campaign_treasure_secrets').insert({ treasure_id: item.id, notes: notes.trim() })
+        if (secretError) await supabase.from('campaign_treasure').delete().eq('id', item.id)
+        else setTreasureSecrets((current) => ({ ...current, [item.id]: { treasure_id: item.id, notes: notes.trim() } }))
+      }
     }
     setSaving(false)
-    setTreasureDraft(emptyTreasure)
-    setShowAdd(false)
+    cancelForm()
   }
 
   const deleteRow = async (table, id) => {
@@ -179,7 +294,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
     await supabase.from(table).delete().eq('id', id)
   }
 
-  const inputCls = 'text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink'
+  const inputCls = 'text-xs bg-bg border border-line rounded-md px-3 py-2 text-ink'
 
   if (loading) {
     return (
@@ -205,7 +320,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
       {isGm && (
         <div className="mb-3">
           <button
-            onClick={() => setShowAdd((s) => !s)}
+            onClick={toggleAdd}
             className="text-xs border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2"
           >
             <Plus size={13} /> Add {TABS.find((t) => t.key === tab)?.label.replace(/s$/, '')}
@@ -214,7 +329,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
       )}
 
       {isGm && showAdd && tab === 'npcs' && (
-        <div className="mb-4 bg-panel border border-line-soft rounded-xl p-3 grid grid-cols-2 gap-2">
+        <Card className="mb-4" bodyClassName="grid grid-cols-2 gap-2">
           <input className={inputCls} placeholder="Name" value={npcDraft.name} onChange={(e) => setNpcDraft({ ...npcDraft, name: e.target.value })} />
           <input className={inputCls} placeholder="Ancestry" value={npcDraft.ancestry} onChange={(e) => setNpcDraft({ ...npcDraft, ancestry: e.target.value })} />
           <input className={inputCls} placeholder="Role/Occupation" value={npcDraft.role} onChange={(e) => setNpcDraft({ ...npcDraft, role: e.target.value })} />
@@ -225,14 +340,19 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
             {['Alive', 'Dead', 'Missing', 'Unknown'].map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <input className={inputCls} placeholder="Notes" value={npcDraft.notes} onChange={(e) => setNpcDraft({ ...npcDraft, notes: e.target.value })} />
-          <button onClick={addNpc} disabled={saving || !npcDraft.name.trim()} className="col-span-2 text-xs border border-line rounded-md py-2 text-ink hover:bg-panel2 disabled:opacity-50">
-            {saving ? 'Saving...' : 'Save NPC'}
-          </button>
-        </div>
+          <div className="col-span-2 flex items-center gap-2">
+            <button onClick={saveNpc} disabled={saving || !npcDraft.name.trim()} className="flex-1 text-xs border border-line rounded-md py-2 text-ink hover:bg-panel2 disabled:opacity-50">
+              {saving ? 'Saving...' : editId ? 'Save changes' : 'Save NPC'}
+            </button>
+            {editId && (
+              <button onClick={cancelForm} className="text-xs text-ink-dim hover:text-ink px-2 py-2">Cancel</button>
+            )}
+          </div>
+        </Card>
       )}
 
       {isGm && showAdd && tab === 'factions' && (
-        <div className="mb-4 bg-panel border border-line-soft rounded-xl p-3 grid grid-cols-2 gap-2">
+        <Card className="mb-4" bodyClassName="grid grid-cols-2 gap-2">
           <input className={inputCls} placeholder="Faction name" value={factionDraft.name} onChange={(e) => setFactionDraft({ ...factionDraft, name: e.target.value })} />
           <input className={inputCls} placeholder="Type" value={factionDraft.type} onChange={(e) => setFactionDraft({ ...factionDraft, type: e.target.value })} />
           <input className={inputCls} placeholder="Leader" value={factionDraft.leader} onChange={(e) => setFactionDraft({ ...factionDraft, leader: e.target.value })} />
@@ -241,14 +361,19 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
           <input className={inputCls} placeholder="Disposition to party" value={factionDraft.disposition} onChange={(e) => setFactionDraft({ ...factionDraft, disposition: e.target.value })} />
           <input className={inputCls} placeholder="Current status / clock" value={factionDraft.status_clock} onChange={(e) => setFactionDraft({ ...factionDraft, status_clock: e.target.value })} />
           <input className={inputCls} placeholder="Notes" value={factionDraft.notes} onChange={(e) => setFactionDraft({ ...factionDraft, notes: e.target.value })} />
-          <button onClick={addFaction} disabled={saving || !factionDraft.name.trim()} className="col-span-2 text-xs border border-line rounded-md py-2 text-ink hover:bg-panel2 disabled:opacity-50">
-            {saving ? 'Saving...' : 'Save faction'}
-          </button>
-        </div>
+          <div className="col-span-2 flex items-center gap-2">
+            <button onClick={saveFaction} disabled={saving || !factionDraft.name.trim()} className="flex-1 text-xs border border-line rounded-md py-2 text-ink hover:bg-panel2 disabled:opacity-50">
+              {saving ? 'Saving...' : editId ? 'Save changes' : 'Save faction'}
+            </button>
+            {editId && (
+              <button onClick={cancelForm} className="text-xs text-ink-dim hover:text-ink px-2 py-2">Cancel</button>
+            )}
+          </div>
+        </Card>
       )}
 
       {isGm && showAdd && tab === 'treasure' && (
-        <div className="mb-4 bg-panel border border-line-soft rounded-xl p-3 grid grid-cols-2 gap-2">
+        <Card className="mb-4" bodyClassName="grid grid-cols-2 gap-2">
           <input className={inputCls} type="number" placeholder="Session #" value={treasureDraft.session_number} onChange={(e) => setTreasureDraft({ ...treasureDraft, session_number: e.target.value })} />
           <input className={inputCls} placeholder="Item / coin" value={treasureDraft.item} onChange={(e) => setTreasureDraft({ ...treasureDraft, item: e.target.value })} />
           <input className={inputCls} placeholder="Type" value={treasureDraft.type} onChange={(e) => setTreasureDraft({ ...treasureDraft, type: e.target.value })} />
@@ -261,17 +386,22 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
             <option value="no">Not identified</option>
           </select>
           <input className={inputCls} placeholder="Notes" value={treasureDraft.notes} onChange={(e) => setTreasureDraft({ ...treasureDraft, notes: e.target.value })} />
-          <button onClick={addTreasure} disabled={saving || !treasureDraft.item.trim()} className="col-span-2 text-xs border border-line rounded-md py-2 text-ink hover:bg-panel2 disabled:opacity-50">
-            {saving ? 'Saving...' : 'Save item'}
-          </button>
-        </div>
+          <div className="col-span-2 flex items-center gap-2">
+            <button onClick={saveTreasure} disabled={saving || !treasureDraft.item.trim()} className="flex-1 text-xs border border-line rounded-md py-2 text-ink hover:bg-panel2 disabled:opacity-50">
+              {saving ? 'Saving...' : editId ? 'Save changes' : 'Save item'}
+            </button>
+            {editId && (
+              <button onClick={cancelForm} className="text-xs text-ink-dim hover:text-ink px-2 py-2">Cancel</button>
+            )}
+          </div>
+        </Card>
       )}
 
       {tab === 'npcs' && (
         <div className="flex flex-col gap-2">
           {npcs.length === 0 && <p className="text-xs text-ink-faint">No NPCs logged yet.</p>}
           {npcs.map((n) => (
-            <div key={n.id} className="bg-panel border border-line-soft rounded-lg p-3">
+            <Card key={n.id}>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-sm text-ink font-medium">
                   {n.name}
@@ -279,6 +409,11 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                 </p>
                 <div className="flex items-center gap-2">
                   <Badge tone={NPC_STATUS_TONE[n.status] || 'neutral'}>{n.status}</Badge>
+                  {isGm && (
+                    <button onClick={() => startEditNpc(n)} className="text-ink-faint hover:text-ink p-1">
+                      <Pencil size={12} />
+                    </button>
+                  )}
                   {isGm && (
                     <button onClick={() => deleteRow('campaign_npcs', n.id)} className="text-ink-faint hover:text-danger-text p-1">
                       <Trash2 size={12} />
@@ -291,7 +426,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
               </p>
               {n.attitude && <p className="text-xs text-ink-faint mt-1">Attitude: {n.attitude}</p>}
               {isGm && npcSecrets[n.id]?.notes && <p className="text-xs text-ink-faint mt-1">{npcSecrets[n.id].notes}</p>}
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -300,7 +435,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
         <div className="flex flex-col gap-2">
           {factions.length === 0 && <p className="text-xs text-ink-faint">No factions logged yet.</p>}
           {factions.map((f) => (
-            <div key={f.id} className="bg-panel border border-line-soft rounded-lg p-3">
+            <Card key={f.id}>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-sm text-ink font-medium">
                   {f.name}
@@ -308,6 +443,11 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                 </p>
                 <div className="flex items-center gap-2">
                   {f.disposition && <Badge tone="neutral">{f.disposition}</Badge>}
+                  {isGm && (
+                    <button onClick={() => startEditFaction(f)} className="text-ink-faint hover:text-ink p-1">
+                      <Pencil size={12} />
+                    </button>
+                  )}
                   {isGm && (
                     <button onClick={() => deleteRow('campaign_factions', f.id)} className="text-ink-faint hover:text-danger-text p-1">
                       <Trash2 size={12} />
@@ -321,7 +461,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
               {isGm && factionSecrets[f.id]?.goal && <p className="text-xs text-ink-faint mt-1">Goal: {factionSecrets[f.id].goal}</p>}
               {f.status_clock && <p className="text-xs text-ink-faint mt-1">Status: {f.status_clock}</p>}
               {isGm && factionSecrets[f.id]?.notes && <p className="text-xs text-ink-faint mt-1">{factionSecrets[f.id].notes}</p>}
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -330,7 +470,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
         <div className="flex flex-col gap-2">
           {treasure.length === 0 && <p className="text-xs text-ink-faint">No treasure logged yet.</p>}
           {treasure.map((t) => (
-            <div key={t.id} className="bg-panel border border-line-soft rounded-lg p-3">
+            <Card key={t.id}>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-sm text-ink font-medium">
                   {t.item}
@@ -340,6 +480,11 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                   {t.session_number != null && <Badge tone="neutral">Session {t.session_number}</Badge>}
                   {t.identified === true && <Badge tone="green">Identified</Badge>}
                   {t.identified === false && <Badge tone="neutral">Unidentified</Badge>}
+                  {isGm && (
+                    <button onClick={() => startEditTreasure(t)} className="text-ink-faint hover:text-ink p-1">
+                      <Pencil size={12} />
+                    </button>
+                  )}
                   {isGm && (
                     <button onClick={() => deleteRow('campaign_treasure', t.id)} className="text-ink-faint hover:text-danger-text p-1">
                       <Trash2 size={12} />
@@ -351,7 +496,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                 {[t.type, t.found_at && `Found at ${t.found_at}`, t.held_by && `Held by ${t.held_by}`].filter(Boolean).join(' · ')}
               </p>
               {isGm && treasureSecrets[t.id]?.notes && <p className="text-xs text-ink-faint mt-1">{treasureSecrets[t.id].notes}</p>}
-            </div>
+            </Card>
           ))}
         </div>
       )}
