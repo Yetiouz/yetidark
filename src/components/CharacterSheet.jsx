@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield, Package, Check, Gem, Users, Filter, ArrowUpDown, Search } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield, Package, Swords, Check, Gem, Users, Filter, ArrowUpDown, Search } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import Row from './ui/Row.jsx'
 import Badge from './ui/Badge.jsx'
@@ -538,13 +538,15 @@ export default function CharacterSheet({ characterId, session, onBack }) {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div className="lg:col-span-2 flex flex-col gap-3">
               {/* Equipped renders as a tile grid (icon chip, name, tag row)
-                  matching the artifact's card layout, instead of the plain
-                  Row list used before. Tags reflect only real columns --
-                  base_ac/is_shield/dex_applies. There's still no damage-die
-                  /property/weapon-type field on character_gear, so weapon
-                  combat tags (the artifact's "1d8 Versatile") are left off
-                  rather than guessed -- same call as the Quick Actions rail
-                  on GameTable and the icon reasoning from PR #66/#72/#74. */}
+                  matching the artifact's card layout. Tags reflect real
+                  columns: base_ac/is_shield/dex_applies for armor/shields,
+                  and (Decision Queue #38, resolved) damage_die/properties
+                  for weapons -- e.g. "1d8 Versatile" -- now that
+                  character_gear actually carries that data past character
+                  creation instead of it living only in CharacterBuilder's
+                  in-memory WEAPONS constant. Icon follows `category` the
+                  same #38 migration added: Swords for weapons, Shield for
+                  armor/shields, Package for everything else. */}
               <Card
                 title="Equipped"
                 titleRight={
@@ -556,17 +558,21 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                 {equippedGear.length === 0 && <p className="text-xs text-ink-faint">Nothing equipped.</p>}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {equippedGear.map((item) => {
-                    const isDefense = item.is_shield || item.base_ac != null
+                    const isWeapon = item.category === 'weapon'
+                    const isDefense = !isWeapon && (item.is_shield || item.category === 'shield' || item.base_ac != null || item.category === 'armor')
+                    const GearIcon = isWeapon ? Swords : isDefense ? Shield : Package
                     const tag = item.is_shield
                       ? '+2 AC'
                       : item.base_ac != null
                         ? `AC ${item.base_ac}${item.dex_applies ? ' + dex' : ''}`
-                        : null
+                        : isWeapon && item.damage_die
+                          ? `${item.damage_die}${item.properties && item.properties !== '-' ? ` ${item.properties}` : ''}`
+                          : null
                     return (
                       <div key={item.id} className="bg-panel2/40 border border-line-soft rounded-lg p-3">
                         <div className="flex items-start gap-2">
                           <span className="w-7 h-7 rounded-md bg-panel2 flex items-center justify-center shrink-0">
-                            {isDefense ? <Shield size={13} className="text-ink-dim" /> : <Package size={13} className="text-ink-dim" />}
+                            <GearIcon size={13} className="text-ink-dim" />
                           </span>
                           <div className="min-w-0">
                             <p className="text-xs text-ink font-medium truncate">
@@ -615,7 +621,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                   {visibleCarried.map((item) => (
                     <Row
                       key={item.id}
-                      icon={Package}
+                      icon={item.category === 'weapon' ? Swords : item.category === 'armor' || item.category === 'shield' ? Shield : Package}
                       label={item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name}
                       right={
                         <div className="flex items-center gap-2">
@@ -625,6 +631,11 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                               category. Nothing currently writes it from the
                               UI, so it's empty until that's added. */}
                           {item.notes && <Badge tone="purple">{item.notes}</Badge>}
+                          {item.category === 'weapon' && item.damage_die && (
+                            <Badge tone="blue">
+                              {item.damage_die}{item.properties && item.properties !== '-' ? ` ${item.properties}` : ''}
+                            </Badge>
+                          )}
                           <span className="text-[10px] text-ink-faint whitespace-nowrap">
                             {item.slots * item.quantity} slot{item.slots * item.quantity === 1 ? '' : 's'}
                           </span>

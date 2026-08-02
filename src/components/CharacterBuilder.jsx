@@ -770,15 +770,34 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
     }
 
     const weaponData = WEAPONS.find((w) => w.name === weaponChoice)
+    // Decision Queue #38 (resolved): category/damage_die/properties are
+    // real character_gear columns now, not just this file's in-memory
+    // WEAPONS/ARMOR/SHIELD/STARTING_KIT shape -- copied straight from the
+    // same constants used to render the pickers above, so there's no new
+    // data invented here, just persisted past character creation for the
+    // first time. Torch/Rations are the only STARTING_KIT items treated
+    // as "consumable" (matches the same migration's backfill judgment
+    // call for existing characters); Backpack/Flint and steel/Rope stay
+    // plain 'gear'.
+    const CONSUMABLE_STARTING_KIT_NAMES = ['Torch', 'Rations']
     const gearRows = [
       ...STARTING_KIT.map((item) => ({
         name: item.name,
         slots: item.slots,
         quantity: item.quantity || 1,
         equipped: false,
+        category: CONSUMABLE_STARTING_KIT_NAMES.includes(item.name) ? 'consumable' : 'gear',
       })),
       ...(weaponData
-        ? [{ name: weaponData.name, slots: weaponData.slots, quantity: 1, equipped: true }]
+        ? [{
+            name: weaponData.name,
+            slots: weaponData.slots,
+            quantity: 1,
+            equipped: true,
+            category: 'weapon',
+            damage_die: weaponData.damage,
+            properties: weaponData.properties,
+          }]
         : []),
       ...(selectedArmor
         ? [
@@ -789,11 +808,13 @@ export default function CharacterBuilder({ campaignId, session, campaignName = '
               equipped: true,
               base_ac: selectedArmor.baseAc,
               dex_applies: selectedArmor.dexApplies,
+              category: 'armor',
+              properties: selectedArmor.properties,
             },
           ]
         : []),
       ...(shieldChoice && selectedClass.shieldAllowed
-        ? [{ name: SHIELD.name, slots: SHIELD.slots, quantity: 1, equipped: true, is_shield: true }]
+        ? [{ name: SHIELD.name, slots: SHIELD.slots, quantity: 1, equipped: true, is_shield: true, category: 'shield', properties: SHIELD.properties }]
         : []),
     ]
 
