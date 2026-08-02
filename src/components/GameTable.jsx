@@ -106,6 +106,8 @@ const [stabilizeTargetId, setStabilizeTargetId] = useState('')
 const [stabilizeNotation, setStabilizeNotation] = useState('1d20')
 const [stabilizing, setStabilizing] = useState(false)
 const [stabilizeError, setStabilizeError] = useState(null)
+const [moving, setMoving] = useState(false)
+const [moveError, setMoveError] = useState(null)
 const [deathCheckPendingId, setDeathCheckPendingId] = useState(null)
 const [rollError, setRollError] = useState(null)
 // The dice roller / Attack / Stabilize cards used to render as permanent
@@ -531,6 +533,16 @@ const actingEntry = turnOrder.find((t) => t.status === 'acting') || null
 const actingIsMonster = actingEntry ? !party.some((p) => p.id === actingEntry.id) : false
 const myCharacter = party.find((p) => p.owner_user_id === user?.id) || null
 
+// Player self-movement (Phase 3 build order item 4, user decision:
+// one zone-step per turn, not free movement). myTurnEntry is my own
+// turn_order entry (carries the per-turn moved/acted flags move_
+// character_zone reads/writes); canMove gates both the ZoneScene
+// moveRestriction below and the "your turn to move" hint under the map.
+const myTurnEntry = myCharacter ? turnOrder.find((t) => t.id === myCharacter.id) : null
+const canMove = Boolean(myCharacter && actingEntry?.id === myCharacter.id && myTurnEntry && !myTurnEntry.moved)
+const ADJACENT_ZONES = { close: ['near'], near: ['close', 'far'], far: ['near'] }
+const myAdjacentZones = myCharacter ? ADJACENT_ZONES[myCharacter.zone || 'near'] || ['close', 'near', 'far'] : []
+
 // My gear/talents -- refetched (not realtime-subscribed) whenever which
 // character is "mine" changes. See the myGear/myTalents state comment
 // above for why this doesn't need its own channel.
@@ -603,6 +615,31 @@ const resolveAttack = async () => {
     return
   }
   if (data.scene_entry) {
+    setLog((all) => (all.some((entry) => entry.id === data.scene_entry.id) ? all : [...all, data.scene_entry]))
+  }
+}
+
+// Player self-movement -- move_character_zone (server-side) re-validates
+// everything this component already gates the UI on (it's my turn, I
+// haven't moved yet, the target zone is adjacent), so a stale client
+// state can't actually move a character out of turn. characters.zone and
+// turn_order.order_list both update via the existing realtime channel,
+// same as when the GM sets a zone -- no local state patch needed here.
+const handleSetZone = async (type, id, zone) => {
+  if (type !== 'character' || !myCharacter || id !== myCharacter.id || moving) return
+  setMoving(true)
+  setMoveError(null)
+  const { data, error } = await supabase.rpc('move_character_zone', {
+    p_campaign_id: campaignId,
+    p_character_id: id,
+    p_zone: zone,
+  })
+  setMoving(false)
+  if (error) {
+    setMoveError(error.message || 'Could not move there.')
+    return
+  }
+  if (data?.scene_entry) {
     setLog((all) => (all.some((entry) => entry.id === data.scene_entry.id) ? all : [...all, data.scene_entry]))
   }
 }
@@ -871,7 +908,17 @@ mapAccessError={mapAccessError}
 party={party}
 monsters={monsters}
 litCharacterId={litCharacterId}
+onSetZone={handleSetZone}
+moveRestriction={canMove ? { tokenId: myCharacter.id, allowedZones: myAdjacentZones } : { tokenId: '__none__', allowedZones: [] }}
 />
+{canMove && (
+<div className="absolute bottom-2 left-2 max-w-[220px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg px-3 py-2">
+<p className="text-[10px] text-primary-text">
+{moving ? 'Moving\u2026' : `Your turn \u2014 right-click your token to move (${myAdjacentZones.map((z) => z[0].toUpperCase() + z.slice(1)).join(' or ')}).`}
+</p>
+{moveError && <p className="text-[10px] text-danger-text mt-1">{moveError}</p>}
+</div>
+)}
 {activeClocks.length > 0 && (
 <div className="absolute top-2 right-2 max-w-[180px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-3">
 <p className="text-[10px] text-ink-dim mb-2 uppercase tracking-wide">Clocks</p>

@@ -45,11 +45,21 @@ function groupByZone(tokens) {
 // player table does) and tokens render exactly as before, not clickable.
 //
 // onSetZone(type, id, zone), if passed, right-click on a token instead
-// pops a small Close/Near/Far menu right on the map -- GM-only (GameTable.jsx
-// never passes this, so the browser's normal context menu still shows for
-// players), replacing the old always-visible per-character/monster zone
-// button list GmDashboard.jsx used to render below the map.
-export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = [], monsters = [], litCharacterId, onSelectToken, selectedTokenId, onSetZone }) {
+// pops a small Close/Near/Far menu right on the map -- GM-only by default
+// (GameTable.jsx passes this for player self-movement too, but scoped
+// down via moveRestriction below), replacing the old always-visible
+// per-character/monster zone button list GmDashboard.jsx used to render
+// below the map.
+//
+// moveRestriction ({ tokenId, allowedZones }), if passed alongside
+// onSetZone, narrows it to player self-movement: only tokenId's own
+// right-click menu opens (not party members' or monsters'), and the menu
+// only lists allowedZones (the caller pre-computes which zones are
+// adjacent to that token's current one -- Shadowdark's "Near movement" is
+// a bounded step, not a teleport). Omit it and onSetZone behaves exactly
+// as before: any token, all three zones -- the GM's own unrestricted
+// control.
+export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = [], monsters = [], litCharacterId, onSelectToken, selectedTokenId, onSetZone, moveRestriction }) {
   const [zoneMenu, setZoneMenu] = useState(null) // { id, type, name, x, y } while a right-click menu is open
 
   const tokens = [
@@ -120,6 +130,7 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
               onClick={() => clickable && onSelectToken(t.id, t.type, t.name)}
               onContextMenu={(e) => {
                 if (!onSetZone) return
+                if (moveRestriction && t.id !== moveRestriction.tokenId) return
                 e.preventDefault()
                 setZoneMenu({ id: t.id, type: t.type, name: t.name, x: t.x, y: t.y })
               }}
@@ -166,7 +177,7 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
               style={{ left: `${zoneMenu.x}%`, top: `${zoneMenu.y}%`, transform: 'translate(-50%, 10px)' }}
             >
               <p className="text-[10px] text-ink-dim px-3 pt-1 pb-2 mb-1 border-b border-line-soft truncate">{zoneMenu.name}</p>
-              {['close', 'near', 'far'].map((z) => (
+              {(moveRestriction && moveRestriction.tokenId === zoneMenu.id ? moveRestriction.allowedZones : ['close', 'near', 'far']).map((z) => (
                 <button
                   key={z}
                   type="button"

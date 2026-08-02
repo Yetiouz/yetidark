@@ -482,7 +482,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       })
     )).filter(Boolean).sort((a, b) => b.result.total - a.result.total)
 
-    const orderList = rolled.map((p, i) => ({ id: p.id, name: p.name, status: i === 0 ? 'acting' : 'waiting' }))
+    const orderList = rolled.map((p, i) => ({ id: p.id, name: p.name, status: i === 0 ? 'acting' : 'waiting', moved: false, acted: false }))
     setTurnOrder(orderList)
     await supabase.from('turn_order').upsert({ campaign_id: campaignId, order_list: orderList }, { onConflict: 'campaign_id' })
   }
@@ -498,7 +498,12 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
   const advanceTurn = async () => {
     if (!campaignId || turnOrder.length === 0) return
-    const rotated = [...turnOrder.slice(1), turnOrder[0]].map((t, i) => ({ ...t, status: i === 0 ? 'acting' : 'waiting' }))
+    // moved/acted reset only for the entry becoming 'acting' -- a waiting
+    // entry's stale flags from its last turn don't matter until it's next,
+    // at which point this same reset fires for it.
+    const rotated = [...turnOrder.slice(1), turnOrder[0]].map((t, i) =>
+      i === 0 ? { ...t, status: 'acting', moved: false, acted: false } : { ...t, status: 'waiting' }
+    )
     setTurnOrder(rotated)
     await supabase.from('turn_order').upsert({ campaign_id: campaignId, order_list: rotated }, { onConflict: 'campaign_id' })
   }
