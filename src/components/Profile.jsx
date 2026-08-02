@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { User, LogOut, Check, AlertCircle, Crown, Bot, Users as UsersIcon, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import Card from './ui/Card.jsx'
+import Button from './ui/Button.jsx'
+import ConfirmModal from './ui/ConfirmModal.jsx'
+import Modal from './ui/Modal.jsx'
 
 export default function Profile({ session, onSignOut, onBack }) {
   const user = session?.user
@@ -18,6 +21,8 @@ export default function Profile({ session, onSignOut, onBack }) {
   const [memberships, setMemberships] = useState([])
   const [loadingMemberships, setLoadingMemberships] = useState(true)
   const [leavingId, setLeavingId] = useState(null)
+  const [leaveTarget, setLeaveTarget] = useState(null) // membership pending leave confirmation (players only)
+  const [gmBlocked, setGmBlocked] = useState(null) // membership the user tried to leave while still its GM
 
   useEffect(() => {
     if (!user) return
@@ -82,8 +87,27 @@ export default function Profile({ session, onSignOut, onBack }) {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const leaveCampaign = async (campaignId) => {
-    if (!user) return
+  // Every campaign has exactly one GM (campaigns.gm_user_id, mirrored 1:1 by
+  // this member row's own role -- confirmed live, no campaign in prod has
+  // zero or multiple role='gm' members, so there's no co-GM model to account
+  // for). A GM leaving would strand the campaign: every is_campaign_gm()-gated
+  // table (monsters, turn order, clocks, NPCs, notes, map) becomes unwritable
+  // by anyone. The DELETE RLS policy on campaign_members ("users can leave a
+  // campaign") doesn't itself guard against this, so block it here instead.
+  // No GM-transfer or campaign-delete feature exists in the app yet (checked
+  // CampaignSettings.jsx and grepped the repo for both), so the block is
+  // unconditional for now rather than pointing at a feature that isn't built.
+  const requestLeaveCampaign = (membership) => {
+    if (membership.role === 'gm') {
+      setGmBlocked(membership)
+      return
+    }
+    setLeaveTarget(membership)
+  }
+
+  const confirmLeaveCampaign = async () => {
+    if (!leaveTarget || !user) return
+    const campaignId = leaveTarget.campaign_id
     setLeavingId(campaignId)
     await supabase
       .from('campaign_members')
@@ -91,6 +115,7 @@ export default function Profile({ session, onSignOut, onBack }) {
       .eq('campaign_id', campaignId)
       .eq('user_id', user.id)
     setLeavingId(null)
+    setLeaveTarget(null)
     loadMemberships()
   }
 
@@ -104,12 +129,9 @@ export default function Profile({ session, onSignOut, onBack }) {
           <h1 className="text-ink text-lg font-medium">Your profile</h1>
         </div>
         {onBack && (
-          <button
-            onClick={onBack}
-            className="text-xs border border-line rounded-md px-3 py-1 text-ink-dim hover:bg-panel2"
-          >
+          <Button className="text-xs px-3 py-1" onClick={onBack}>
             Back to lobby
-          </button>
+          </Button>
         )}
       </div>
 
@@ -124,14 +146,10 @@ export default function Profile({ session, onSignOut, onBack }) {
               onChange={(e) => setDisplayName(e.target.value)}
               className="flex-1 bg-bg border border-line rounded-md px-3 py-2 text-sm text-ink"
             />
-            <button
-              onClick={saveName}
-              disabled={saving || displayName.trim() === savedName}
-              className="text-sm border border-line rounded-md px-3 py-2 text-ink hover:bg-panel2 disabled:opacity-40 flex items-center gap-2"
-            >
+            <Button onClick={saveName} disabled={saving || displayName.trim() === savedName}>
               {saved ? <Check size={14} className="text-positive-text" /> : null}
               {saving ? 'Saving...' : saved ? 'Saved' : 'Save'}
-            </button>
+            </Button>
           </div>
         )}
         {error && (
@@ -147,12 +165,9 @@ export default function Profile({ session, onSignOut, onBack }) {
             <p className="text-sm text-ink">{user?.email}</p>
           </div>
           {onSignOut && (
-            <button
-              onClick={onSignOut}
-              className="text-xs border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink-dim hover:bg-panel2"
-            >
-              <LogOut size={13} /> Sign out
-            </button>
+            <Button icon={LogOut} onClick={onSignOut}>
+              Sign out
+            </Button>
           )}
         </div>
       </Card>
@@ -177,8 +192,13 @@ export default function Profile({ session, onSignOut, onBack }) {
                   {m.role === 'gm' ? 'You are GM' : 'Player'}
                 </p>
               </div>
+              {/* Raw <button>, not the shared Button: hover-only danger-text
+                  cue with no persistent tint, same pattern GameTable.jsx's
+                  Batch B pass deliberately kept raw since Button's danger
+                  variant always carries a persistent bg-danger-bg tint this
+                  one intentionally doesn't have. */}
               <button
-                onClick={() => leaveCampaign(m.campaign_id)}
+                onClick={() => requestLeaveCampaign(m)}
                 disabled={leavingId === m.campaign_id}
                 title="Leave campaign"
                 className="text-xs border border-line rounded-md px-2 py-1 text-ink-dim hover:bg-panel2 hover:text-danger-text disabled:opacity-40 flex items-center gap-1"
@@ -210,6 +230,34 @@ export default function Profile({ session, onSignOut, onBack }) {
           ))
         )}
       </div>
+
+      <ConfirmModal
+        open={!!leaveTarget}
+        onClose={() => setLeaveTarget(null)}
+        onConfirm={confirmLeaveCampaign}
+        title="Leave campaign?"
+        message={
+          leaveTarget
+            ? `You'll leave "${leaveTarget.campaigns.name}". You can rejoin later if it's public or you have the join code.`
+            : ''
+        }
+        confirmLabel="Leave"
+        confirmVariant="danger"
+        confirming={!!leaveTarget && leavingId === leaveTarget.campaign_id}
+      />
+
+      <Modal open={!!gmBlocked} onClose={() => setGmBlocked(null)} title="You're the GM">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-ink-dim">
+            {gmBlocked
+              ? `You're the GM of "${gmBlocked.campaigns.name}" -- leaving would strand it with no GM. There's no GM-transfer or campaign-delete option yet, so for now only players can leave.`
+              : ''}
+          </p>
+          <div className="flex justify-end">
+            <Button onClick={() => setGmBlocked(null)}>Got it</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
