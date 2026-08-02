@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Dices, ListChecks } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import Card from './ui/Card.jsx'
+import Button from './ui/Button.jsx'
 
 const badgeColors = ['bg-primary-bg text-primary-text', 'bg-warning-bg text-warning-text', 'bg-ai-bg text-ai-text']
 
@@ -45,26 +46,33 @@ export default function CharacterPicker({ campaignId, session, campaignName = 'T
           <Dices size={22} className="text-primary-text" />
           <p className="text-sm font-medium text-ink">Create a character</p>
           <p className="text-xs text-ink-dim">Roll stats, pick ancestry and class</p>
-          <button
-            onClick={() => onChooseCharacter && onChooseCharacter({ mode: 'create' })}
-            className="w-full mt-1 text-sm border border-line rounded-md py-2 text-ink hover:bg-panel2"
-          >
+          <Button className="w-full mt-1" onClick={() => onChooseCharacter && onChooseCharacter({ mode: 'create' })}>
             Start rolling
-          </button>
+          </Button>
         </Card>
         <Card bodyClassName="flex flex-col items-center text-center gap-2">
           <ListChecks size={22} className="text-ink-dim" />
           <p className="text-sm font-medium text-ink">Pick an existing character</p>
-          <p className="text-xs text-ink-dim">Already made one for this campaign</p>
-          <button
-            disabled={characters.length === 0}
+          <p className="text-xs text-ink-dim">
+            {/* Bug #2 fix: this shortcut used to always call onChooseCharacter
+                with characters[0]?.id, silently choosing the wrong character
+                whenever a player had more than one in this campaign. It's
+                now only enabled when there's exactly one -- the one case
+                where "the first character" and "the intended character" are
+                the same thing. With 2+, the button disables and the copy
+                below points at the per-row "Use" buttons in the list, which
+                already carry the correct id for whichever row was clicked. */}
+            {characters.length > 1 ? 'Pick one from the list below' : 'Already made one for this campaign'}
+          </p>
+          <Button
+            className="w-full mt-1"
+            disabled={characters.length !== 1}
             onClick={() =>
               onChooseCharacter && onChooseCharacter({ mode: 'existing', characterId: characters[0]?.id })
             }
-            className="w-full mt-1 text-sm border border-line rounded-md py-2 text-ink hover:bg-panel2 disabled:opacity-40"
           >
             Choose
-          </button>
+          </Button>
         </Card>
       </div>
 
@@ -92,12 +100,9 @@ export default function CharacterPicker({ campaignId, session, campaignName = 'T
                   {c.ancestry} {c.class} &middot; lvl {c.level}
                 </p>
               </div>
-              <button
-                onClick={() => onChooseCharacter && onChooseCharacter({ mode: 'existing', characterId: c.id })}
-                className="text-xs border border-line rounded-md px-3 py-1 text-ink hover:bg-panel2"
-              >
+              <Button onClick={() => onChooseCharacter && onChooseCharacter({ mode: 'existing', characterId: c.id })}>
                 Use
-              </button>
+              </Button>
             </div>
           ))}
         </div>
