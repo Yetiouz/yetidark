@@ -479,7 +479,7 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
               >
                 {saving ? 'Creating...' : 'Create campaign'}
               </button>
-            )
+            )}
           </div>
           <div className="hidden md:block" />
         </div>
