@@ -13,7 +13,7 @@ import { Bot } from 'lucide-react'
 // GmDashboard's own renderLogEntry had no ai_gm branch at all, so AI GM
 // narration fell through to the plain default styling there. Folding
 // both screens onto this one component fixes that for GmDashboard too.
-export default function LogEntry({ entry, as = 'span' }) {
+export default function LogEntry({ entry, as = 'span', color }) {
   const Tag = as
   const blockClass = as === 'span' ? 'block' : undefined
   const rollFlexClass = as === 'span' ? 'inline-flex' : 'flex'
@@ -25,7 +25,7 @@ export default function LogEntry({ entry, as = 'span' }) {
   if (entry.type === 'gm') {
     return (
       <Tag className={blockClass}>
-        <span className="font-medium text-primary-text">{entry.sender_name}:</span>{' '}
+        <span className="font-medium text-primary-text" style={color ? { color } : undefined}>{entry.sender_name}:</span>{' '}
         <span className="text-ink">{entry.text}</span>
       </Tag>
     )
@@ -62,7 +62,7 @@ export default function LogEntry({ entry, as = 'span' }) {
 
   return (
     <Tag className={blockClass}>
-      <span className="font-medium text-white">{entry.sender_name}:</span>{' '}
+      <span className="font-medium text-white" style={color ? { color } : undefined}>{entry.sender_name}:</span>{' '}
       <span className="text-ink">{entry.text}</span>
     </Tag>
   )

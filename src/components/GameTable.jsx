@@ -702,7 +702,7 @@ const isMine = entry.sender_user_id === user?.id
 return (
 <div key={entry.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
 <div className={`max-w-[75%] rounded-xl px-4 py-2 ${isMine ? 'bg-primary/20' : 'bg-panel2'}`}>
-{!isMine && <p className="text-[11px] font-medium text-ink-dim mb-1">{entry.sender_name}</p>}
+{!isMine && <p className="text-[11px] font-medium text-ink-dim mb-1" style={party.find((p) => p.owner_user_id === entry.sender_user_id)?.color ? { color: party.find((p) => p.owner_user_id === entry.sender_user_id).color } : undefined}>{entry.sender_name}</p>}
 <p className="text-sm text-ink whitespace-pre-wrap">{entry.text}</p>
 </div>
 </div>

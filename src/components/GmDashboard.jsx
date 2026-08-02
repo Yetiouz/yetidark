@@ -955,7 +955,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   className="min-h-[160px] max-h-[280px] md:min-h-0 md:max-h-none md:flex-1 overflow-y-auto flex flex-col gap-2 text-sm pr-1"
                 >
                   {log.length === 0 && <p className="text-xs text-ink-dim">No messages yet -- narrate something below.</p>}
-                  {log.map((entry) => <LogEntry as="p" key={entry.id} entry={entry} />)}
+                  {log.map((entry) => <LogEntry as="p" key={entry.id} entry={entry} color={party.find((p) => p.owner_user_id === entry.sender_user_id)?.color} />)}
                 </div>
               </Card>
             </div>
