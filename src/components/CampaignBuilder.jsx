@@ -99,6 +99,18 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
       return
     }
 
+    // AI-run campaigns can't be private yet at all, regardless of password:
+    // the creating human is enrolled in campaign_members with role 'player'
+    // (handle_new_campaign() only grants 'gm' when gm_type is 'human'), so
+    // set_campaign_privacy's is_campaign_gm() check always rejects them.
+    // That's a real gap in how AI-GM ownership is modeled (tracked as a
+    // follow-up), not something to silently orphan a campaign over here --
+    // block it up front until campaign ownership for AI GMs is sorted out.
+    if (!isPublic && gmType === 'ai') {
+      setError("AI-run campaigns can't be made private yet -- pick Public, or choose a human GM.")
+      return
+    }
+
     setSaving(true)
     setError(null)
 
