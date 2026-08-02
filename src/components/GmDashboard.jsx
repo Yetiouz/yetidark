@@ -39,6 +39,15 @@ return Math.max(0, source.remaining_minutes - elapsed)
 return source.remaining_minutes
 }
 
+// Mirrors GameTable.jsx's Party HP bar coloring -- same thresholds, kept
+// local here for the same reason formatMinutes/displayedMinutes are.
+function hpBarColor(hp, maxHp) {
+const pct = maxHp ? hp / maxHp : 0
+if (pct > 0.6) return 'bg-positive'
+if (pct > 0.3) return 'bg-warning'
+return 'bg-danger'
+}
+
 // Rebuilt to match the delve-gm-dashboard-visual mockup's actual structure
 // (status strip of individual bordered cards, 3-column body, shared
 // ui/ components as the implementation vocabulary) rather than the prior
@@ -149,6 +158,22 @@ return source.remaining_minutes
 // below Party, a deliberate departure from matching GameTable.jsx's rail
 // order (Party last) that PR #80 established -- this was a direct,
 // explicit instruction, not an oversight.
+//
+// PARTY CARD, per direct instruction ("Party card on Gm and player should
+// be the same"): each character row now matches GameTable.jsx's Party row
+// exactly -- a real HP `ProgressBar` (color-coded via the same
+// `hpBarColor` thresholds) instead of plain HP/AC text, a per-character
+// amber Torch bar when that character has a lit light source (using the
+// same `lightSources`/`displayedMinutes` data this file already read for
+// the header Torch card), a "Dying (timer)"/"stable" status pill instead
+// of a plain alive/dying dot, and a "Roll death check" button for dying
+// characters (calls the same `resolve_dying_turn` RPC the player page
+// calls -- it takes an explicit character_id, so the GM triggering it
+// here is the same real action, not a new code path). AC is no longer
+// shown here -- GameTable.jsx's Party card never showed it either, and
+// matching means matching, not matching-plus-extra. The outer `Card`
+// wrapper (title="Party") stays, for consistency with this rail's other
+// cards; only the per-character content changed.
 export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
@@ -177,6 +202,10 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [sessionActive, setSessionActive] = useState(false)
   const [togglingSession, setTogglingSession] = useState(false)
+  // Party card parity with GameTable.jsx: which dying character (if any)
+  // has a death-check roll in flight, same state name/shape as the player
+  // page's own deathCheckPendingId.
+  const [deathCheckPendingId, setDeathCheckPendingId] = useState(null)
   const sceneLogRef = useRef(null)
 
   // Only matters while a torch is actually burning, but a cheap 1s
@@ -284,6 +313,25 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     const nextHidden = !monster.hidden
     setEncounter((list) => list.map((m) => (m.id === monster.id ? { ...m, hidden: nextHidden } : m)))
     await supabase.from('encounter_monsters').update({ hidden: nextHidden }).eq('id', monster.id)
+  }
+
+  // Party card parity with GameTable.jsx: death check, rolled on a dying
+  // character's subsequent turn. Same RPC (`resolve_dying_turn`) the
+  // player page already calls -- it takes an explicit character_id rather
+  // than inferring the caller, so the GM triggering it here for a dying
+  // party member (e.g. one who's stepped away) is the same real action,
+  // not a separate code path.
+  const rollDeathCheck = async (characterId) => {
+    if (deathCheckPendingId) return
+    setDeathCheckPendingId(characterId)
+    const { data, error } = await supabase.rpc('resolve_dying_turn', {
+      p_campaign_id: campaignId,
+      p_character_id: characterId,
+    })
+    setDeathCheckPendingId(null)
+    if (!error && data?.scene_entry) {
+      setLog((all) => (all.some((entry) => entry.id === data.scene_entry.id) ? all : [...all, data.scene_entry]))
+    }
   }
 
   const addMonster = async () => {
@@ -851,52 +899,65 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 )}
               >
                 {party.length === 0 && <p className="text-[11px] text-ink-dim">No characters yet.</p>}
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-2">
                   {party.map((p) => {
                     const isActing = actingEntry?.id === p.id
+                    const light = lightSources.find((s) => s.character_id === p.id)
+                    const lightRemaining = light?.lit ? displayedMinutes(light, nowTick) : null
                     return (
-                    <button
-                      key={p.id}
-                      onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
-                      disabled={!onOpenCharacterSheet}
-                      className={`w-full text-left border rounded-lg px-2.5 py-2 hover:bg-panel2 disabled:cursor-default disabled:hover:bg-transparent ${
-                        isActing ? 'border-primary bg-primary/10' : 'border-line'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-1.5 mb-1">
-                        <span className="flex items-center gap-1.5 min-w-0">
-                          {p.avatar_url ? (
-                            <img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-line shrink-0" />
-                          ) : (
-                            <div
-                              className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-medium text-white shrink-0"
-                              style={{ backgroundColor: p.color || '#3f3f46' }}
-                            >
-                              {p.name?.[0]?.toUpperCase() || '?'}
-                            </div>
-                          )}
-                          <span className="text-xs font-medium text-white truncate">{p.name}</span>
-                          {isActing && (
-                            <span className="text-[9px] uppercase tracking-wide text-primary-text bg-primary/20 rounded-full px-1.5 py-0.5 shrink-0">Acting</span>
-                          )}
+                    <div key={p.id} className={`border rounded-md p-2 ${isActing ? 'border-primary bg-primary/10' : 'border-line-soft'}`}>
+                      <button
+                        onClick={() => onOpenCharacterSheet && onOpenCharacterSheet(p.id)}
+                        disabled={!onOpenCharacterSheet}
+                        className="w-full text-left disabled:cursor-default"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {p.avatar_url ? (
+                              <img src={p.avatar_url} alt={p.name} className="w-5 h-5 rounded-full object-cover border border-line shrink-0" />
+                            ) : (
+                              <div
+                                className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-medium text-white shrink-0"
+                                style={{ backgroundColor: p.color || '#3f3f46' }}
+                              >
+                                {p.name?.[0]?.toUpperCase() || '?'}
+                              </div>
+                            )}
+                            <span className="text-xs font-medium text-white truncate">{p.name}</span>
+                            {isActing && (
+                              <span className="text-[9px] uppercase tracking-wide text-primary-text bg-primary/20 rounded-full px-1.5 py-0.5 shrink-0">Acting</span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-ink-dim shrink-0">{p.hp}/{p.max_hp}</span>
+                        </div>
+                        <ProgressBar value={p.hp} max={p.max_hp} barClassName={hpBarColor(p.hp, p.max_hp)} trackBg="bg-danger/40" heightClassName="h-1" />
+                      </button>
+                      {lightRemaining !== null && (
+                        <div className="mt-1.5">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-[9px] text-warning-text flex items-center gap-1"><Flame size={9} /> Torch</span>
+                            <span className="text-[9px] text-ink-dim">{formatMinutes(lightRemaining)}</span>
+                          </div>
+                          <ProgressBar value={lightRemaining} max={light.total_minutes} tone="amber" heightClassName="h-1" />
+                        </div>
+                      )}
+                      {p.status && p.status !== 'alive' && (
+                        <span className={`inline-block mt-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+                          p.status === 'dying' ? 'border-danger text-danger-text' : p.status === 'stable' ? 'border-warning text-warning-text' : 'border-line text-ink-dim'
+                        }`}>
+                          {p.status === 'dying' ? `Dying (${p.death_timer ?? '?'})` : p.status}
                         </span>
-                        <span className="flex items-center gap-1.5 shrink-0">
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${p.status === 'dying' ? 'bg-danger' : 'bg-positive'}`}
-                            title={p.status === 'dying' ? 'Dying' : 'Alive'}
-                          />
-                          <Eye size={11} className="text-ink-faint" />
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-ink-dim">
-                        {p.status === 'dying' ? (
-                          <span className="text-danger-text">Dying ({p.death_timer ?? '?'})</span>
-                        ) : (
-                          `${p.hp}/${p.max_hp} HP`
-                        )}
-                        {' '}&middot; AC {p.ac}
-                      </p>
-                    </button>
+                      )}
+                      {p.status === 'dying' && (
+                        <button
+                          onClick={() => rollDeathCheck(p.id)}
+                          disabled={deathCheckPendingId === p.id}
+                          className="mt-1.5 w-full text-[11px] border border-danger/60 text-danger-text rounded-md py-1 hover:bg-danger/40 disabled:opacity-50"
+                        >
+                          {deathCheckPendingId === p.id ? 'Rolling…' : 'Roll death check'}
+                        </button>
+                      )}
+                    </div>
                     )
                   })}
                 </div>
