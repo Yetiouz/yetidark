@@ -7,6 +7,8 @@ import StatTile from './ui/StatTile.jsx'
 import Card from './ui/Card.jsx'
 import Footer from './ui/Footer.jsx'
 import Modal from './ui/Modal.jsx'
+import Button from './ui/Button.jsx'
+import DiceRoller from './ui/DiceRoller.jsx'
 import CampaignToolbar from './CampaignToolbar.jsx'
 import { supabase } from '../lib/supabaseClient.js'
 import { flatDieNotation } from '../lib/dice.js'
@@ -15,7 +17,6 @@ import { appendUniqueById } from '../app/realtimeCollections.js'
 import { useCampaignSession, useProfileDisplayName } from '../lib/useCampaignSession.js'
 import { gearSlotCapacity, occupiedGearSlots } from '../game/rules/character.js'
 
-const dice = [20, 12, 10, 8, 6, 4]
 // Auto-respond debounce: after any non-AI message lands in an AI-GM
 // campaign's scene log, wait this long with no further messages before
 // automatically asking the AI to take its turn. Batches near-simultaneous
@@ -576,6 +577,10 @@ const sceneMode = turnOrder.length > 0 ? 'Combat' : 'Exploration'
 const showMapPane = true
 const showLogPane = true
 
+// Precomputed once for DiceRoller's Stabilize panel (used for both the
+// empty-state check and the target select's option list).
+const dyingParty = party.filter((p) => p.status === 'dying')
+
 // Attack resolution goes through the same authoritative server command
 // pattern as roll_campaign_dice: rolls to hit, compares to the target's
 // AC, rolls damage on a hit, and applies it -- one audited round trip.
@@ -730,9 +735,7 @@ onOpenLibrary={onOpenLibrary}
 onOpenTracker={onOpenTracker}
 onOpenSettings={onOpenSettings}
 after={isGm && gmType !== 'ai' && onOpenGmView && (
-<button onClick={onOpenGmView} className="text-xs border border-line rounded-md px-3 py-1 text-ink hover:bg-panel2">
-GM view
-</button>
+<Button onClick={onOpenGmView}>GM view</Button>
 )}
 />
 </div>
@@ -890,222 +893,42 @@ litCharacterId={litCharacterId}
 )}
 
 <Modal open={showDiceModal} onClose={() => setShowDiceModal(false)} title="Dice & combat">
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-<div className="bg-panel rounded-lg p-3">
-<style>{`
-@keyframes dice-spin {
-0% { transform: rotate(0deg) scale(1); }
-50% { transform: rotate(180deg) scale(1.12); }
-100% { transform: rotate(360deg) scale(1); }
-}
-@keyframes dice-land {
-0% { transform: scale(1.35); }
-60% { transform: scale(0.92); }
-100% { transform: scale(1); }
-}
-.dice-rolling { animation: dice-spin 0.3s linear infinite; }
-.dice-landed { animation: dice-land 0.3s ease-out; }
-`}</style>
-<p className="text-xs text-ink-dim mb-2">Roll a die</p>
-
-<div className="flex flex-col items-center justify-center mb-3">
-<div
-key={rollNonce}
-className={`w-16 h-16 rounded-xl border-2 flex items-center justify-center text-2xl font-bold ${
-rollState
-? rollState.isCrit
-? 'border-positive text-white bg-positive/10'
-: rollState.isFumble
-? 'border-danger text-white bg-danger/10'
-: 'border-primary text-white bg-primary/10'
-: 'border-line text-ink-faint bg-bg'
-} ${rollState?.isRolling ? 'dice-rolling' : rollState ? 'dice-landed' : ''}`}
->
-{rollState ? rollState.value : <Dices size={22} />}
-</div>
-{rollState && (
-<p className="text-[11px] text-ink-dim mt-2">
-{rollState.label}
-{rollState.isRolling ? ' rolling…' : rollState.isCrit ? ' — crit!' : rollState.isFumble ? ' — fumble!' : ''}
-</p>
-)}
-</div>
-
-<div className="grid grid-cols-3 gap-2 mb-3">
-{dice.map((sides) => (
-<button
-key={sides}
-onClick={() => rollQuickDie(sides)}
-disabled={rollState?.isRolling}
-className="text-xs py-2 border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
->
-d{sides}
-</button>
-))}
-</div>
-
-<div className="pt-3 border-t border-line-soft">
-<p className="text-[11px] text-ink-dim mb-2">Custom roll (notation, advantage/disadvantage, reason)</p>
-<div className="flex gap-2 mb-2">
-<input
-value={notationInput}
-onChange={(e) => setNotationInput(e.target.value)}
-placeholder="1d20+3"
-className="w-20 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
+<DiceRoller
+rollState={rollState}
+rollNonce={rollNonce}
+onRollQuickDie={rollQuickDie}
+notationInput={notationInput}
+setNotationInput={setNotationInput}
+rollMode={rollMode}
+setRollMode={setRollMode}
+reasonInput={reasonInput}
+setReasonInput={setReasonInput}
+onRollCustom={rollCustom}
+rollError={rollError}
+manualDie={manualDie}
+setManualDie={setManualDie}
+manualValue={manualValue}
+setManualValue={setManualValue}
+onLogManualRoll={logManualRoll}
+monsters={monsters}
+attackTargetId={attackTargetId}
+setAttackTargetId={setAttackTargetId}
+attackNotation={attackNotation}
+setAttackNotation={setAttackNotation}
+damageNotation={damageNotation}
+setDamageNotation={setDamageNotation}
+onResolveAttack={resolveAttack}
+attacking={attacking}
+attackError={attackError}
+dyingParty={dyingParty}
+stabilizeTargetId={stabilizeTargetId}
+setStabilizeTargetId={setStabilizeTargetId}
+stabilizeNotation={stabilizeNotation}
+setStabilizeNotation={setStabilizeNotation}
+onResolveStabilize={resolveStabilize}
+stabilizing={stabilizing}
+stabilizeError={stabilizeError}
 />
-<div className="flex flex-1 gap-1">
-{['flat', 'advantage', 'disadvantage'].map((m) => (
-<button
-key={m}
-onClick={() => setRollMode(m)}
-className={`flex-1 text-[10px] py-1 rounded-md border ${
-rollMode === m ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink'
-}`}
->
-{m === 'flat' ? 'flat' : m === 'advantage' ? 'adv' : 'disadv'}
-</button>
-))}
-</div>
-</div>
-<div className="flex gap-2 mb-2">
-<input
-value={reasonInput}
-onChange={(e) => setReasonInput(e.target.value)}
-placeholder="reason (optional)"
-className="flex-1 min-w-0 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
-/>
-<button
-onClick={rollCustom}
-disabled={rollState?.isRolling}
-className="text-xs px-3 border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
->
-Roll
-</button>
-</div>
-{rollError && (
-<div className="flex items-center gap-2 text-danger-text mb-2">
-<AlertCircle size={12} />
-<p className="text-[11px]">{rollError}</p>
-</div>
-)}
-</div>
-
-<div className="pt-3 border-t border-line-soft">
-<p className="text-[11px] text-ink-dim mb-2">Rolled it yourself? Log it here.</p>
-<div className="flex gap-2">
-<select
-value={manualDie}
-onChange={(e) => setManualDie(e.target.value)}
-className="w-14 text-xs bg-bg border border-line rounded-md px-1 py-1 text-white"
->
-{dice.map((d) => (
-<option key={d} value={d}>d{d}</option>
-))}
-</select>
-<input
-type="number"
-value={manualValue}
-onChange={(e) => setManualValue(e.target.value)}
-placeholder="14"
-className="w-14 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
-/>
-<button onClick={logManualRoll} className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2">
-Log
-</button>
-</div>
-</div>
-</div>
-
-<div className="flex flex-col gap-3">
-<div className="bg-panel rounded-lg p-3">
-<p className="text-xs text-ink-dim mb-2">Attack</p>
-{monsters.length === 0 ? (
-<p className="text-[11px] text-ink-dim">No monsters in this encounter yet.</p>
-) : (
-<>
-<select
-value={attackTargetId}
-onChange={(e) => setAttackTargetId(e.target.value)}
-className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1 text-white mb-2"
->
-<option value="">Target...</option>
-{monsters.map((m) => (
-<option key={m.id} value={m.id}>{m.name}</option>
-))}
-</select>
-<div className="flex gap-2 mb-2">
-<input
-value={attackNotation}
-onChange={(e) => setAttackNotation(e.target.value)}
-placeholder="1d20+3"
-className="w-16 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
-/>
-<input
-value={damageNotation}
-onChange={(e) => setDamageNotation(e.target.value)}
-placeholder="1d6+1"
-className="w-16 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
-/>
-<button
-onClick={resolveAttack}
-disabled={!attackTargetId || attacking}
-className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
->
-{attacking ? 'Rolling…' : 'Attack'}
-</button>
-</div>
-{attackError && (
-<div className="flex items-center gap-2 text-danger-text">
-<AlertCircle size={12} />
-<p className="text-[11px]">{attackError}</p>
-</div>
-)}
-</>
-)}
-</div>
-
-<div className="bg-panel rounded-lg p-3">
-<p className="text-xs text-ink-dim mb-2">Stabilize</p>
-{party.filter((p) => p.status === 'dying').length === 0 ? (
-<p className="text-[11px] text-ink-dim">No one is dying right now.</p>
-) : (
-<>
-<select
-value={stabilizeTargetId}
-onChange={(e) => setStabilizeTargetId(e.target.value)}
-className="w-full text-xs bg-bg border border-line rounded-md px-2 py-1 text-white mb-2"
->
-<option value="">Target...</option>
-{party.filter((p) => p.status === 'dying').map((p) => (
-<option key={p.id} value={p.id}>{p.name}{(p.zone || 'near') !== 'close' ? ' (not Close)' : ''}</option>
-))}
-</select>
-<div className="flex gap-2 mb-2">
-<input
-value={stabilizeNotation}
-onChange={(e) => setStabilizeNotation(e.target.value)}
-placeholder="1d20+1"
-className="w-16 text-xs bg-bg border border-line rounded-md px-2 py-1 text-white"
-/>
-<button
-onClick={resolveStabilize}
-disabled={!stabilizeTargetId || stabilizing}
-className="flex-1 text-xs border border-line rounded-md text-ink hover:bg-panel2 disabled:opacity-50"
->
-{stabilizing ? 'Rolling…' : 'Stabilize (DC 15 INT)'}
-</button>
-</div>
-{stabilizeError && (
-<div className="flex items-center gap-2 text-danger-text">
-<AlertCircle size={12} />
-<p className="text-[11px]">{stabilizeError}</p>
-</div>
-)}
-</>
-)}
-</div>
-</div>
-</div>
 </Modal>
 
 {showLogPane && (
@@ -1274,28 +1097,10 @@ onKeyDown={(e) => e.key === 'Enter' && (gmType === 'ai' ? sendAndAskAiGm() : sen
 placeholder="Say or do something"
 className="min-w-0 bg-panel border border-line rounded-md px-3 py-2 text-sm text-white"
 />
-<button
-onClick={() => setShowDiceModal(true)}
-title="Roll dice / Attack / Stabilize"
-className="text-sm border border-line rounded-md px-3 py-2 text-ink hover:bg-panel2"
->
-<Dices size={15} />
-</button>
-<button
-disabled
-title="Voice input isn't wired up yet -- placeholder"
-className="text-sm border border-line-soft rounded-md px-3 py-2 text-ink-faint cursor-not-allowed"
->
-<Mic size={15} />
-</button>
+<Button iconOnly icon={Dices} onClick={() => setShowDiceModal(true)} title="Roll dice / Attack / Stabilize" />
+<Button iconOnly icon={Mic} disabled title="Voice input isn't wired up yet -- placeholder" />
 {onOpenLibrary && (
-<button
-onClick={onOpenLibrary}
-title="Ask a rule"
-className="text-sm border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2 whitespace-nowrap"
->
-<HelpCircle size={15} /> Ask a rule
-</button>
+<Button icon={HelpCircle} onClick={onOpenLibrary}>Ask a rule</Button>
 )}
 {gmType === 'ai' ? (
 <button
@@ -1307,12 +1112,7 @@ className="text-sm border border-ai/40 bg-ai/10 rounded-md px-4 py-2 flex items-
 {aiTurnPending ? 'Thinking…' : message.trim() ? 'Send' : 'Continue'}
 </button>
 ) : (
-<button
-onClick={sendMessage}
-className="text-sm border border-line rounded-md px-4 py-2 flex items-center justify-center gap-2 text-ink hover:bg-panel2"
->
-<Send size={15} /> Send
-</button>
+<Button icon={Send} onClick={sendMessage}>Send</Button>
 )}
 </div>
 </Footer>
