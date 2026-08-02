@@ -13,6 +13,7 @@ import Badge from './ui/Badge.jsx'
 import Button from './ui/Button.jsx'
 import Row from './ui/Row.jsx'
 import Modal from './ui/Modal.jsx'
+import ConfirmModal from './ui/ConfirmModal.jsx'
 import Footer from './ui/Footer.jsx'
 import LogEntry from './LogEntry.jsx'
 import CampaignToolbar from './CampaignToolbar.jsx'
@@ -186,8 +187,11 @@ return 'bg-danger'
 // Replace map (still `Upload`) also gained a genuine new counterpart:
 // Remove map (`Trash2`, disabled when no map is set) actually clears the
 // campaign's map reference via a new `removeMap` handler (confirmed via
-// window.confirm, matching this file's existing window.prompt style for
-// consequential actions) -- `ZoneScene` already falls back to its
+// window.confirm -- out of scope for this pass's Bug #4/#11 work, which
+// added a real Modal.jsx-based `ConfirmModal` for encounter-monster delete
+// and replaced every window.prompt in this file with small Modal forms;
+// removeMap's single yes/no window.confirm was left as-is rather than
+// scope-creeping into an unrelated fix) -- `ZoneScene` already falls back to its
 // placeholder scene when `mapUrl` is empty, the same state a campaign is
 // in before any map's ever been uploaded, so no new fallback UI was
 // needed. `removeMap` doesn't delete the file from storage, only the
@@ -207,7 +211,19 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   // design decision. Traps/features aren't real entities yet (no table for
   // them), so selection is character/monster only for now.
   const [selectedEntity, setSelectedEntity] = useState(null) // { type: 'character' | 'monster', id, name }
-  const [monsterDraft, setMonsterDraft] = useState('')
+  // Add-monster used to be a name input here + 3 sequential window.prompts
+  // (AC/HP/DEX) once submitted; now it's one small Modal.jsx form with all
+  // four fields, opened via the Plus button below (Bug #11).
+  const [showAddMonster, setShowAddMonster] = useState(false)
+  const [monsterForm, setMonsterForm] = useState({ name: '', ac: '10', hp: '4', dexMod: '0' })
+  const [addingMonster, setAddingMonster] = useState(false)
+  // Delete-monster confirm (Bug #4) -- the codebase had no Modal.jsx-based
+  // confirm dialog before this (row deletes elsewhere fire immediately with
+  // no confirmation: CampaignTracker.jsx's deleteRow, CharacterSheet.jsx's
+  // removeGear/removeFeature/removeSpell, Profile.jsx's leaveCampaign), so
+  // this uses the new shared ConfirmModal.jsx.
+  const [monsterToDelete, setMonsterToDelete] = useState(null)
+  const [deletingMonster, setDeletingMonster] = useState(false)
   const [message, setMessage] = useState('')
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [composeMode, setComposeMode] = useState('public') // 'public' -> scene_log, 'private' -> gm_notes
@@ -246,7 +262,14 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
   const [moraleChecking, setMoraleChecking] = useState(false)
+  // Morale check / Request a roll used to be 2 and 3 sequential
+  // window.prompts respectively; now each is one small Modal.jsx form
+  // (Bug #11).
+  const [showMoraleModal, setShowMoraleModal] = useState(false)
+  const [moraleForm, setMoraleForm] = useState({ label: '', notation: '1d20' })
   const [requestingRoll, setRequestingRoll] = useState(false)
+  const [showRequestRollModal, setShowRequestRollModal] = useState(false)
+  const [requestRollForm, setRequestRollForm] = useState({ roller: '', notation: '1d20', reason: '' })
   const [quickRolling, setQuickRolling] = useState(false)
   const fileInputRef = useRef(null)
   const { url: mapUrl, error: mapAccessError } = useCampaignMapUrl(mapInfo)
@@ -354,20 +377,37 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     }
   }
 
+  const openAddMonster = () => {
+    setMonsterForm({ name: '', ac: '10', hp: '4', dexMod: '0' })
+    setShowAddMonster(true)
+  }
+
   const addMonster = async () => {
-    const name = monsterDraft.trim()
-    if (!name || !campaignId) return
-    const acInput = window.prompt('Armor class?', '10')
-    if (acInput === null) return
-    const hpInput = window.prompt('Starting / max HP?', '4')
-    if (hpInput === null) return
-    const dexInput = window.prompt('DEX modifier (for initiative)?', '0')
-    if (dexInput === null) return
-    const ac = parseInt(acInput, 10) || 10
-    const hp = Math.max(1, parseInt(hpInput, 10) || 1)
-    const dexMod = parseInt(dexInput, 10) || 0
+    const name = monsterForm.name.trim()
+    if (!name || !campaignId || addingMonster) return
+    setAddingMonster(true)
+    const ac = parseInt(monsterForm.ac, 10) || 10
+    const hp = Math.max(1, parseInt(monsterForm.hp, 10) || 1)
+    const dexMod = parseInt(monsterForm.dexMod, 10) || 0
     await supabase.from('encounter_monsters').insert({ campaign_id: campaignId, name, ac, hp, max_hp: hp, hidden: false, dex_mod: dexMod })
-    setMonsterDraft('')
+    setAddingMonster(false)
+    setShowAddMonster(false)
+  }
+
+  // Bug #4: encounter monsters had no delete affordance at all. GM-only
+  // DELETE is already permitted by RLS ("only gm writes monsters - delete"
+  // on encounter_monsters, gated on is_campaign_gm), so this is a direct
+  // table delete, same shape as adjustHp/revealMonster/toggleMonsterHidden
+  // above -- just gated behind the ConfirmModal below instead of firing on
+  // click.
+  const deleteMonster = async () => {
+    if (!monsterToDelete || deletingMonster) return
+    setDeletingMonster(true)
+    const id = monsterToDelete.id
+    await supabase.from('encounter_monsters').delete().eq('id', id)
+    setEncounter((list) => list.filter((m) => m.id !== id))
+    setDeletingMonster(false)
+    setMonsterToDelete(null)
   }
 
   const revealNote = async (id) => {
@@ -465,38 +505,47 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   // GM-triggered DC 15 WIS morale check for a monster group -- the app
   // doesn't try to auto-detect "half the group is down," that judgment
   // call stays with the GM, same as picking who/what a check applies to.
+  const openMoraleCheck = () => {
+    setMoraleForm({ label: encounter[0]?.name || 'Monsters', notation: '1d20' })
+    setShowDiceModal(false)
+    setShowMoraleModal(true)
+  }
+
   const moraleCheck = async () => {
-    if (moraleChecking) return
-    const label = window.prompt('Morale check for which group?', encounter[0]?.name || 'Monsters')
-    if (!label) return
-    const notation = window.prompt('WIS check notation?', '1d20') || '1d20'
+    const label = moraleForm.label.trim()
+    if (!label || moraleChecking) return
     setMoraleChecking(true)
     await supabase.rpc('resolve_morale_check', {
       p_campaign_id: campaignId,
       p_group_label: label,
-      p_wis_notation: notation,
+      p_wis_notation: moraleForm.notation.trim() || '1d20',
     })
     setMoraleChecking(false)
+    setShowMoraleModal(false)
   }
 
   // "Request a roll": the GM picks who rolls and what, same authoritative
   // roll_campaign_dice command as every other app roll, just invoked on
   // someone else's behalf rather than the player's own dice card.
+  const openRequestRoll = () => {
+    setRequestRollForm({ roller: party[0]?.name || 'Party', notation: '1d20', reason: '' })
+    setShowDiceModal(false)
+    setShowRequestRollModal(true)
+  }
+
   const requestRoll = async () => {
-    if (requestingRoll || !campaignId) return
-    const roller = window.prompt('Who rolls?', party[0]?.name || 'Party')
-    if (!roller) return
-    const notation = window.prompt('Notation?', '1d20') || '1d20'
-    const reason = window.prompt('Reason (optional)?', '') || null
+    const roller = requestRollForm.roller.trim()
+    if (!roller || requestingRoll || !campaignId) return
     setRequestingRoll(true)
     await supabase.rpc('roll_campaign_dice', {
       p_campaign_id: campaignId,
-      p_notation: notation,
+      p_notation: requestRollForm.notation.trim() || '1d20',
       p_mode: 'flat',
-      p_reason: reason,
+      p_reason: requestRollForm.reason.trim() || null,
       p_roller_name: roller,
     })
     setRequestingRoll(false)
+    setShowRequestRollModal(false)
   }
 
   // Quick tables: real dice-engine shortcuts under recognizable Shadowdark
@@ -752,18 +801,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
               <Card
                 title="Active encounter"
-                titleRight={
-                  <div className="flex gap-2">
-                    <input
-                      value={monsterDraft}
-                      onChange={(e) => setMonsterDraft(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addMonster()}
-                      placeholder="Monster name"
-                      className="text-xs bg-bg border border-line rounded-md px-2 py-1 w-24 text-white"
-                    />
-                    <Button icon={Plus} iconOnly onClick={addMonster} title="Add monster" />
-                  </div>
-                }
+                titleRight={<Button icon={Plus} iconOnly onClick={openAddMonster} title="Add monster" />}
               >
                 <div className="flex flex-col gap-2">
                   {encounter.length === 0 && <p className="text-xs text-ink-dim">No monsters yet -- add one above.</p>}
@@ -784,6 +822,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                           <button onClick={() => adjustHp(m, -1)} className="px-2 border border-line rounded text-ink">-</button>
                           <span className="min-w-[44px] text-center text-ink">{m.hp} / {m.max_hp} hp</span>
                           <button onClick={() => adjustHp(m, 1)} className="px-2 border border-line rounded text-ink">+</button>
+                          <button
+                            onClick={() => setMonsterToDelete(m)}
+                            title="Delete monster"
+                            className="text-ink-faint hover:text-danger-text p-1"
+                          >
+                            <Trash2 size={12} />
+                          </button>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-wrap">
@@ -1076,11 +1121,156 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         <div className="flex flex-col gap-2">
           <Row icon={Shuffle} label="Random encounter" onClick={() => rollQuickTable('Random encounter check', '1d6')} disabled={quickRolling} />
           <Row icon={Users} label="Reaction" onClick={() => rollQuickTable('Reaction roll', '2d6')} disabled={quickRolling} />
-          <Row icon={Gauge} label={moraleChecking ? 'Rolling…' : 'Morale'} onClick={moraleCheck} disabled={moraleChecking || encounter.length === 0} />
+          <Row icon={Gauge} label="Morale" onClick={openMoraleCheck} disabled={encounter.length === 0} />
           <Row icon={Gem} label="Treasure" onClick={() => rollQuickTable('Treasure roll', '1d100')} disabled={quickRolling} />
-          <Row icon={Dices} label={requestingRoll ? 'Requesting…' : 'Request a roll'} onClick={requestRoll} disabled={requestingRoll} />
+          <Row icon={Dices} label="Request a roll" onClick={openRequestRoll} />
         </div>
       </Modal>
+
+      {/* Add monster -- Bug #11: was a name input here + 3 sequential
+          window.prompts (AC/HP/DEX) once submitted. One small form now,
+          field styling matching CampaignBuilder.jsx's label-above-input
+          convention (text-[11px] text-ink-dim label, bg-bg/border-line
+          input). */}
+      <Modal open={showAddMonster} onClose={() => setShowAddMonster(false)} title="Add monster">
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="text-[11px] text-ink-dim mb-1">Name</p>
+            <input
+              value={monsterForm.name}
+              onChange={(e) => setMonsterForm((f) => ({ ...f, name: e.target.value }))}
+              onKeyDown={(e) => e.key === 'Enter' && addMonster()}
+              placeholder="Monster name"
+              autoFocus
+              className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-white"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-[11px] text-ink-dim mb-1">Armor class</p>
+              <input
+                type="number"
+                value={monsterForm.ac}
+                onChange={(e) => setMonsterForm((f) => ({ ...f, ac: e.target.value }))}
+                className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <p className="text-[11px] text-ink-dim mb-1">HP</p>
+              <input
+                type="number"
+                value={monsterForm.hp}
+                onChange={(e) => setMonsterForm((f) => ({ ...f, hp: e.target.value }))}
+                className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <p className="text-[11px] text-ink-dim mb-1">DEX mod</p>
+              <input
+                type="number"
+                value={monsterForm.dexMod}
+                onChange={(e) => setMonsterForm((f) => ({ ...f, dexMod: e.target.value }))}
+                className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-white"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setShowAddMonster(false)} disabled={addingMonster}>Cancel</Button>
+            <Button variant="primary" onClick={addMonster} disabled={!monsterForm.name.trim() || addingMonster}>
+              {addingMonster ? 'Adding…' : 'Add monster'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Morale check -- Bug #11: was 2 sequential window.prompts (group
+          label, WIS notation). Wired to resolve_morale_check (GM-only RPC,
+          same p_campaign_id/p_group_label/p_wis_notation shape it already
+          took from the prompts). */}
+      <Modal open={showMoraleModal} onClose={() => setShowMoraleModal(false)} title="Morale check">
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="text-[11px] text-ink-dim mb-1">Group</p>
+            <input
+              value={moraleForm.label}
+              onChange={(e) => setMoraleForm((f) => ({ ...f, label: e.target.value }))}
+              className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-white"
+            />
+          </div>
+          <div>
+            <p className="text-[11px] text-ink-dim mb-1">WIS check notation</p>
+            <input
+              value={moraleForm.notation}
+              onChange={(e) => setMoraleForm((f) => ({ ...f, notation: e.target.value }))}
+              placeholder="1d20"
+              className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-white"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setShowMoraleModal(false)} disabled={moraleChecking}>Cancel</Button>
+            <Button variant="primary" onClick={moraleCheck} disabled={!moraleForm.label.trim() || moraleChecking}>
+              {moraleChecking ? 'Rolling…' : 'Roll'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Request a roll -- Bug #11: was 3 sequential window.prompts
+          (who/notation/reason). Wired to roll_campaign_dice with
+          p_roller_name set -- the same "GM rolls for an unowned subject"
+          path the RPC already supports (it requires is_campaign_gm when
+          p_roller_name is non-null), so this is the same real action as
+          before, not a new code path. */}
+      <Modal open={showRequestRollModal} onClose={() => setShowRequestRollModal(false)} title="Request a roll">
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="text-[11px] text-ink-dim mb-1">Who rolls</p>
+            <input
+              value={requestRollForm.roller}
+              onChange={(e) => setRequestRollForm((f) => ({ ...f, roller: e.target.value }))}
+              className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-white"
+            />
+          </div>
+          <div>
+            <p className="text-[11px] text-ink-dim mb-1">Notation</p>
+            <input
+              value={requestRollForm.notation}
+              onChange={(e) => setRequestRollForm((f) => ({ ...f, notation: e.target.value }))}
+              placeholder="1d20"
+              className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-white"
+            />
+          </div>
+          <div>
+            <p className="text-[11px] text-ink-dim mb-1">Reason (optional)</p>
+            <input
+              value={requestRollForm.reason}
+              onChange={(e) => setRequestRollForm((f) => ({ ...f, reason: e.target.value }))}
+              className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-white"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setShowRequestRollModal(false)} disabled={requestingRoll}>Cancel</Button>
+            <Button variant="primary" onClick={requestRoll} disabled={!requestRollForm.roller.trim() || requestingRoll}>
+              {requestingRoll ? 'Requesting…' : 'Request'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete-monster confirm (Bug #4) -- first real use of the new
+          shared ConfirmModal.jsx; see that file's own comment for why it
+          exists and how to reuse it elsewhere (Profile.jsx's leaveCampaign
+          is a good next candidate -- currently an unconfirmed one-click
+          delete -- tracked separately, not fixed here). */}
+      <ConfirmModal
+        open={!!monsterToDelete}
+        onClose={() => setMonsterToDelete(null)}
+        onConfirm={deleteMonster}
+        confirming={deletingMonster}
+        title="Delete monster"
+        message={monsterToDelete ? `Remove ${monsterToDelete.name} from this encounter? This can't be undone.` : ''}
+        confirmLabel="Delete"
+      />
 
       {/* GM notes (general, private) -- used to be a permanently-visible
           right-rail card; now behind this on-demand modal, opened from the
