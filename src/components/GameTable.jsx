@@ -540,6 +540,7 @@ const myCharacter = party.find((p) => p.owner_user_id === user?.id) || null
 // moveRestriction below and the "your turn to move" hint under the map.
 const myTurnEntry = myCharacter ? turnOrder.find((t) => t.id === myCharacter.id) : null
 const canMove = Boolean(myCharacter && actingEntry?.id === myCharacter.id && myTurnEntry && !myTurnEntry.moved)
+const isSurprised = myTurnEntry?.status === 'surprised'
 const ADJACENT_ZONES = { close: ['near'], near: ['close', 'far'], far: ['near'] }
 const myAdjacentZones = myCharacter ? ADJACENT_ZONES[myCharacter.zone || 'near'] || ['close', 'near', 'far'] : []
 
@@ -919,6 +920,11 @@ moveRestriction={canMove ? { tokenId: myCharacter.id, allowedZones: myAdjacentZo
 {moveError && <p className="text-[10px] text-danger-text mt-1">{moveError}</p>}
 </div>
 )}
+{isSurprised && (
+<div className="absolute bottom-2 left-2 max-w-[220px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg px-3 py-2">
+<p className="text-[10px] text-ink-dim">You&rsquo;re surprised \u2014 wait for the surprise round to end before you can act.</p>
+</div>
+)}
 {activeClocks.length > 0 && (
 <div className="absolute top-2 right-2 max-w-[180px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-3">
 <p className="text-[10px] text-ink-dim mb-2 uppercase tracking-wide">Clocks</p>
@@ -1070,6 +1076,7 @@ this is the only place that turn gets surfaced. */}
 <div className="flex flex-col gap-2">
 {party.map((p) => {
 const isActing = actingEntry?.id === p.id
+const isPartySurprised = turnOrder.find((t) => t.id === p.id)?.status === 'surprised'
 const light = lightSources.find((s) => s.character_id === p.id)
 const lightRemaining = light?.lit ? displayedMinutes(light, nowTick) : null
 return (
@@ -1094,6 +1101,9 @@ style={{ backgroundColor: p.color || '#3f3f46' }}
 <span className="text-xs font-medium text-white truncate">{p.name}</span>
 {isActing && (
 <span className="text-[9px] uppercase tracking-wide text-primary-text bg-primary/20 rounded-full px-2 py-1 shrink-0">Acting</span>
+)}
+{isPartySurprised && (
+<span className="text-[9px] uppercase tracking-wide text-ink-dim bg-line/40 rounded-full px-2 py-1 shrink-0">Surprised</span>
 )}
 </div>
 <span className="text-[11px] text-ink-dim shrink-0">{p.hp}/{p.max_hp}</span>

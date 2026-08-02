@@ -266,6 +266,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   // window.prompts respectively; now each is one small Modal.jsx form
   // (Bug #11).
   const [showMoraleModal, setShowMoraleModal] = useState(false)
+  const [showSurpriseChooser, setShowSurpriseChooser] = useState(false)
   const [moraleForm, setMoraleForm] = useState({ label: '', notation: '1d20' })
   const [requestingRoll, setRequestingRoll] = useState(false)
   const [showRequestRollModal, setShowRequestRollModal] = useState(false)
@@ -459,16 +460,27 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   // table (auditable via dice_rolls), then the order just rotates
   // (advanceTurn below) rather than re-sorting -- clockwise, not a ranked
   // tracker that reshuffles every round.
-  const rollInitiative = async () => {
+  // Surprise (Shadowdark p.87-88): "The GM determines if any creatures are
+  // unaware of each other. A creature who surprises another takes one turn
+  // before a new initiative order is rolled." This is a GM judgment call,
+  // not derived from any tracked detection/stealth state (none exists in
+  // schema) -- so surprisedSide is set by the chooser modal below, never
+  // inferred. When set, the surprised side is rolled out of this round
+  // entirely and appended with status 'surprised' so the tracker/party
+  // list can show them as sitting out rather than just vanishing.
+  const rollInitiative = async (surprisedSide = null) => {
     if (!campaignId) return
-    const participants = [
-      ...party.map((c) => ({ id: c.id, name: c.name, dexMod: abilityModifier(Number(c.stats?.dex) || 10) })),
-      ...encounter.filter((m) => !m.hidden).map((m) => ({ id: m.id, name: m.name, dexMod: m.dex_mod || 0 })),
-    ]
-    if (participants.length === 0) return
+    const partyParticipants = party.map((c) => ({ id: c.id, name: c.name, dexMod: abilityModifier(Number(c.stats?.dex) || 10), side: 'party' }))
+    const monsterParticipants = encounter.filter((m) => !m.hidden).map((m) => ({ id: m.id, name: m.name, dexMod: m.dex_mod || 0, side: 'monsters' }))
+    const allParticipants = [...partyParticipants, ...monsterParticipants]
+    if (allParticipants.length === 0) return
+
+    const rollingParticipants = surprisedSide ? allParticipants.filter((p) => p.side !== surprisedSide) : allParticipants
+    const surprisedParticipants = surprisedSide ? allParticipants.filter((p) => p.side === surprisedSide) : []
+    if (rollingParticipants.length === 0) return
 
     const rolled = (await Promise.all(
-      participants.map(async (participant) => {
+      rollingParticipants.map(async (participant) => {
         const notation = `1d20${participant.dexMod >= 0 ? '+' : ''}${participant.dexMod}`
         const { data, error } = await supabase.rpc('roll_campaign_dice', {
           p_campaign_id: campaignId,
@@ -482,30 +494,55 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       })
     )).filter(Boolean).sort((a, b) => b.result.total - a.result.total)
 
-    const orderList = rolled.map((p, i) => ({ id: p.id, name: p.name, status: i === 0 ? 'acting' : 'waiting', moved: false, acted: false }))
+    const orderList = [
+      ...rolled.map((p, i) => ({ id: p.id, name: p.name, status: i === 0 ? 'acting' : 'waiting', moved: false, acted: false })),
+      ...surprisedParticipants.map((p) => ({ id: p.id, name: p.name, status: 'surprised', moved: false, acted: false })),
+    ]
     setTurnOrder(orderList)
     await supabase.from('turn_order').upsert({ campaign_id: campaignId, order_list: orderList }, { onConflict: 'campaign_id' })
+
+    if (surprisedSide) {
+      const surprisedLabel = surprisedSide === 'party' ? 'The party' : 'The monsters'
+      const surprisingLabel = surprisedSide === 'party' ? 'the monsters' : 'the party'
+      await supabase.from('scene_log').insert({
+        campaign_id: campaignId,
+        type: 'narration',
+        sender_name: 'GM',
+        text: `Surprise round! ${surprisedLabel} didn't see it coming -- ${surprisingLabel} each get a turn before initiative is rolled for everyone.`,
+      })
+    }
   }
 
   // Mockup's "Start encounter" -- the real action is rolling initiative
-  // (there's no separate "encounter start" flag). Used to also jump the
-  // center tabs over to Encounter, but the Scene/Map/Encounter tab switcher
-  // is gone now (see the Map/Active encounter cards below), so there's
-  // nowhere left to jump to -- both are always visible.
-  const startEncounter = async () => {
-    await rollInitiative()
+  // (there's no separate "encounter start" flag). Every click asks
+  // whether either side is surprised first (Decision, 2026-08-02): cheap
+  // to answer "No surprise" every normal time, and reusing that same
+  // question is also how the GM rolls the real full-party initiative once
+  // a declared surprise round's turns are done -- no separate button.
+  const startEncounter = () => setShowSurpriseChooser(true)
+  const chooseSurprise = async (surprisedSide) => {
+    setShowSurpriseChooser(false)
+    await rollInitiative(surprisedSide)
   }
 
   const advanceTurn = async () => {
     if (!campaignId || turnOrder.length === 0) return
+    // Surprised entries (see rollInitiative) sit out entirely -- pinned at
+    // the end, excluded from the clockwise rotation -- until the GM rolls
+    // full initiative (Start encounter -> "No surprise"), which replaces
+    // the whole list and clears every status.
+    const rotatable = turnOrder.filter((t) => t.status !== 'surprised')
+    const surprised = turnOrder.filter((t) => t.status === 'surprised')
+    if (rotatable.length === 0) return
     // moved/acted reset only for the entry becoming 'acting' -- a waiting
     // entry's stale flags from its last turn don't matter until it's next,
     // at which point this same reset fires for it.
-    const rotated = [...turnOrder.slice(1), turnOrder[0]].map((t, i) =>
+    const rotated = [...rotatable.slice(1), rotatable[0]].map((t, i) =>
       i === 0 ? { ...t, status: 'acting', moved: false, acted: false } : { ...t, status: 'waiting' }
     )
-    setTurnOrder(rotated)
-    await supabase.from('turn_order').upsert({ campaign_id: campaignId, order_list: rotated }, { onConflict: 'campaign_id' })
+    const nextOrder = [...rotated, ...surprised]
+    setTurnOrder(nextOrder)
+    await supabase.from('turn_order').upsert({ campaign_id: campaignId, order_list: nextOrder }, { onConflict: 'campaign_id' })
   }
 
   const setCharacterZone = async (id, zone) => {
@@ -698,6 +735,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   // same as the player page.
   const actingEntry = turnOrder.find((t) => t.status === 'acting') || null
   const actingIsMonster = actingEntry ? !party.some((p) => p.id === actingEntry.id) : false
+  const inSurpriseRound = turnOrder.some((t) => t.status === 'surprised')
 
   useEffect(() => {
     if (sceneLogRef.current) sceneLogRef.current.scrollTop = sceneLogRef.current.scrollHeight
@@ -791,7 +829,10 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 <div className="flex flex-col gap-2">
                   <p className="text-[11px] text-ink-dim px-1">
                     {actingEntry ? (
-                      <><span className="text-ink font-medium">{actingEntry.name}</span>&rsquo;s turn</>
+                      <>
+                        <span className="text-ink font-medium">{actingEntry.name}</span>&rsquo;s turn
+                        {inSurpriseRound && <span className="text-warning-text"> (surprise round)</span>}
+                      </>
                     ) : (
                       'No initiative rolled yet.'
                     )}
@@ -990,7 +1031,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                       <Row
                         key={m.id}
                         icon={m.hidden ? EyeOff : undefined}
-                        label={m.name}
+                        label={turnOrder.find((t) => t.id === m.id)?.status === 'surprised' ? `${m.name} (Surprised)` : m.name}
                         right={<span className="text-[11px] text-ink-dim">{m.hp}/{m.max_hp} HP</span>}
                         onClick={() => selectEntity('monster', m.id, m.name)}
                         selected={selectedEntity?.type === 'monster' && selectedEntity?.id === m.id}
@@ -1012,6 +1053,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                 <div className="flex flex-col gap-2">
                   {party.map((p) => {
                     const isActing = actingEntry?.id === p.id
+                    const isSurprised = turnOrder.find((t) => t.id === p.id)?.status === 'surprised'
                     const light = lightSources.find((s) => s.character_id === p.id)
                     const lightRemaining = light?.lit ? displayedMinutes(light, nowTick) : null
                     return (
@@ -1036,6 +1078,9 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                             <span className="text-xs font-medium text-white truncate">{p.name}</span>
                             {isActing && (
                               <span className="text-[9px] uppercase tracking-wide text-primary-text bg-primary/20 rounded-full px-2 py-1 shrink-0">Acting</span>
+                            )}
+                            {isSurprised && (
+                              <span className="text-[9px] uppercase tracking-wide text-ink-dim bg-line/40 rounded-full px-2 py-1 shrink-0">Surprised</span>
                             )}
                           </div>
                           <span className="text-[11px] text-ink-dim shrink-0">{p.hp}/{p.max_hp}</span>
@@ -1200,6 +1245,24 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             <Button variant="primary" onClick={addMonster} disabled={!monsterForm.name.trim() || addingMonster}>
               {addingMonster ? 'Adding…' : 'Add monster'}
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Surprise round (Shadowdark p.87-88) -- GM judgment call, no
+          detection state exists to derive it from, so this is always a
+          manual pick. Reused for every "Start encounter" click, including
+          the later one that ends a declared surprise round -- picking "No
+          surprise" there rolls the real full-party initiative. */}
+      <Modal open={showSurpriseChooser} onClose={() => setShowSurpriseChooser(false)} title="Roll initiative">
+        <div className="flex flex-col gap-3">
+          <p className="text-[11px] text-ink-dim">
+            Is either side caught by surprise? A surprised side sits out a surprise round -- the other side each gets one turn before initiative is rolled for everyone.
+          </p>
+          <div className="flex flex-col gap-2">
+            <Button variant="primary" onClick={() => chooseSurprise(null)}>No surprise, roll for everyone</Button>
+            <Button onClick={() => chooseSurprise('party')}>Party is surprised</Button>
+            <Button onClick={() => chooseSurprise('monsters')}>Monsters are surprised</Button>
           </div>
         </div>
       </Modal>
