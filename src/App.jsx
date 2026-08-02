@@ -174,9 +174,21 @@ export default function App() {
     navigateTo('campaign-lobby', { campaignId: campaign.id })
   }
 
-  const chooseCharacter = ({ mode } = {}) => {
+  const chooseCharacter = ({ mode, characterId } = {}) => {
     if (mode === 'create') {
       navigateTo('builder')
+      return
+    }
+    // Decision #53: this used to ignore characterId entirely and always
+    // return to campaign-lobby regardless of which existing character (if
+    // any) was chosen, so CharacterPicker.jsx's own characterId fix (bug #2,
+    // Phase 2 Batch C) had no visible effect in production. Route straight
+    // to that character's sheet, reusing the same openCharacterSheet
+    // mechanism every other "view a character" entry point in the app
+    // already uses (CampaignLobby's own list, GameTable, GmDashboard),
+    // rather than inventing a new pre-select-in-CampaignLobby pattern.
+    if (mode === 'existing' && characterId) {
+      openCharacterSheet(characterId, 'campaign-lobby')
       return
     }
     navigateTo('campaign-lobby')
