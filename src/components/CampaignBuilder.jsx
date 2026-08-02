@@ -85,6 +85,20 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
 
   const create = async () => {
     if (!session?.user) return
+
+    // Fail fast, before writing anything: set_campaign_privacy rejects an
+    // empty password for a brand-new private campaign, and by the time that
+    // RPC runs the campaigns + campaign_members rows below are already
+    // committed with no way for the client to roll them back (no DELETE
+    // policy on campaigns) -- so a failure there previously left a live,
+    // public-by-default orphan campaign behind instead of the private one
+    // the user asked for. Catching it here avoids that entirely for the
+    // common case.
+    if (!isPublic && !password.trim()) {
+      setError('A password is required to make this campaign private.')
+      return
+    }
+
     setSaving(true)
     setError(null)
 
@@ -465,7 +479,7 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
               >
                 {saving ? 'Creating...' : 'Create campaign'}
               </button>
-            )}
+            )
           </div>
           <div className="hidden md:block" />
         </div>
