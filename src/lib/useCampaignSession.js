@@ -3,9 +3,10 @@ import { supabase } from './supabaseClient.js'
 import { appendUniqueById } from '../app/realtimeCollections.js'
 
 // Shared by GameTable.jsx (players) and GmDashboard.jsx (GM): both screens
-// fetch-then-subscribe to the same six tables in lockstep -- scene log,
-// the campaign row, turn order, party characters, clocks, and light
-// sources -- with identical realtime wiring. Screen-specific data stays
+// fetch-then-subscribe to the same seven tables in lockstep -- scene log,
+// the campaign row, turn order, party characters, clocks, light sources,
+// and AI-GM ruling-dispute flags -- with identical realtime wiring.
+// Screen-specific data stays
 // local to each screen instead of being forced in here, since the two
 // screens read (and sometimes write) it very differently:
 //   - campaign_threads: GameTable-only (status rail "objective").
@@ -35,6 +36,7 @@ export function useCampaignSession(campaignId, { channelKey = 'campaign-session'
   const [party, setParty] = useState([])
   const [clocks, setClocks] = useState([])
   const [lightSources, setLightSources] = useState([])
+  const [flags, setFlags] = useState([])
 
   // Kept current every render (no deps) so the realtime handler set up
   // once below -- closed over campaignId/channelKey only -- always calls
@@ -91,6 +93,13 @@ export function useCampaignSession(campaignId, { channelKey = 'campaign-session'
       .eq('campaign_id', campaignId)
       .then(({ data }) => { if (!cancelled) setLightSources(data || []) })
 
+    supabase
+      .from('ai_gm_ruling_flags')
+      .select('id, campaign_id, scene_log_id, ruling_text, flagged_by, flagged_by_name, reason, status, gm_response, resolved_by, resolved_at, created_at')
+      .eq('campaign_id', campaignId)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => { if (!cancelled) setFlags(data || []) })
+
     const channel = supabase
       .channel(`${channelKey}-${campaignId}`)
       .on(
@@ -140,6 +149,15 @@ export function useCampaignSession(campaignId, { channelKey = 'campaign-session'
           else if (payload.eventType === 'DELETE') setLightSources((l) => l.filter((x) => x.id !== payload.old.id))
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ai_gm_ruling_flags', filter: `campaign_id=eq.${campaignId}` },
+        (payload) => {
+          // No DELETE case -- flags are never deleted, only resolved/dismissed via UPDATE.
+          if (payload.eventType === 'INSERT') setFlags((f) => appendUniqueById(f, payload.new))
+          else if (payload.eventType === 'UPDATE') setFlags((f) => f.map((x) => (x.id === payload.new.id ? payload.new : x)))
+        }
+      )
       .subscribe()
 
     return () => {
@@ -155,6 +173,7 @@ export function useCampaignSession(campaignId, { channelKey = 'campaign-session'
     party, setParty,
     clocks, setClocks,
     lightSources, setLightSources,
+    flags, setFlags,
   }
 }
 
