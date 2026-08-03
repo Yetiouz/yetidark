@@ -99,18 +99,6 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
       return
     }
 
-    // AI-run campaigns can't be private yet at all, regardless of password:
-    // the creating human is enrolled in campaign_members with role 'player'
-    // (handle_new_campaign() only grants 'gm' when gm_type is 'human'), so
-    // set_campaign_privacy's is_campaign_gm() check always rejects them.
-    // That's a real gap in how AI-GM ownership is modeled (tracked as a
-    // follow-up), not something to silently orphan a campaign over here --
-    // block it up front until campaign ownership for AI GMs is sorted out.
-    if (!isPublic && gmType === 'ai') {
-      setError("AI-run campaigns can't be made private yet -- pick Public, or choose a human GM.")
-      return
-    }
-
     setSaving(true)
     setError(null)
 
@@ -127,7 +115,13 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
       name: finalName,
       system: 'Shadowdark',
       gm_type: gmType,
-      gm_user_id: gmType === 'human' ? session.user.id : null,
+      // Decision Queue #30 (resolved 2026-08-03): the campaign creator holds
+      // the GM seat regardless of gm_type -- an AI-GM campaign's human
+      // organizer still owns the table (design spec Section 4.17/4.22), the
+      // AI narrates through the ai-gm-turn edge function's own service-role
+      // access, not through this row. Always the creator now, not just for
+      // gm_type='human'.
+      gm_user_id: session.user.id,
       join_code: randomJoinCode(),
       starting_level: startingLevel,
       min_players: minPlayers,
@@ -146,12 +140,13 @@ export default function CampaignBuilder({ session, onComplete, onCancel }) {
       return
     }
 
-    // The trigger already adds the creator as a member -- this just makes
-    // sure it's there without erroring if it is (same as before).
+    // The trigger already adds the creator as 'gm' (Decision Queue #30) --
+    // this just makes sure it's there without erroring if it is (same as
+    // before).
     await supabase
       .from('campaign_members')
       .upsert(
-        { campaign_id: id, user_id: session.user.id, role: gmType === 'human' ? 'gm' : 'player' },
+        { campaign_id: id, user_id: session.user.id, role: 'gm' },
         { onConflict: 'campaign_id,user_id', ignoreDuplicates: true }
       )
 
