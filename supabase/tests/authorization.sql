@@ -115,10 +115,15 @@ values
   );
 
 -- Fresh, isolated fixtures for combat-command / campaign-privacy coverage (#23).
+-- Trigger disabled around the insert, same as the fixture block at the top of
+-- this file: on_campaign_created auto-inserts a GM membership from auth.uid(),
+-- which is null in this test context.
+alter table campaigns disable trigger on_campaign_created;
 insert into campaigns (id, name, gm_type, gm_user_id, join_code, is_public, join_password_hash)
 values
   ('10000000-0000-0000-0000-000000000004', 'Combat test A', 'human', '00000000-0000-0000-0000-000000000001', 'COMBATA1', false, crypt('secret', gen_salt('bf'))),
   ('10000000-0000-0000-0000-000000000005', 'Combat test B', 'human', '00000000-0000-0000-0000-000000000001', 'COMBATB1', false, null);
+alter table campaigns enable trigger on_campaign_created;
 
 insert into campaign_members (campaign_id, user_id, role) values
   ('10000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000001', 'gm'),

@@ -92,7 +92,7 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
     if (!activeStroke) return
     setActiveStroke((pts) => [...pts, pointFromPointerEvent(e)])
   }
-  const handleDrawPointerUp = (e) => {
+  const handleDrawPointerUp = () => {
     if (!activeStroke) return
     if (activeStroke.length > 1 && onAddStroke) onAddStroke(activeStroke)
     setActiveStroke(null)

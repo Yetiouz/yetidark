@@ -42,6 +42,53 @@ function emptyDraft(entryType) {
   return { entry_type: entryType, title: '', body: '', status: 'fact', revealed: false }
 }
 
+
+// Hoisted to module scope (react-hooks/static-components): components defined
+// inside the parent's render are recreated every render and reset their state.
+const EntryRow = ({ entry, isGm, onEdit, onDelete }) => (
+  <div className="text-xs border border-line rounded-md p-3 flex flex-col gap-1">
+    <div className="flex items-center justify-between gap-2">
+      <p className="text-ink font-medium">{entry.title}</p>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {entry.entry_type === 'clue' && (
+          <Badge tone={entry.status === 'fact' ? 'green' : 'purple'}>
+            {entry.status === 'fact' ? 'Fact' : 'Suspicion'}
+          </Badge>
+        )}
+        <Badge tone={entry.revealed ? 'green' : 'neutral'}>{entry.revealed ? 'Revealed' : 'Hidden'}</Badge>
+        {isGm && (
+          <>
+            <button onClick={() => onEdit(entry)} className="text-ink-faint hover:text-ink p-1">
+              <Pencil size={12} />
+            </button>
+            <button onClick={() => onDelete(entry)} className="text-ink-faint hover:text-danger-text p-1">
+              <Trash2 size={12} />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+    {entry.body && <p className="text-ink-dim whitespace-pre-wrap">{entry.body}</p>}
+  </div>
+)
+
+const EntryTab = ({ entryType, list, emptyLabel, isGm, onAdd, onEdit, onDelete }) => (
+  <div className="flex flex-col gap-2">
+    {isGm && (
+      <button
+        onClick={() => onAdd(entryType)}
+        className="self-start text-xs border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2"
+      >
+        <Plus size={13} /> Add {ENTRY_LABEL[entryType]}
+      </button>
+    )}
+    {list.length === 0 && <p className="text-xs text-ink-faint">{emptyLabel}</p>}
+    {list.map((entry) => (
+      <EntryRow key={entry.id} entry={entry} isGm={isGm} onEdit={onEdit} onDelete={onDelete} />
+    ))}
+  </div>
+)
+
 export default function CampaignJournal({ campaignId, session, campaignName = 'The sunken keep', onBack }) {
   const user = session?.user
   const [isGm, setIsGm] = useState(false)
@@ -225,49 +272,7 @@ export default function CampaignJournal({ campaignId, session, campaignName = 'T
   })
   const places = Array.from(placesMap.entries()).sort(([a], [b]) => a.localeCompare(b))
 
-  const EntryRow = ({ entry }) => (
-    <div className="text-xs border border-line rounded-md p-3 flex flex-col gap-1">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-ink font-medium">{entry.title}</p>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {entry.entry_type === 'clue' && (
-            <Badge tone={entry.status === 'fact' ? 'green' : 'purple'}>
-              {entry.status === 'fact' ? 'Fact' : 'Suspicion'}
-            </Badge>
-          )}
-          <Badge tone={entry.revealed ? 'green' : 'neutral'}>{entry.revealed ? 'Revealed' : 'Hidden'}</Badge>
-          {isGm && (
-            <>
-              <button onClick={() => openEditEntry(entry)} className="text-ink-faint hover:text-ink p-1">
-                <Pencil size={12} />
-              </button>
-              <button onClick={() => setDeleteTarget(entry)} className="text-ink-faint hover:text-danger-text p-1">
-                <Trash2 size={12} />
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-      {entry.body && <p className="text-ink-dim whitespace-pre-wrap">{entry.body}</p>}
-    </div>
-  )
-
-  const EntryTab = ({ entryType, list, emptyLabel }) => (
-    <div className="flex flex-col gap-2">
-      {isGm && (
-        <button
-          onClick={() => openAddEntry(entryType)}
-          className="self-start text-xs border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2"
-        >
-          <Plus size={13} /> Add {ENTRY_LABEL[entryType]}
-        </button>
-      )}
-      {list.length === 0 && <p className="text-xs text-ink-faint">{emptyLabel}</p>}
-      {list.map((entry) => <EntryRow key={entry.id} entry={entry} />)}
-    </div>
-  )
-
-  return (
+    return (
     <div className="max-w-2xl mx-auto p-6">
       {onBack && (
         <button onClick={onBack} className="text-xs text-ink-dim hover:text-ink flex items-center gap-1 mb-3">
@@ -305,7 +310,7 @@ export default function CampaignJournal({ campaignId, session, campaignName = 'T
             <p className="text-xs text-ink-dim mb-2">Recently discovered</p>
             {recentlyDiscovered.length === 0 && <p className="text-xs text-ink-faint">Nothing revealed yet.</p>}
             <div className="flex flex-col gap-2">
-              {recentlyDiscovered.map((entry) => <EntryRow key={entry.id} entry={entry} />)}
+              {recentlyDiscovered.map((entry) => <EntryRow key={entry.id} entry={entry} isGm={isGm} onEdit={openEditEntry} onDelete={setDeleteTarget} />)}
             </div>
           </div>
         </div>
@@ -378,13 +383,13 @@ export default function CampaignJournal({ campaignId, session, campaignName = 'T
       )}
 
       {activeTab === 'quests' && (
-        <EntryTab entryType="quest" list={questEntries} emptyLabel="No quests logged yet." />
+        <EntryTab entryType="quest" list={questEntries} emptyLabel="No quests logged yet." isGm={isGm} onAdd={openAddEntry} onEdit={openEditEntry} onDelete={setDeleteTarget} />
       )}
       {activeTab === 'clues' && (
-        <EntryTab entryType="clue" list={clueEntries} emptyLabel="No clues logged yet." />
+        <EntryTab entryType="clue" list={clueEntries} emptyLabel="No clues logged yet." isGm={isGm} onAdd={openAddEntry} onEdit={openEditEntry} onDelete={setDeleteTarget} />
       )}
       {activeTab === 'notes' && (
-        <EntryTab entryType="note" list={noteEntries} emptyLabel="No notes logged yet." />
+        <EntryTab entryType="note" list={noteEntries} emptyLabel="No notes logged yet." isGm={isGm} onAdd={openAddEntry} onEdit={openEditEntry} onDelete={setDeleteTarget} />
       )}
 
       <Modal

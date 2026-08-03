@@ -1107,6 +1107,19 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   </p>
                   <Row icon={SkipForward} label="Advance round" onClick={advanceTurn} disabled={turnOrder.length === 0} />
                   <Row
+                    icon={RotateCw}
+                    label={advancingCrawlingRound ? 'Working\u2026' : 'Advance crawling round'}
+                    onClick={advanceCrawlingRound}
+                    disabled={advancingCrawlingRound || !dangerLevel || turnOrder.length > 0}
+                    title={
+                      !dangerLevel
+                        ? 'Set a danger level first -- the check cadence keys off it'
+                        : turnOrder.length > 0
+                          ? 'Crawling rounds pause while combat initiative is active'
+                          : undefined
+                    }
+                  />
+                  <Row
                     icon={sessionActive ? Pause : Play}
                     label={togglingSession ? 'Working…' : sessionActive ? 'Pause session' : 'Resume session'}
                     onClick={toggleSession}
