@@ -67,13 +67,16 @@ return source.remaining_minutes
 // rail) matching the delve-ui-reference player-session mockup, inside the
 // same fixed-viewport header/scroll/composer frame as before.
 //
-// A handful of mockup elements have no real data behind them yet -- Luck,
+// A handful of mockup elements have no real data behind them yet --
 // weapon-specific attack/damage dice, tracked conditions/active effects,
 // and the AI GM's per-message "pending adjudication" check card. Per
 // explicit direction, those are kept as visible placeholder UI (clearly
 // inert/disabled, honest empty states, no fabricated numbers) so the
 // layout reads the way the mockup does, rather than being omitted --
 // they're slots waiting on real schema/mechanics, not real features yet.
+// Luck was one of these too until 2026-08-03 (characters.luck_tokens,
+// GM-awarded via GmDashboard.jsx's Party card) -- see that file for the
+// award control; this screen only ever displays the count.
 // The "Talents" panel uses real character_talents rows.
 export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
 const user = session?.user
@@ -809,8 +812,10 @@ after={isGm && gmType !== 'ai' && onOpenGmView && (
 <StatTile label="Gear">
 <p className="text-lg font-semibold text-warning-text">{gearUsed}<span className="text-ink-dim"> / {gearCapacity}</span></p>
 </StatTile>
-<StatTile label="LUCK" icon={Sparkles}>
-<p className="text-lg font-semibold text-ink-faint" title="Luck isn't tracked yet -- placeholder slot">&mdash;</p>
+<StatTile label="LUCK" icon={Sparkles} highlight={Boolean(myCharacter?.luck_tokens)}>
+<p className={`text-lg font-semibold ${myCharacter?.luck_tokens ? 'text-primary-text' : 'text-ink-faint'}`}>
+{myCharacter?.luck_tokens ?? 0}
+</p>
 </StatTile>
 <StatTile label="TORCH" icon={Flame} highlight={litSources[0]?.lit}>
 {litSources[0]?.lit ? (

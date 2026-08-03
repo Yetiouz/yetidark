@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Eye, EyeOff, Plus, Upload, Dices, SkipForward, Flame, AlertTriangle, RotateCw, Timer, Sun, CloudFog,
   Target, Mic, Paperclip, Megaphone, Lock, Pause, Play, HelpCircle, Swords, Shuffle, Gauge, Users, Gem,
-  Skull, StickyNote, Trash2,
+  Skull, StickyNote, Trash2, Sparkles,
 } from 'lucide-react'
 
 import ZoneScene from './ZoneScene.jsx'
@@ -239,6 +239,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [crawlingRound, setCrawlingRound] = useState(0)
   const [roundsSinceCheck, setRoundsSinceCheck] = useState(0)
   const [advancingCrawlingRound, setAdvancingCrawlingRound] = useState(false)
+  const [modesOfPlay, setModesOfPlay] = useState([])
 
   // Secret zones (traps, hidden doors -- ROADMAP.md Milestone 1 locked
   // decision, built 2026-08-03): scene_secrets mirrors encounter_monsters'
@@ -327,7 +328,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('campaigns')
-      .select('session_active, danger_level, crawling_round, rounds_since_check')
+      .select('session_active, danger_level, crawling_round, rounds_since_check, modes_of_play')
       .eq('id', campaignId)
       .maybeSingle()
       .then(({ data }) => {
@@ -336,6 +337,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         setDangerLevel(data?.danger_level || null)
         setCrawlingRound(data?.crawling_round || 0)
         setRoundsSinceCheck(data?.rounds_since_check || 0)
+        setModesOfPlay(data?.modes_of_play || [])
       })
 
     supabase
@@ -381,6 +383,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
           setDangerLevel(payload.new.danger_level)
           setCrawlingRound(payload.new.crawling_round)
           setRoundsSinceCheck(payload.new.rounds_since_check)
+          setModesOfPlay(payload.new.modes_of_play || [])
         }
       )
       .subscribe()
@@ -645,6 +648,21 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const setCharacterZone = async (id, zone) => {
     setParty((list) => list.map((p) => (p.id === id ? { ...p, zone } : p)))
     await supabase.from('characters').update({ zone }).eq('id', id)
+  }
+
+  // Luck tokens (rulebook p.79) -- GM-awarded, direct characters update,
+  // same shape as setCharacterZone above (RLS's "owners and gm can update
+  // characters" already covers any column for a GM). Capped at 1 unless
+  // this campaign's real modes_of_play includes 'pulp' (p.111); spending a
+  // token (reroll or hand-off to a companion) is still just the GM
+  // clicking minus after narrating it at the table, not a separate flow.
+  const isPulpMode = modesOfPlay.includes('pulp')
+  const adjustLuck = async (character, delta) => {
+    const current = character.luck_tokens || 0
+    if (delta > 0 && !isPulpMode && current >= 1) return
+    const next = Math.max(0, current + delta)
+    setParty((list) => list.map((p) => (p.id === character.id ? { ...p, luck_tokens: next } : p)))
+    await supabase.from('characters').update({ luck_tokens: next }).eq('id', character.id)
   }
 
   const setMonsterZone = async (id, zone) => {
@@ -1270,6 +1288,29 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         </div>
                         <ProgressBar value={p.hp} max={p.max_hp} barClassName={hpBarColor(p.hp, p.max_hp)} trackBg="bg-danger/40" heightClassName="h-1" />
                       </button>
+                      <div className="mt-2 flex items-center justify-between gap-1">
+                        <span className="text-[9px] text-ink-dim flex items-center gap-1">
+                          <Sparkles size={9} className="text-primary-text" /> Luck
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => adjustLuck(p, -1)}
+                            disabled={!p.luck_tokens}
+                            className="px-1.5 border border-line rounded text-ink text-[10px] disabled:opacity-40"
+                          >
+                            -
+                          </button>
+                          <span className="min-w-[14px] text-center text-[10px] text-ink">{p.luck_tokens || 0}</span>
+                          <button
+                            onClick={() => adjustLuck(p, 1)}
+                            disabled={!isPulpMode && (p.luck_tokens || 0) >= 1}
+                            title={!isPulpMode && (p.luck_tokens || 0) >= 1 ? 'Capped at 1 -- enable Pulp Mode in campaign settings to remove the cap' : 'Award a luck token'}
+                            className="px-1.5 border border-line rounded text-ink text-[10px] disabled:opacity-40"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
                       {lightRemaining !== null && (
                         <div className="mt-2">
                           <div className="flex items-center justify-between mb-1">

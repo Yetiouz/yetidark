@@ -74,7 +74,7 @@ export function useCampaignSession(campaignId, { channelKey = 'campaign-session'
 
     supabase
       .from('characters')
-      .select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, owner_user_id, status, death_timer, stats')
+      .select('id, name, class, level, hp, max_hp, ac, avatar_url, color, zone, owner_user_id, status, death_timer, stats, luck_tokens')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setParty(data || []) })
