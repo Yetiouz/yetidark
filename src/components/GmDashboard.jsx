@@ -204,7 +204,7 @@ return 'bg-danger'
 // reference -- `uploadMap` above never cleaned up old files on replace
 // either, so this keeps the same scope rather than introducing new
 // storage-management responsibility no other map action here has.
-export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
+export default function GmDashboard({ campaignId, session, campaignName = 'The sunken keep', onSwitchToPlayerView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker, onOpenJournal }) {
   const user = session?.user
   const displayName = useProfileDisplayName(user, 'GM')
   const [encounter, setEncounter] = useState([])
@@ -911,6 +911,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             onOpenLog={onOpenLog}
             onOpenLibrary={onOpenLibrary}
             onOpenTracker={onOpenTracker}
+            onOpenJournal={onOpenJournal}
             onOpenSettings={onOpenSettings}
             after={onSwitchToPlayerView && (
               <Button icon={Eye} onClick={onSwitchToPlayerView}>Switch to player view</Button>

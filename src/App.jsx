@@ -13,6 +13,7 @@ const CampaignSettings = lazy(() => import('./components/CampaignSettings.jsx'))
 const CampaignLog = lazy(() => import('./components/CampaignLog.jsx'))
 const RulesLibrary = lazy(() => import('./components/RulesLibrary.jsx'))
 const CampaignTracker = lazy(() => import('./components/CampaignTracker.jsx'))
+const CampaignJournal = lazy(() => import('./components/CampaignJournal.jsx'))
 const GameTable = lazy(() => import('./components/GameTable.jsx'))
 const GmDashboard = lazy(() => import('./components/GmDashboard.jsx'))
 const Profile = lazy(() => import('./components/Profile.jsx'))
@@ -33,6 +34,7 @@ export default function App() {
   const [logReturnView, setLogReturnView] = useState('table')
   const [libraryReturnView, setLibraryReturnView] = useState('table')
   const [trackerReturnView, setTrackerReturnView] = useState('table')
+  const [journalReturnView, setJournalReturnView] = useState('table')
   const historyIndexRef = useRef(0)
 
   const applyRoute = useCallback((route) => {
@@ -227,6 +229,11 @@ export default function App() {
     navigateTo('tracker')
   }
 
+  const openJournal = (fromView) => {
+    setJournalReturnView(fromView)
+    navigateTo('journal')
+  }
+
   const campaignName = activeCampaign?.name || ''
 
   if (session === undefined || (session && routeLoading)) {
@@ -301,6 +308,7 @@ export default function App() {
             onOpenLog={() => openCampaignLog('table')}
             onOpenLibrary={() => openRulesLibrary('table')}
             onOpenTracker={() => openTracker('table')}
+            onOpenJournal={() => openJournal('table')}
           />
         )}
         {view === 'gm' && (
@@ -314,6 +322,7 @@ export default function App() {
             onOpenLog={() => openCampaignLog('gm')}
             onOpenLibrary={() => openRulesLibrary('gm')}
             onOpenTracker={() => openTracker('gm')}
+            onOpenJournal={() => openJournal('gm')}
           />
         )}
         {view === 'sheet' && (
@@ -353,6 +362,14 @@ export default function App() {
             session={session}
             campaignName={campaignName}
             onBack={() => navigateBack(trackerReturnView)}
+          />
+        )}
+        {view === 'journal' && (
+          <CampaignJournal
+            campaignId={activeCampaign?.id}
+            session={session}
+            campaignName={campaignName}
+            onBack={() => navigateBack(journalReturnView)}
           />
         )}
         {view !== 'lobby' && view !== 'campaign-builder' && (

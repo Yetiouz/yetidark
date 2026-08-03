@@ -1,12 +1,12 @@
-import { Settings, ScrollText, BookOpen, Users } from 'lucide-react'
+import { Settings, ScrollText, BookOpen, Users, BookMarked } from 'lucide-react'
 
-// The four icon buttons (Campaign log / Rules library / NPCs, factions &
-// treasure / Campaign settings) shared by the player table and GM
-// dashboard headers. Each screen appends its own trailing control -- a
-// "GM view" link on the player table, or "Switch to player view" on the
-// dashboard -- via `after`, since those aren't the same control on both
-// screens.
-export default function CampaignToolbar({ onOpenLog, onOpenLibrary, onOpenTracker, onOpenSettings, after }) {
+// The five icon buttons (Campaign log / Rules library / NPCs, factions &
+// treasure / Campaign journal / Campaign settings) shared by the player
+// table and GM dashboard headers. Each screen appends its own trailing
+// control -- a "GM view" link on the player table, or "Switch to player
+// view" on the dashboard -- via `after`, since those aren't the same
+// control on both screens.
+export default function CampaignToolbar({ onOpenLog, onOpenLibrary, onOpenTracker, onOpenJournal, onOpenSettings, after }) {
   return (
     <div className="flex items-center gap-2">
       {onOpenLog && (
@@ -34,6 +34,15 @@ export default function CampaignToolbar({ onOpenLog, onOpenLibrary, onOpenTracke
           className="text-xs border border-line rounded-md p-2 text-ink hover:bg-panel2"
         >
           <Users size={14} />
+        </button>
+      )}
+      {onOpenJournal && (
+        <button
+          onClick={onOpenJournal}
+          title="Campaign journal"
+          className="text-xs border border-line rounded-md p-2 text-ink hover:bg-panel2"
+        >
+          <BookMarked size={14} />
         </button>
       )}
       {onOpenSettings && (

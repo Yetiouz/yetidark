@@ -14,6 +14,7 @@ const CAMPAIGN_PATHS = {
   log: '/log',
   library: '/library',
   tracker: '/tracker',
+  journal: '/journal',
 }
 
 function safeSegment(value) {

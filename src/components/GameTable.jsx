@@ -78,7 +78,7 @@ return source.remaining_minutes
 // GM-awarded via GmDashboard.jsx's Party card) -- see that file for the
 // award control; this screen only ever displays the count.
 // The "Talents" panel uses real character_talents rows.
-export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker }) {
+export default function GameTable({ campaignId, session, campaignName = 'The sunken keep', onOpenGmView, onOpenCharacterSheet, onOpenSettings, onOpenLog, onOpenLibrary, onOpenTracker, onOpenJournal }) {
 const user = session?.user
 const displayName = useProfileDisplayName(user, 'You')
 const [isGm, setIsGm] = useState(false)
@@ -790,6 +790,7 @@ style={{ backgroundColor: p.color || '#3f3f46' }}
 onOpenLog={onOpenLog}
 onOpenLibrary={onOpenLibrary}
 onOpenTracker={onOpenTracker}
+              onOpenJournal={onOpenJournal}
 onOpenSettings={onOpenSettings}
 after={isGm && gmType !== 'ai' && onOpenGmView && (
 <Button onClick={onOpenGmView}>GM view</Button>
