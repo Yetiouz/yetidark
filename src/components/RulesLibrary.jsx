@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Plus, FileText, Link as LinkIcon, Trash2, ExternalLink, Search } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import Tabs from './ui/Tabs.jsx'
+import { CLASSES, STANDARD_DCS, DISTANCES, MOVEMENT_RULES } from '../game/rules/content.js'
 
 // The design mockup for this screen (design-handoff-spec Section 4.11)
 // imagines a searchable database of individual rules/spells/talents, with
@@ -19,6 +20,24 @@ const CATEGORY_TABS = [
   { key: 'all', label: 'All' },
   { key: 'file', label: 'Files' },
   { key: 'link', label: 'Links' },
+]
+
+const MODE_TABS = [
+  { key: 'documents', label: 'Documents' },
+  { key: 'quickref', label: 'Quick Reference' },
+]
+
+// Lightweight, structured rules lookup -- the thing "Ask a rule" actually
+// promises but this screen never delivered: standard DCs, movement/distance,
+// and a browsable class reference (features + talent table), all sourced
+// from src/game/rules/content.js rather than duplicated here. Deliberately
+// not the mockup's searchable-corpus vision (see the file header comment
+// above) -- just the small, honest slice persona-analysis called out as the
+// real in-session friction point.
+const QUICKREF_TABS = [
+  { key: 'dcs', label: 'Standard DCs' },
+  { key: 'movement', label: 'Movement & Distance' },
+  { key: 'classes', label: 'Classes' },
 ]
 
 // Reference material (core rulebook, supplements, adventures) -- distinct
@@ -43,6 +62,11 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
   const [error, setError] = useState(null)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
+
+  const [mode, setMode] = useState('documents')
+  const [qrTab, setQrTab] = useState('dcs')
+  const [myCharacters, setMyCharacters] = useState([])
+  const [selectedClass, setSelectedClass] = useState(null)
 
   const [showAdd, setShowAdd] = useState(false)
   const [addKind, setAddKind] = useState('file') // 'file' | 'link'
@@ -99,6 +123,32 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
       cancelled = true
     }
   }, [campaignId, user])
+
+  // Same query CharacterPicker.jsx already uses to list "my characters in
+  // this campaign" -- reused here only to default the Classes tab to the
+  // viewer's own class, not to duplicate character-picking UI.
+  useEffect(() => {
+    if (!campaignId || !user) return
+    let cancelled = false
+    supabase
+      .from('characters')
+      .select('id, name, class')
+      .eq('campaign_id', campaignId)
+      .eq('owner_user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (!cancelled) setMyCharacters(data || [])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [campaignId, user])
+
+  useEffect(() => {
+    if (selectedClass) return
+    const ownClass = myCharacters[0]?.class
+    setSelectedClass(ownClass && CLASSES.some((c) => c.name === ownClass) ? ownClass : CLASSES[0]?.name || null)
+  }, [myCharacters, selectedClass])
 
   const openDoc = async (doc) => {
     if (doc.kind === 'link') {
@@ -212,6 +262,10 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
 
       {error && <p className="text-xs text-danger-text mb-3">{error}</p>}
 
+      <Tabs tabs={MODE_TABS} activeKey={mode} onChange={setMode} />
+
+      {mode === 'documents' && (
+      <>
       {docs.length > 0 && (
         <div className="mb-4">
           <div className="relative mb-3">
@@ -362,6 +416,114 @@ export default function RulesLibrary({ campaignId, session, campaignName = 'The 
           </div>
         ))}
       </div>
+      </>
+      )}
+
+      {mode === 'quickref' && (
+        <div>
+          <Tabs tabs={QUICKREF_TABS} activeKey={qrTab} onChange={setQrTab} />
+
+          {qrTab === 'dcs' && (
+            <div className="flex flex-col gap-2">
+              <p className="text-[11px] text-ink-faint mb-1">
+                The GM calls for a check when the action has a real chance of failure, requires skill, or there&rsquo;s time pressure.
+              </p>
+              {STANDARD_DCS.map((row) => (
+                <div key={row.label} className="bg-panel border border-line-soft rounded-lg p-3">
+                  <p className="text-sm text-ink flex items-center gap-2">
+                    {row.label} <span className="text-ink-faint text-xs">DC {row.dc}</span>
+                  </p>
+                  <p className="text-xs text-ink-faint mt-1">{row.examples}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {qrTab === 'movement' && (
+            <div className="flex flex-col gap-4">
+              <div>
+                <p className="text-xs text-ink-dim mb-2">Distances</p>
+                <div className="flex flex-col gap-2">
+                  {DISTANCES.map((d) => (
+                    <div key={d.label} className="bg-panel border border-line-soft rounded-lg p-3">
+                      <p className="text-sm text-ink">{d.label}</p>
+                      <p className="text-xs text-ink-faint mt-1">{d.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-ink-dim mb-2">Movement</p>
+                <div className="flex flex-col gap-2">
+                  {MOVEMENT_RULES.map((m) => (
+                    <div key={m.name} className="bg-panel border border-line-soft rounded-lg p-3">
+                      <p className="text-sm text-ink">{m.name}</p>
+                      <p className="text-xs text-ink-faint mt-1">{m.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {qrTab === 'classes' && (
+            <div>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {CLASSES.map((c) => (
+                  <button
+                    key={c.name}
+                    onClick={() => setSelectedClass(c.name)}
+                    className={`text-xs rounded-md px-3 py-1.5 border ${
+                      selectedClass === c.name ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim'
+                    }`}
+                  >
+                    {c.name}
+                    {myCharacters.some((ch) => ch.class === c.name) && (
+                      <span className="text-primary-text"> &middot; yours</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {(() => {
+                const cls = CLASSES.find((c) => c.name === selectedClass)
+                if (!cls) return null
+                return (
+                  <div className="flex flex-col gap-3">
+                    <p className="text-xs text-ink-faint">{cls.blurb}</p>
+                    <div>
+                      <p className="text-xs text-ink-dim mb-2">Features</p>
+                      <div className="flex flex-col gap-2">
+                        {cls.features.map((f) => (
+                          <div key={f.name} className="bg-panel border border-line-soft rounded-lg p-3">
+                            <p className="text-sm text-ink">{f.name}</p>
+                            <p className="text-xs text-ink-faint mt-1">{f.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-ink-dim mb-2">Talent table (2d6, gained at levels 1/3/5/7/9)</p>
+                      <div className="flex flex-col gap-1">
+                        {cls.talentTable.map((t) => (
+                          <div
+                            key={`${t.min}-${t.max}`}
+                            className="flex items-start gap-3 bg-panel border border-line-soft rounded-lg p-3"
+                          >
+                            <span className="text-xs text-ink-faint w-10 shrink-0">
+                              {t.min === t.max ? t.min : `${t.min}-${t.max}`}
+                            </span>
+                            <span className="text-xs text-ink">{t.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

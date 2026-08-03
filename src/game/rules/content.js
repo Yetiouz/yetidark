@@ -499,3 +499,42 @@ export const BACKGROUNDS = [
   'Noble -- A famous name has opened many doors for you',
   'Chirurgeon -- You know anatomy, surgery, and first aid',
 ]
+
+// Standard difficulty classes, pg. 81 ("Making Checks"). The GM calls for a
+// check when the action has a negative consequence for failure, requires
+// skill, or there's time pressure -- these four DCs are the entire
+// difficulty scale used for every ability check in the game.
+export const STANDARD_DCS = [
+  { label: 'Easy', dc: 9, examples: 'Leaping a narrow chasm, sneaking up on an inattentive guard.' },
+  { label: 'Normal', dc: 12, examples: 'Kicking open a stuck door, picking a poor lock.' },
+  {
+    label: 'Hard',
+    dc: 15,
+    examples: 'Swimming against a strong current, giving first aid to stop a character from dying.',
+  },
+  { label: 'Extreme', dc: 18, examples: 'Climbing a slippery cliff one-handed, restraining a frenzied lion.' },
+]
+
+// Distances and movement, pg. 85 ("Movement"). Distances are zones, not
+// exact feet -- matches ZoneScene.jsx's Close/Near/Far ring model directly.
+export const DISTANCES = [
+  { label: 'Close', detail: '5 feet -- melee range.' },
+  { label: 'Near', detail: 'Up to 30 feet.' },
+  { label: 'Far', detail: 'Within sight during an encounter or scene.' },
+]
+
+export const MOVEMENT_RULES = [
+  {
+    name: 'Climbing',
+    text: 'Strength or Dexterity check to climb half your speed. Fall if you fail the check by 5 or more.',
+  },
+  { name: 'Falling', text: 'Take 1d6 damage for every 10 feet you fall.' },
+  { name: 'Moving through', text: 'Move freely through allies. Strength or Dexterity check to move through enemies.' },
+  {
+    name: 'Swimming',
+    text:
+      'Swim at half speed (Strength check in rough water). Hold your breath for a number of rounds equal to your ' +
+      'Constitution modifier (minimum 1); after that, make a Constitution check each round or take 1d6 damage ' +
+      'per round until you exit the hazard.',
+  },
+]
