@@ -1,17 +1,31 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield, Package, Swords, Check, Gem, Users, Filter, ArrowUpDown, Search } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield, Package, Swords, Check, Gem, Users, Filter, ArrowUpDown, Search, ArrowUpCircle, Dices } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import Row from './ui/Row.jsx'
 import Badge from './ui/Badge.jsx'
 import Card from './ui/Card.jsx'
 import Button from './ui/Button.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
+import Modal from './ui/Modal.jsx'
 import {
   abilityModifier,
   gearSlotCapacity,
   occupiedGearSlots,
   resolveSpellCheck,
+  resolveTalentRolls,
 } from '../game/rules/character.js'
+import { CLASSES } from '../game/rules/content.js'
+
+// Shadowdark levels up on a hard formula (rulebook p.39): "current level x
+// 10 XP", XP resets to zero on success, capped at level 10. Talent rolls
+// (class talentTable, 2d6) are granted when the level being reached is one
+// of these -- level 1's talent already happened at character creation, so
+// this list only matters for level-ups from here on out (Decision,
+// 2026-08-03: enforced as a hard gate here, not GM-overridable, matching
+// every other rules-accurate numeric gate already built this session
+// (spell check DC, crawling-round cadence).
+const TALENT_LEVELS = [1, 3, 5, 7, 9]
+const MAX_LEVEL = 10
 
 const STAT_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 const STAT_LABELS = { str: 'STR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'WIS', cha: 'CHA' }
@@ -48,6 +62,11 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   const [restError, setRestError] = useState(null)
   const [changeReason, setChangeReason] = useState('')
   const [resourceChanging, setResourceChanging] = useState(false)
+  const [showLevelUp, setShowLevelUp] = useState(false)
+  const [hpGainRoll, setHpGainRoll] = useState(null)
+  const [talentRoll, setTalentRoll] = useState(null)
+  const [levelingUp, setLevelingUp] = useState(false)
+  const [levelUpError, setLevelUpError] = useState(null)
   const [resourceError, setResourceError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
@@ -162,6 +181,73 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     }
     setCharacter((current) => ({ ...current, [resource]: Number(data.after) }))
     setChangeReason('')
+  }
+
+  // Level-up flow: HP gain is rolled/entered the same way starting HP is
+  // during character creation (roll button + manual-entry input, same
+  // trust model -- the RPC has no per-class hit-die knowledge since class
+  // data lives client-side in content.js, so it only sanity-bounds the
+  // value). Talent rolls reuse the exact same resolveTalentRolls() call
+  // creation uses, against the same CLASSES[].talentTable data.
+  const selectedClassDef = character ? CLASSES.find((c) => c.name === character.class) : null
+  const requiredXpToLevel = character ? character.level * 10 : 0
+  const eligibleToLevelUp = character && character.level < MAX_LEVEL && character.xp >= requiredXpToLevel
+  const nextLevel = character ? character.level + 1 : null
+  const grantsTalentThisLevel = nextLevel != null && TALENT_LEVELS.includes(nextLevel)
+
+  const openLevelUp = () => {
+    setHpGainRoll(null)
+    setTalentRoll(null)
+    setLevelUpError(null)
+    setShowLevelUp(true)
+  }
+
+  const rollLevelUpHp = () => {
+    if (!selectedClassDef) return
+    setHpGainRoll(Math.floor(Math.random() * selectedClassDef.hitDie) + 1)
+  }
+
+  const rollLevelUpTalent = () => {
+    if (!selectedClassDef) return
+    const twoD6 = Math.floor(Math.random() * 6) + 1 + (Math.floor(Math.random() * 6) + 1)
+    const [resolved] = resolveTalentRolls({ rolls: [twoD6], table: selectedClassDef.talentTable })
+    setTalentRoll(resolved)
+  }
+
+  const confirmLevelUp = async () => {
+    if (!character || !characterId || levelingUp) return
+    if (!hpGainRoll || hpGainRoll < 1) {
+      setLevelUpError(`Enter or roll an HP gain from 1 to ${selectedClassDef?.hitDie ?? '?'}.`)
+      return
+    }
+    if (grantsTalentThisLevel && !talentRoll) {
+      setLevelUpError('Roll this level\'s talent before confirming.')
+      return
+    }
+    setLevelingUp(true)
+    setLevelUpError(null)
+    const talents = grantsTalentThisLevel && talentRoll
+      ? [{
+          source: `${character.class} talent (2d6)`,
+          description: talentRoll.description,
+          roll_formula: talentRoll.formula,
+          roll_total: talentRoll.roll,
+        }]
+      : []
+    const { data, error } = await supabase.rpc('advance_character_level', {
+      p_character_id: characterId,
+      p_hp_gain: hpGainRoll,
+      p_talents: talents,
+    })
+    setLevelingUp(false)
+    if (error) {
+      setLevelUpError(error.message)
+      return
+    }
+    setCharacter((current) => ({ ...current, level: data.level, xp: data.xp, max_hp: data.max_hp }))
+    setShowLevelUp(false)
+    setHpGainRoll(null)
+    setTalentRoll(null)
   }
 
   const toggleEquipped = async (item) => {
@@ -447,6 +533,16 @@ export default function CharacterSheet({ characterId, session, onBack }) {
             <span className="text-sm text-ink">{character.xp}</span>
             {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('xp', 1)} className="px-2 border border-line rounded text-ink-dim disabled:opacity-40">+</button>}
           </div>
+          {canEdit && character.level < MAX_LEVEL && (
+            <button
+              onClick={openLevelUp}
+              disabled={!eligibleToLevelUp}
+              title={eligibleToLevelUp ? 'Level up' : `Needs ${requiredXpToLevel} XP to reach level ${nextLevel} (has ${character.xp})`}
+              className="w-full mt-2 text-[11px] border border-line rounded-md px-2 py-1 flex items-center justify-center gap-1 text-ink-dim hover:bg-panel2 disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <ArrowUpCircle size={12} /> {eligibleToLevelUp ? `Level up to ${nextLevel}` : `${requiredXpToLevel} XP to level ${nextLevel}`}
+            </button>
+          )}
         </div>
 
         <div className="bg-panel rounded-lg p-3">
@@ -951,6 +1047,82 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         <div className="bg-panel rounded-lg p-4 text-xs text-ink-faint">
           Notes aren't wired up yet -- this section is reserved for freeform character notes once that's built.
         </div>
+
+      <Modal open={showLevelUp} onClose={() => !levelingUp && setShowLevelUp(false)} title={`Level up to ${nextLevel}`}>
+        <div className="space-y-3">
+          <p className="text-xs text-ink-dim">
+            {character?.class} &middot; 1d{selectedClassDef?.hitDie} hit points per level. XP resets to 0 on confirm.
+          </p>
+
+          <div className="bg-bg rounded-md p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-ink-dim">HP gain</p>
+                <p className="text-[11px] text-ink-faint">Roll 1d{selectedClassDef?.hitDie}, or enter a physical roll's result.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max={selectedClassDef?.hitDie}
+                  value={hpGainRoll ?? ''}
+                  onChange={(e) => setHpGainRoll(Number.parseInt(e.target.value, 10) || null)}
+                  placeholder={`1-${selectedClassDef?.hitDie}`}
+                  className="w-16 bg-panel border border-line rounded-md px-2 py-1 text-sm text-ink text-center"
+                />
+                <button
+                  onClick={rollLevelUpHp}
+                  className="text-xs border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2"
+                >
+                  <Dices size={13} /> Roll
+                </button>
+              </div>
+            </div>
+            {hpGainRoll != null && (
+              <p className="text-[11px] text-ink-dim mt-2">
+                Max HP: {character?.max_hp} &rarr; {(character?.max_hp ?? 0) + hpGainRoll}
+              </p>
+            )}
+          </div>
+
+          {grantsTalentThisLevel && (
+            <div className="bg-bg rounded-md p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs text-ink-dim">Talent roll</p>
+                  <p className="text-[11px] text-ink-faint">Level {nextLevel} grants a talent -- roll 2d6 on the {character?.class} table.</p>
+                </div>
+                <button
+                  onClick={rollLevelUpTalent}
+                  className="text-xs border border-line rounded-md px-3 py-2 flex items-center gap-2 text-ink hover:bg-panel2 shrink-0"
+                >
+                  <Dices size={13} /> Roll
+                </button>
+              </div>
+              {talentRoll && (
+                <p className="text-[11px] text-ink-dim mt-2">
+                  2d6: {talentRoll.roll} &mdash; {talentRoll.description}
+                </p>
+              )}
+            </div>
+          )}
+
+          {levelUpError && <p className="text-xs text-danger-text">{levelUpError}</p>}
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              onClick={() => setShowLevelUp(false)}
+              disabled={levelingUp}
+              className="text-xs border border-line rounded-md px-3 py-2 text-ink-dim hover:bg-panel2 disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            <Button variant="primary" onClick={confirmLevelUp} disabled={levelingUp}>
+              {levelingUp ? 'Leveling up…' : `Confirm level ${nextLevel}`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
