@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Dices, Send, AlertCircle, Bot, Loader2, Flame, HelpCircle, Swords, Backpack, Sparkles, Package, Mic, ShieldCheck } from 'lucide-react'
+import { Dices, Send, AlertCircle, Bot, Loader2, Flame, HelpCircle, Swords, Backpack, Sparkles, Package, Mic, ShieldCheck, Flag } from 'lucide-react'
 import ZoneScene from './ZoneScene.jsx'
 import Row from './ui/Row.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
@@ -83,6 +83,10 @@ const user = session?.user
 const displayName = useProfileDisplayName(user, 'You')
 const [isGm, setIsGm] = useState(false)
 
+const [flaggingEntry, setFlaggingEntry] = useState(null)
+const [flagReasonDraft, setFlagReasonDraft] = useState('')
+const [submittingFlag, setSubmittingFlag] = useState(false)
+
 const [message, setMessage] = useState('')
 const [manualDie, setManualDie] = useState(20)
 const [manualValue, setManualValue] = useState('')
@@ -156,6 +160,7 @@ turnOrder,
 party,
 clocks,
 lightSources,
+flags,
 } = useCampaignSession(campaignId, { channelKey: 'game-table', onSceneLogInsert: handleSceneLogInsert })
 const gmType = mapInfo?.gm_type || null // 'human' | 'ai'
 const [aiTurnPending, setAiTurnPending] = useState(false)
@@ -342,6 +347,22 @@ const { data, error } = await supabase
 if (!error && data) {
 setLog((l) => (l.some((e) => e.id === data.id) ? l : [...l, data]))
 }
+}
+
+const submitRulingFlag = async () => {
+if (!flaggingEntry || !flagReasonDraft.trim() || submittingFlag) return
+setSubmittingFlag(true)
+await supabase.from('ai_gm_ruling_flags').insert({
+campaign_id: campaignId,
+scene_log_id: flaggingEntry.id,
+ruling_text: flaggingEntry.text,
+flagged_by: user?.id,
+flagged_by_name: displayName,
+reason: flagReasonDraft.trim(),
+})
+setSubmittingFlag(false)
+setFlaggingEntry(null)
+setFlagReasonDraft('')
 }
 
 const sendMessage = () => {
@@ -744,11 +765,20 @@ if (sceneLogRef.current) sceneLogRef.current.scrollTop = sceneLogRef.current.scr
 // types now share the one feed AI-GM campaigns already had working.
 const renderChatBubble = (entry) => {
 if (entry.type === 'ai_gm') {
+const flagStatus = flags.find((f) => f.scene_log_id === entry.id)?.status
 return (
 <div key={entry.id} className="flex justify-start">
 <div className="max-w-[85%] bg-ai/10 border border-ai/20 rounded-xl px-4 py-3">
-<p className="font-medium text-ai-text flex items-center gap-2 mb-1 text-xs">
-<Bot size={12} /> AI GM
+<p className="font-medium text-ai-text flex items-center justify-between gap-2 mb-1 text-xs">
+<span className="flex items-center gap-2"><Bot size={12} /> AI GM</span>
+<button
+onClick={() => setFlaggingEntry(entry)}
+disabled={!!flagStatus}
+title={flagStatus === 'open' ? 'Flagged -- awaiting GM review' : flagStatus ? 'Reviewed by GM' : 'Flag this ruling for GM review'}
+className={`p-0.5 rounded ${flagStatus === 'open' ? 'text-warning-text' : flagStatus ? 'text-ink-faint' : 'text-ink-faint hover:text-warning-text'}`}
+>
+<Flag size={11} fill={flagStatus === 'open' ? 'currentColor' : 'none'} />
+</button>
 </p>
 <p className="text-sm text-ink whitespace-pre-wrap">{entry.text}</p>
 </div>
@@ -1022,6 +1052,25 @@ onResolveStabilize={resolveStabilize}
 stabilizing={stabilizing}
 stabilizeError={stabilizeError}
 />
+</Modal>
+
+<Modal open={!!flaggingEntry} onClose={() => { setFlaggingEntry(null); setFlagReasonDraft('') }} title="Flag this ruling">
+<div className="flex flex-col gap-3">
+<p className="text-[11px] text-ink-dim italic bg-panel2 rounded-md p-2">"{flaggingEntry?.text}"</p>
+<div>
+<p className="text-[11px] text-ink-dim mb-1">What's wrong with it?</p>
+<textarea
+value={flagReasonDraft}
+onChange={(e) => setFlagReasonDraft(e.target.value)}
+rows={3}
+className="w-full bg-bg border border-line rounded-md px-3 py-2 text-sm text-ink"
+placeholder="e.g. that should have been an automatic hit, not a miss"
+/>
+</div>
+<Button onClick={submitRulingFlag} disabled={!flagReasonDraft.trim() || submittingFlag}>
+{submittingFlag ? 'Flagging...' : 'Flag for GM review'}
+</Button>
+</div>
 </Modal>
 
 {showLogPane && (

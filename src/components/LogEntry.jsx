@@ -1,4 +1,4 @@
-import { Bot } from 'lucide-react'
+import { Bot, Flag } from 'lucide-react'
 
 // Shared by GameTable.jsx's Scene log panel and GmDashboard.jsx's Scene
 // log panel -- same four entry types (narration/gm/ai_gm/roll/chat-default),
@@ -13,7 +13,7 @@ import { Bot } from 'lucide-react'
 // GmDashboard's own renderLogEntry had no ai_gm branch at all, so AI GM
 // narration fell through to the plain default styling there. Folding
 // both screens onto this one component fixes that for GmDashboard too.
-export default function LogEntry({ entry, as = 'span', color }) {
+export default function LogEntry({ entry, as = 'span', color, onFlag, flagStatus }) {
   const Tag = as
   const blockClass = as === 'span' ? 'block' : undefined
   const rollFlexClass = as === 'span' ? 'inline-flex' : 'flex'
@@ -34,8 +34,28 @@ export default function LogEntry({ entry, as = 'span', color }) {
   if (entry.type === 'ai_gm') {
     return (
       <Tag className={`${blockClass ? blockClass + ' ' : ''}bg-ai/10 border border-ai/20 rounded-md px-3 py-2 -mx-1`}>
-        <span className="font-medium text-ai-text flex items-center gap-2 mb-1">
-          <Bot size={12} /> AI GM
+        <span className="font-medium text-ai-text flex items-center justify-between gap-2 mb-1">
+          <span className="flex items-center gap-2">
+            <Bot size={12} /> AI GM
+          </span>
+          {onFlag && (
+            <button
+              onClick={() => onFlag(entry)}
+              disabled={!!flagStatus}
+              title={
+                flagStatus === 'open'
+                  ? 'Flagged -- awaiting GM review'
+                  : flagStatus
+                  ? 'Reviewed by GM'
+                  : 'Flag this ruling for GM review'
+              }
+              className={`p-0.5 rounded ${
+                flagStatus === 'open' ? 'text-warning-text' : flagStatus ? 'text-ink-faint' : 'text-ink-faint hover:text-warning-text'
+              }`}
+            >
+              <Flag size={11} fill={flagStatus === 'open' ? 'currentColor' : 'none'} />
+            </button>
+          )}
         </span>
         <span className="text-ink whitespace-pre-wrap">{entry.text}</span>
       </Tag>

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Eye, EyeOff, Plus, Upload, Dices, SkipForward, Flame, AlertTriangle, RotateCw, Timer, Sun, CloudFog,
   Target, Mic, Paperclip, Megaphone, Lock, Pause, Play, HelpCircle, Swords, Shuffle, Gauge, Users, Gem,
-  Skull, StickyNote, Trash2, Sparkles, Pencil, Undo2, Eraser,
+  Skull, StickyNote, Trash2, Sparkles, Pencil, Undo2, Eraser, Flag, Check, X,
 } from 'lucide-react'
 
 import ZoneScene from './ZoneScene.jsx'
@@ -258,6 +258,12 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [drawMode, setDrawMode] = useState(false)
   const [secretToDelete, setSecretToDelete] = useState(null)
   const [deletingSecret, setDeletingSecret] = useState(false)
+
+  const [flaggingEntry, setFlaggingEntry] = useState(null)
+  const [flagReasonDraft, setFlagReasonDraft] = useState('')
+  const [submittingFlag, setSubmittingFlag] = useState(false)
+  const [resolvingFlagId, setResolvingFlagId] = useState(null)
+  const [resolveDraft, setResolveDraft] = useState('')
   const [message, setMessage] = useState('')
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [composeMode, setComposeMode] = useState('public') // 'public' -> scene_log, 'private' -> gm_notes
@@ -292,6 +298,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     party, setParty,
     clocks,
     lightSources,
+    flags,
   } = useCampaignSession(campaignId, { channelKey: 'gm-dashboard' })
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
@@ -533,6 +540,48 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     setSecrets((list) => list.filter((s) => s.id !== id))
     setDeletingSecret(false)
     setSecretToDelete(null)
+  }
+
+  const submitRulingFlag = async () => {
+    if (!flaggingEntry || !flagReasonDraft.trim() || submittingFlag) return
+    setSubmittingFlag(true)
+    await supabase.from('ai_gm_ruling_flags').insert({
+      campaign_id: campaignId,
+      scene_log_id: flaggingEntry.id,
+      ruling_text: flaggingEntry.text,
+      flagged_by: user?.id,
+      flagged_by_name: displayName,
+      reason: flagReasonDraft.trim(),
+    })
+    setSubmittingFlag(false)
+    setFlaggingEntry(null)
+    setFlagReasonDraft('')
+  }
+
+  const resolveFlag = async (flag) => {
+    const response = resolveDraft.trim()
+    await supabase
+      .from('ai_gm_ruling_flags')
+      .update({ status: 'resolved', gm_response: response || null, resolved_by: user?.id, resolved_at: new Date().toISOString() })
+      .eq('id', flag.id)
+    if (response) {
+      await supabase.from('scene_log').insert({
+        campaign_id: campaignId,
+        type: 'gm',
+        sender_user_id: user?.id,
+        sender_name: displayName,
+        text: response,
+      })
+    }
+    setResolvingFlagId(null)
+    setResolveDraft('')
+  }
+
+  const dismissFlag = async (flag) => {
+    await supabase
+      .from('ai_gm_ruling_flags')
+      .update({ status: 'dismissed', resolved_by: user?.id, resolved_at: new Date().toISOString() })
+      .eq('id', flag.id)
   }
 
   const SECRET_STATE_CYCLE = { hidden: 'tell_visible', tell_visible: 'revealed', revealed: 'hidden' }
@@ -1174,6 +1223,57 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   ))}
                 </div>
               </Card>
+
+              <Card
+                title="Disputed rulings"
+                titleRight={
+                  flags.filter((f) => f.status === 'open').length > 0
+                    ? <Badge tone="amber">{flags.filter((f) => f.status === 'open').length} open</Badge>
+                    : undefined
+                }
+              >
+                {flags.length === 0 ? (
+                  <p className="text-xs text-ink-faint">No disputed rulings yet.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {flags.slice().reverse().map((flag) => (
+                      <div key={flag.id} className="bg-panel2 border border-line-soft rounded-lg p-2 flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge tone={flag.status === 'open' ? 'amber' : flag.status === 'resolved' ? 'green' : 'neutral'}>
+                            {flag.status}
+                          </Badge>
+                          <span className="text-[10px] text-ink-faint">{flag.flagged_by_name}</span>
+                        </div>
+                        <p className="text-[11px] text-ink-dim italic">"{flag.ruling_text}"</p>
+                        <p className="text-xs text-ink">{flag.reason}</p>
+                        {flag.gm_response && <p className="text-[11px] text-positive-text">GM: {flag.gm_response}</p>}
+                        {flag.status === 'open' && (
+                          resolvingFlagId === flag.id ? (
+                            <div className="flex flex-col gap-1">
+                              <textarea
+                                value={resolveDraft}
+                                onChange={(e) => setResolveDraft(e.target.value)}
+                                placeholder="Optional correction to post to the table..."
+                                rows={2}
+                                className="bg-bg border border-line rounded-md px-2 py-1 text-xs text-ink"
+                              />
+                              <div className="flex items-center gap-1.5">
+                                <Button icon={Check} onClick={() => resolveFlag(flag)} className="text-[11px] px-2 py-1">Confirm</Button>
+                                <Button icon={X} onClick={() => { setResolvingFlagId(null); setResolveDraft('') }} className="text-[11px] px-2 py-1">Cancel</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <Button icon={Check} onClick={() => setResolvingFlagId(flag.id)} className="text-[11px] px-2 py-1">Resolve</Button>
+                              <Button icon={X} onClick={() => dismissFlag(flag)} className="text-[11px] px-2 py-1">Dismiss</Button>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
             </div>
 
             {/* CENTER: map + scene log -- Active encounter moved to the left
@@ -1304,7 +1404,16 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   className="min-h-[160px] max-h-[280px] md:min-h-0 md:max-h-none md:flex-1 overflow-y-auto flex flex-col gap-2 text-sm pr-1"
                 >
                   {log.length === 0 && <p className="text-xs text-ink-dim">No messages yet -- narrate something below.</p>}
-                  {log.map((entry) => <LogEntry as="p" key={entry.id} entry={entry} color={party.find((p) => p.owner_user_id === entry.sender_user_id)?.color} />)}
+                  {log.map((entry) => (
+                    <LogEntry
+                      as="p"
+                      key={entry.id}
+                      entry={entry}
+                      color={party.find((p) => p.owner_user_id === entry.sender_user_id)?.color}
+                      onFlag={entry.type === 'ai_gm' ? setFlaggingEntry : undefined}
+                      flagStatus={flags.find((f) => f.scene_log_id === entry.id)?.status}
+                    />
+                  ))}
                 </div>
               </Card>
             </div>
@@ -1618,6 +1727,25 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
               {addingSecret ? 'Adding…' : 'Add secret'}
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!flaggingEntry} onClose={() => { setFlaggingEntry(null); setFlagReasonDraft('') }} title="Flag this ruling">
+        <div className="flex flex-col gap-3">
+          <p className="text-[11px] text-ink-dim italic bg-panel2 rounded-md p-2">"{flaggingEntry?.text}"</p>
+          <div>
+            <p className="text-[11px] text-ink-dim mb-1">What's wrong with it?</p>
+            <textarea
+              value={flagReasonDraft}
+              onChange={(e) => setFlagReasonDraft(e.target.value)}
+              rows={3}
+              className="w-full bg-bg border border-line rounded-md px-3 py-2 text-sm text-ink"
+              placeholder="e.g. that should have been an automatic hit, not a miss"
+            />
+          </div>
+          <Button onClick={submitRulingFlag} disabled={!flagReasonDraft.trim() || submittingFlag}>
+            {submittingFlag ? 'Flagging...' : 'Flag for GM review'}
+          </Button>
         </div>
       </Modal>
 
