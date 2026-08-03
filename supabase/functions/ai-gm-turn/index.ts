@@ -22,28 +22,26 @@
 // here, server-side, with a real RNG, and is logged to dice_rolls exactly
 // like a human GM's rolls are.
 //
-// Tool surface (Decision Queue #31, part 1 -- 2026-08-03): beyond roll_dice,
-// the model also gets spawn_monster/damage_monster/remove_monster so it can
-// actually run a fight, not just narrate one. These write directly to
-// encounter_monsters via the same service-role `writer` client dice_rolls
-// already uses -- no new RPC needed, this is the identical direct-table-CRUD
-// shape GmDashboard.jsx's own addMonster/adjustHp/deleteMonster already use
-// for a human GM, so the AI's mechanical footprint here is indistinguishable
-// from a human GM clicking the same buttons. The rest of #31 (adjust_
-// character_resource, roll_initiative/advance_turn, advance_clock, reveal/
-// light control, write_gm_note/update_npc/update_faction, and the combat-
-// resolution trio resolve_morale_check/resolve_stabilize_check/resolve_
-// dying_turn) is NOT wired yet -- those three in particular hit a real
-// wrinkle worth flagging for whoever picks this up next: they're SECURITY
-// DEFINER RPCs with an explicit `is_campaign_gm(campaign_id)` check inside
-// them, which reads auth.uid() -- and this `writer` client has no user JWT
-// (it authenticates as service_role), so auth.uid() is null there and that
-// check would always reject it. Calling them will need each RPC's guard
-// widened to accept `is_campaign_gm(p_campaign_id) or auth.role() =
-// 'service_role'` first (safe: service_role already bypasses RLS on every
-// table these touch, so this doesn't widen who can reach them, only lets
-// this already-trusted caller in) -- not done here to keep this pass to the
-// tools that needed zero auth-model changes.
+// Tool surface (Decision Queue #31 -- 2026-08-03): beyond roll_dice, the
+// model gets spawn_monster/damage_monster/remove_monster (part 1), which
+// write directly to encounter_monsters via the same service-role `writer`
+// client dice_rolls already uses -- no new RPC needed, this is the
+// identical direct-table-CRUD shape GmDashboard.jsx's own addMonster/
+// adjustHp/deleteMonster already use for a human GM. It also gets
+// resolve_morale_check/resolve_stabilize_check/resolve_dying_turn (part 2),
+// which call the same combat-resolution RPCs a human GM's UI calls. Those
+// three are SECURITY DEFINER RPCs that originally checked is_campaign_gm()/
+// is_campaign_member() -- both of which read auth.uid(), which is null for
+// this service-role `writer` client, so they'd always have rejected it.
+// Fixed at the source (migration allow_service_role_through_gm_and_member_
+// checks) by widening both predicate functions to also accept auth.role()
+// = 'service_role' -- safe, since service_role already bypasses RLS on
+// every table these touch regardless of what the predicate returns, so the
+// widening only removes a redundant explicit check these SECURITY DEFINER
+// functions layer on top of RLS, without changing who can reach them.
+// Still not wired: adjust_character_resource, roll_initiative/advance_turn,
+// advance_clock, reveal/light control, write_gm_note/update_npc/
+// update_faction (rest of #31).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -112,6 +110,7 @@ CORE COMMITMENTS (non-negotiable):
 3. Consequences stick. No retroactive softening of a bad outcome, including PC death, to protect the story.
 4. If a table is aimless or stuck, actively nudge -- resurface a lead, frame explicit choices -- rather than leaving it fully open with no momentum (guided sandbox, not railroad).
 5. Monsters and other mechanical combatants are real tracked things, not just prose. Use spawn_monster the moment one becomes a real combatant in the scene, damage_monster for every hit that actually lands (after rolling damage with roll_dice), and remove_monster once it's truly dead or gone for good -- don't leave a monster's HP only described in narration without updating it here too.
+6. A character shown as STATUS: DYING in the PARTY list needs a real death check every round they stay dying on their turn -- call resolve_dying_turn for them, don't just narrate whether they cling on. If another character at Close range is trying to save them, call resolve_stabilize_check instead of narrating a rescue. When a group of monsters or NPCs takes heavy losses, loses its leader, or otherwise has real reason to break, call resolve_morale_check rather than deciding unilaterally whether they flee.
 
 VOICE: Grimdark with real humor -- "Dungeon Crawler Carl" register. Stakes are genuinely dark (death is permanent, monsters are horrific) but it should also be funny -- dark comedy, snark, absurd/gonzo details, theatrical flair. A funny death is still a real, permanent death.
 
@@ -264,7 +263,7 @@ Deno.serve(async (req) => {
   }
 
   const [{ data: party }, { data: npcs }, { data: factions }, { data: log }, { data: encounterMonsters }] = await Promise.all([
-    supabase.from('characters').select('name, ancestry, class, level, hp, max_hp, ac').eq('campaign_id', campaignId),
+    supabase.from('characters').select('id, name, ancestry, class, level, hp, max_hp, ac, status, death_timer, zone').eq('campaign_id', campaignId),
     supabase.from('campaign_npcs').select('id, name, ancestry, role, location, attitude, status').eq('campaign_id', campaignId),
     supabase.from('campaign_factions').select('id, name, type, leader, territory, disposition, status_clock').eq('campaign_id', campaignId),
     supabase
@@ -286,6 +285,13 @@ Deno.serve(async (req) => {
   // without needing a fresh DB round-trip.
   const currentMonsters: Array<{ id: string; name: string; ac: number; hp: number; max_hp: number; dex_mod: number; zone: string; hidden: boolean }> =
     encounterMonsters ? [...encounterMonsters] : []
+
+  // Mutable working copy for the party too: resolve_dying_turn/
+  // resolve_stabilize_check below update status/death_timer in place so a
+  // later tool call in the same turn (e.g. a second death check on the same
+  // character) sees the current state without a fresh DB round-trip.
+  const currentParty: Array<{ id: string; name: string; ancestry: string; class: string; level: number; hp: number; max_hp: number; ac: number; status: string; death_timer: number | null; zone: string | null }> =
+    party ? [...party] : []
 
   const transcript = (log || []).slice().reverse()
   const [{ data: npcSecrets }, { data: factionSecrets }] = await Promise.all([
@@ -332,8 +338,8 @@ Rules style: ${GM_RULES_STYLE[campaign.ai_gm_rules_style as keyof typeof GM_RULE
 Lethality: ${lethalityLabel(campaign.ai_gm_lethality)}
 Autonomy: ${GM_AUTONOMY[campaign.ai_gm_autonomy as keyof typeof GM_AUTONOMY] || GM_AUTONOMY.ask_major}
 
-PARTY:
-${(party || []).map((c) => `- ${c.name}, ${c.ancestry} ${c.class} (lvl ${c.level}), ${c.hp}/${c.max_hp} hp, ac ${c.ac}`).join('\n') || '(no characters yet)'}
+PARTY (refer to these by name with resolve_dying_turn/resolve_stabilize_check; "zone" is where each stands relative to the action -- stabilizing requires the healer's target to be at Close range):
+${currentParty.map((c) => `- ${c.name}, ${c.ancestry} ${c.class} (lvl ${c.level}), ${c.hp}/${c.max_hp} hp, ac ${c.ac}, zone ${c.zone || 'near'}${c.status !== 'alive' ? `, STATUS: ${c.status.toUpperCase()}${c.status === 'dying' ? ` (death timer: ${c.death_timer ?? '?'} round${c.death_timer === 1 ? '' : 's'} left)` : ''}` : ''}`).join('\n') || '(no characters yet)'}
 
 KNOWN NPCs:
 ${(npcs || []).map((n) => {
@@ -412,6 +418,45 @@ ${transcriptText}
               monster_name: { type: 'STRING', description: 'The exact name as it appears in the CURRENT ENCOUNTER list.' },
             },
             required: ['monster_name'],
+          },
+        },
+        {
+          name: 'resolve_dying_turn',
+          description:
+            "Roll a death check for a character shown as STATUS: DYING in the PARTY list -- call this on their turn every round they remain dying. A natural 20 claws them back to 1 HP; otherwise their death timer ticks down, and hitting 0 kills them for good. This IS the roll -- don't also call roll_dice for it.",
+          parameters: {
+            type: 'OBJECT',
+            properties: {
+              character_name: { type: 'STRING', description: 'The exact name as it appears in the PARTY list.' },
+            },
+            required: ['character_name'],
+          },
+        },
+        {
+          name: 'resolve_stabilize_check',
+          description:
+            "Attempt to stabilize a dying character. The healer must be at the dying character's side, and the target must be at Close range (check the PARTY list's zone) -- if they aren't, narrate closing the distance first instead of calling this. Success sets the target to stable (safe from further death checks, though still unconscious). This IS the roll -- don't also call roll_dice for it.",
+          parameters: {
+            type: 'OBJECT',
+            properties: {
+              healer_name: { type: 'STRING', description: 'Who is attempting to stabilize them (a party member or NPC name).' },
+              target_name: { type: 'STRING', description: 'The exact name of the dying character, as it appears in the PARTY list.' },
+              int_notation: { type: 'STRING', description: 'INT check notation, e.g. "1d20+2" to add a modifier. Defaults to "1d20".' },
+            },
+            required: ['healer_name', 'target_name'],
+          },
+        },
+        {
+          name: 'resolve_morale_check',
+          description:
+            "Roll a morale check for a group of monsters or NPCs (not player characters) -- call this when they've taken heavy losses, lost their leader, or otherwise have real reason to break rather than fight on. Success means they hold; failure means they break and flee. This IS the roll -- don't also call roll_dice for it.",
+          parameters: {
+            type: 'OBJECT',
+            properties: {
+              group_label: { type: 'STRING', description: 'Who is checking morale, e.g. "the goblin raiders".' },
+              wis_notation: { type: 'STRING', description: 'WIS check notation, e.g. "1d20+1" to add a modifier. Defaults to "1d20".' },
+            },
+            required: ['group_label'],
           },
         },
       ],
@@ -575,6 +620,49 @@ ${transcriptText}
             if (removeError) throw new Error(removeError.message)
             currentMonsters.splice(idx, 1)
             responseContent = `${monster.name} removed from the encounter.`
+          } else if (call.name === 'resolve_dying_turn') {
+            const { character_name } = call.args as { character_name: string }
+            const target = currentParty.find((c) => c.name.toLowerCase() === String(character_name).toLowerCase())
+            if (!target) throw new Error(`No character named "${character_name}" in the party. Check the PARTY list.`)
+            const { data: dyingResult, error: dyingError } = await writer.rpc('resolve_dying_turn', {
+              p_campaign_id: campaignId,
+              p_character_id: target.id,
+            })
+            if (dyingError || !dyingResult) throw new Error(dyingError?.message || 'Could not resolve the death check.')
+            target.status = dyingResult.status
+            target.death_timer = dyingResult.death_timer
+            responseContent = dyingResult.nat20
+              ? `${target.name} rolled a natural 20 on their death check and claws back to consciousness with 1 HP!`
+              : dyingResult.status === 'dead'
+              ? `${target.name}'s death timer ran out -- they have perished.`
+              : `${target.name} is still dying. Death timer: ${dyingResult.death_timer} round(s) remaining.`
+          } else if (call.name === 'resolve_stabilize_check') {
+            const { healer_name, target_name, int_notation } = call.args as {
+              healer_name: string
+              target_name: string
+              int_notation?: string
+            }
+            const target = currentParty.find((c) => c.name.toLowerCase() === String(target_name).toLowerCase())
+            if (!target) throw new Error(`No character named "${target_name}" in the party. Check the PARTY list.`)
+            const { data: stabilizeResult, error: stabilizeError } = await writer.rpc('resolve_stabilize_check', {
+              p_campaign_id: campaignId,
+              p_healer_name: healer_name,
+              p_target_character_id: target.id,
+              p_int_notation: int_notation || '1d20',
+            })
+            if (stabilizeError || !stabilizeResult) throw new Error(stabilizeError?.message || 'Could not resolve the stabilize check.')
+            target.status = stabilizeResult.target_status
+            if (stabilizeResult.target_status === 'stable') target.death_timer = null
+            responseContent = `${healer_name} attempts to stabilize ${target.name}: total ${stabilizeResult.total} vs DC 15 -- ${stabilizeResult.success ? `success, ${target.name} is now stable.` : 'failure.'}`
+          } else if (call.name === 'resolve_morale_check') {
+            const { group_label, wis_notation } = call.args as { group_label: string; wis_notation?: string }
+            const { data: moraleResult, error: moraleError } = await writer.rpc('resolve_morale_check', {
+              p_campaign_id: campaignId,
+              p_group_label: group_label,
+              p_wis_notation: wis_notation || '1d20',
+            })
+            if (moraleError || !moraleResult) throw new Error(moraleError?.message || 'Could not resolve the morale check.')
+            responseContent = `${group_label} morale check: total ${moraleResult.total} vs DC 15 -- ${moraleResult.success ? 'holds.' : 'breaks and flees!'}`
           } else {
             throw new Error(`Unknown tool "${call.name}".`)
           }
