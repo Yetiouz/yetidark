@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Eye, EyeOff, Plus, Upload, Dices, SkipForward, Flame, AlertTriangle, RotateCw, Timer, Sun, CloudFog,
   Target, Mic, Paperclip, Megaphone, Lock, Pause, Play, HelpCircle, Swords, Shuffle, Gauge, Users, Gem,
-  Skull, StickyNote, Trash2, Sparkles,
+  Skull, StickyNote, Trash2, Sparkles, Pencil, Undo2, Eraser,
 } from 'lucide-react'
 
 import ZoneScene from './ZoneScene.jsx'
@@ -248,6 +248,14 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   const [showAddSecret, setShowAddSecret] = useState(false)
   const [secretForm, setSecretForm] = useState({ name: '', description: '', zone: 'near' })
   const [addingSecret, setAddingSecret] = useState(false)
+
+  // Map drawing (freehand annotations, user-requested 2026-08-03): one row
+  // per stroke in campaign_map_drawings, GM-only write / member read (see
+  // ZoneScene.jsx for the capture/render side). drawMode toggles whether
+  // the overlay is currently capturing pointer input -- off by default so
+  // clicking tokens keeps working normally.
+  const [mapDrawings, setMapDrawings] = useState([])
+  const [drawMode, setDrawMode] = useState(false)
   const [secretToDelete, setSecretToDelete] = useState(null)
   const [deletingSecret, setDeletingSecret] = useState(false)
   const [message, setMessage] = useState('')
@@ -347,6 +355,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (!cancelled) setSecrets(data || []) })
 
+    supabase
+      .from('campaign_map_drawings')
+      .select('id, points, color, created_at')
+      .eq('campaign_id', campaignId)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => { if (!cancelled) setMapDrawings(data || []) })
+
     const channel = supabase
       .channel(`gm-dashboard-extra-${campaignId}`)
       .on(
@@ -373,6 +388,16 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
           if (payload.eventType === 'INSERT') setSecrets((list) => [...list, payload.new])
           else if (payload.eventType === 'UPDATE') setSecrets((list) => list.map((s) => (s.id === payload.new.id ? payload.new : s)))
           else if (payload.eventType === 'DELETE') setSecrets((list) => list.filter((s) => s.id !== payload.old.id))
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'campaign_map_drawings', filter: `campaign_id=eq.${campaignId}` },
+        (payload) => {
+          // No UPDATE case -- strokes are immutable once drawn (see the
+          // migration comment), only ever inserted or deleted.
+          if (payload.eventType === 'INSERT') setMapDrawings((list) => [...list, payload.new])
+          else if (payload.eventType === 'DELETE') setMapDrawings((list) => list.filter((d) => d.id !== payload.old.id))
         }
       )
       .on(
@@ -773,6 +798,46 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     setTogglingSession(false)
   }
 
+  // Map drawing (freehand annotations). Strokes are immutable once drawn --
+  // addStroke inserts one row per completed pen stroke (see ZoneScene.jsx's
+  // onAddStroke), undoLastDrawing removes the single most recent one, and
+  // clearDrawings wipes every stroke for this campaign. All three rely on
+  // the campaign_map_drawings RLS insert/delete policies (GM-only) rather
+  // than a bespoke RPC -- same as-is level of engineering as scene_secrets'
+  // direct-table CRUD elsewhere in this file.
+  const addStroke = async (points) => {
+    if (!campaignId || !user) return
+    const { data, error } = await supabase
+      .from('campaign_map_drawings')
+      .insert({ campaign_id: campaignId, created_by: user.id, points })
+      .select('id, points, color, created_at')
+      .single()
+    if (!error && data) setMapDrawings((list) => [...list, data])
+  }
+  const undoLastDrawing = async () => {
+    if (mapDrawings.length === 0) return
+    const last = mapDrawings[mapDrawings.length - 1]
+    setMapDrawings((list) => list.filter((d) => d.id !== last.id))
+    await supabase.from('campaign_map_drawings').delete().eq('id', last.id)
+  }
+  const clearDrawings = async () => {
+    if (!campaignId || mapDrawings.length === 0) return
+    if (!window.confirm('Clear every drawing on this map? This can\'t be undone.')) return
+    setMapDrawings([])
+    await supabase.from('campaign_map_drawings').delete().eq('campaign_id', campaignId)
+  }
+
+  // Clears any drawings left over from the previous map image -- a stroke
+  // aligned to the old picture would just look wrong floating over a new,
+  // unrelated one. Not DB-enforced (see the migration comment); best-effort
+  // client-side cleanup, same as-is scope as this function already not
+  // deleting the old storage file on replace.
+  const clearMapDrawingsForCampaign = async () => {
+    if (!campaignId) return
+    setMapDrawings([])
+    await supabase.from('campaign_map_drawings').delete().eq('campaign_id', campaignId)
+  }
+
   const uploadMap = async (file) => {
     if (!file || !campaignId) return
     setUploading(true)
@@ -794,6 +859,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       return
     }
     setMapInfo((m) => ({ ...(m || {}), map_path: path, map_url: null }))
+    clearMapDrawingsForCampaign()
   }
 
   // Clears the campaign's map reference so ZoneScene falls back to its
@@ -814,6 +880,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       return
     }
     setMapInfo((m) => ({ ...(m || {}), map_path: null, map_url: null }))
+    clearMapDrawingsForCampaign()
   }
 
   const sendMessage = async () => {
@@ -1148,9 +1215,12 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     monsters={encounter}
                     secrets={secrets}
                     litCharacterId={lightSources.find((s) => s.lit)?.character_id || null}
-                    onSelectToken={(id, type, name) => selectEntity(type, id, name)}
+                    onSelectToken={drawMode ? undefined : (id, type, name) => selectEntity(type, id, name)}
                     selectedTokenId={selectedEntity?.id || null}
-                    onSetZone={(type, id, zone) => (type === 'character' ? setCharacterZone(id, zone) : type === 'secret' ? setSecretZone(id, zone) : setMonsterZone(id, zone))}
+                    onSetZone={drawMode ? undefined : (type, id, zone) => (type === 'character' ? setCharacterZone(id, zone) : type === 'secret' ? setSecretZone(id, zone) : setMonsterZone(id, zone))}
+                    drawings={mapDrawings}
+                    drawMode={drawMode}
+                    onAddStroke={addStroke}
                   />
                   <div className="absolute top-2 left-2 max-w-[calc(100%-1rem)] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-2 flex items-center gap-1 flex-wrap">
                     {onSwitchToPlayerView && (
@@ -1160,6 +1230,26 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     <Button icon={Sun} iconOnly disabled title="Light isn't wired up yet -- placeholder" />
                     <Button icon={CloudFog} iconOnly disabled title="Fog isn't wired up yet -- placeholder" />
                     <Button icon={Skull} iconOnly disabled title="Traps isn't wired up yet -- placeholder; will show trigger/attack/damage details once traps become selectable map objects" />
+                    {/* Draw on the map (user-requested 2026-08-03): freehand
+                        pen over the scene image, GM-only. While active,
+                        onSelectToken/onSetZone above are disabled so a
+                        pointer-down starts a stroke instead of clicking a
+                        token -- toggle it back off to interact with tokens
+                        again. Undo/Clear only appear once there's something
+                        to act on. */}
+                    <Button
+                      variant={drawMode ? 'primary' : 'outline'}
+                      icon={Pencil}
+                      iconOnly
+                      onClick={() => setDrawMode((v) => !v)}
+                      title={drawMode ? 'Stop drawing' : 'Draw on the map'}
+                    />
+                    {drawMode && (
+                      <>
+                        <Button icon={Undo2} iconOnly onClick={undoLastDrawing} disabled={mapDrawings.length === 0} title="Undo last stroke" />
+                        <Button icon={Eraser} iconOnly onClick={clearDrawings} disabled={mapDrawings.length === 0} title="Clear all drawings" />
+                      </>
+                    )}
                     <input
                       ref={fileInputRef}
                       type="file"

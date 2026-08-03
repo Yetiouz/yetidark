@@ -63,8 +63,40 @@ function groupByZone(tokens) {
 // a bounded step, not a teleport). Omit it and onSetZone behaves exactly
 // as before: any token, all three zones -- the GM's own unrestricted
 // control.
-export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = [], monsters = [], secrets = [], litCharacterId, onSelectToken, selectedTokenId, onSetZone, moveRestriction }) {
+export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = [], monsters = [], secrets = [], litCharacterId, onSelectToken, selectedTokenId, onSetZone, moveRestriction, drawings = [], drawMode = false, onAddStroke }) {
   const [zoneMenu, setZoneMenu] = useState(null) // { id, type, name, x, y } while a right-click menu is open
+
+  // Freehand map-drawing capture (GM-only "draw on the map" feature). A
+  // stroke is just an ordered list of {x,y} percentage points in this same
+  // 0-100 coordinate space the zone rings/tokens already use -- captured
+  // locally while the pointer is down, then handed up via onAddStroke once
+  // on release so the caller (GmDashboard.jsx) persists exactly one row per
+  // stroke, not one row per point. Omit drawMode/onAddStroke (GameTable.jsx
+  // does, since drawing is GM-only) and existing `drawings` still render,
+  // just not interactively -- read-only for players, same pattern as
+  // onSelectToken/onSetZone being optional above.
+  const [activeStroke, setActiveStroke] = useState(null)
+
+  function pointFromPointerEvent(e) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width) * 100
+    const y = ((e.clientY - rect.top) / rect.height) * 100
+    return { x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) }
+  }
+  const handleDrawPointerDown = (e) => {
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setActiveStroke([pointFromPointerEvent(e)])
+  }
+  const handleDrawPointerMove = (e) => {
+    if (!activeStroke) return
+    setActiveStroke((pts) => [...pts, pointFromPointerEvent(e)])
+  }
+  const handleDrawPointerUp = (e) => {
+    if (!activeStroke) return
+    if (activeStroke.length > 1 && onAddStroke) onAddStroke(activeStroke)
+    setActiveStroke(null)
+  }
 
   const tokens = [
     ...party.map((p) => ({ id: p.id, name: p.name, color: p.color || '#3b82f6', zone: p.zone || 'near', type: 'character' })),
@@ -105,6 +137,53 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
         ) : (
           <PlaceholderScene caption="scene art placeholder -- map/zone view comes later" />
         )}
+
+        {/* Freehand annotation layer -- always rendered (so players and a
+            GM who isn't currently drawing both see existing strokes), but
+            only captures pointer events while drawMode is on, via the
+            pointerEvents toggle below. viewBox 0 0 100 100 with
+            preserveAspectRatio="none" matches the same 0-100 percentage
+            space every token/zone-ring position already uses, so a stroke
+            drawn here stays aligned with the map underneath it regardless
+            of the box's own (non-square) aspect ratio -- same reasoning
+            the zone rings already rely on. vectorEffect="non-scaling-stroke"
+            keeps line thickness a constant screen width despite that
+            non-uniform viewBox scale. */}
+        <svg
+          className="absolute inset-0 w-full h-full"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          style={{ pointerEvents: drawMode ? 'auto' : 'none', cursor: drawMode ? 'crosshair' : 'default', touchAction: drawMode ? 'none' : 'auto' }}
+          onPointerDown={drawMode ? handleDrawPointerDown : undefined}
+          onPointerMove={drawMode ? handleDrawPointerMove : undefined}
+          onPointerUp={drawMode ? handleDrawPointerUp : undefined}
+          onPointerLeave={drawMode ? handleDrawPointerUp : undefined}
+        >
+          {drawings.map((d) => (
+            <polyline
+              key={d.id}
+              points={d.points.map((p) => `${p.x},${p.y}`).join(' ')}
+              fill="none"
+              stroke={d.color || '#f2f2f2'}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          {activeStroke && activeStroke.length > 1 && (
+            <polyline
+              points={activeStroke.map((p) => `${p.x},${p.y}`).join(' ')}
+              fill="none"
+              stroke="#f2f2f2"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+              opacity={0.8}
+            />
+          )}
+        </svg>
 
         {litPos && (
           <div

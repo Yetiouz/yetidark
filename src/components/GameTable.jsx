@@ -172,6 +172,7 @@ const { url: mapUrl, error: mapAccessError } = useCampaignMapUrl(mapInfo)
 const [threads, setThreads] = useState([])
 const [monsters, setMonsters] = useState([])
 const [secrets, setSecrets] = useState([])
+const [mapDrawings, setMapDrawings] = useState([]) // GM's freehand map annotations -- read-only here, see ZoneScene.jsx
 const [nowTick, setNowTick] = useState(() => Date.now())
 
 // My character's gear and talents -- powers the left-rail "Quick actions"
@@ -243,6 +244,13 @@ supabase
 .then(({ data }) => { if (!cancelled) setSecrets(data || []) })
 
 supabase
+.from('campaign_map_drawings')
+.select('id, points, color, created_at')
+.eq('campaign_id', campaignId)
+.order('created_at', { ascending: true })
+.then(({ data }) => { if (!cancelled) setMapDrawings(data || []) })
+
+supabase
 .from('gm_notes')
 .select('id, text, revealed')
 .eq('campaign_id', campaignId)
@@ -286,6 +294,14 @@ else if (payload.eventType === 'DELETE') setMonsters((m) => m.filter((x) => x.id
 if (payload.eventType === 'INSERT') setSecrets((s) => appendUniqueById(s, payload.new))
 else if (payload.eventType === 'UPDATE') setSecrets((s) => s.map((x) => (x.id === payload.new.id ? payload.new : x)))
 else if (payload.eventType === 'DELETE') setSecrets((s) => s.filter((x) => x.id !== payload.old.id))
+}
+)
+.on(
+'postgres_changes',
+{ event: '*', schema: 'public', table: 'campaign_map_drawings', filter: `campaign_id=eq.${campaignId}` },
+(payload) => {
+if (payload.eventType === 'INSERT') setMapDrawings((d) => appendUniqueById(d, payload.new))
+else if (payload.eventType === 'DELETE') setMapDrawings((d) => d.filter((x) => x.id !== payload.old.id))
 }
 )
 .on(
@@ -934,6 +950,7 @@ secrets={secrets}
 litCharacterId={litCharacterId}
 onSetZone={handleSetZone}
 moveRestriction={canMove ? { tokenId: myCharacter.id, allowedZones: myAdjacentZones } : { tokenId: '__none__', allowedZones: [] }}
+drawings={mapDrawings}
 />
 {canMove && (
 <div className="absolute bottom-2 left-2 max-w-[220px] bg-bg/90 backdrop-blur border border-line-soft rounded-lg px-3 py-2">
