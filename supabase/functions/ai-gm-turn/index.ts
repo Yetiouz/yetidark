@@ -49,6 +49,18 @@ const GEMINI_MODEL = 'gemini-3.6-flash'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 const MAX_TOOL_ROUNDS = 14
 const TRANSCRIPT_LIMIT = 60
+// Decision Queue #32, AI ops hardening: transcript summarization beyond the
+// live window. Once a campaign's scene_log has more than TRANSCRIPT_LIMIT
+// entries, everything older than that is invisible to the model turn after
+// turn -- it never learns what happened before its live window. Rather than
+// widening the live window (which just moves the cliff and burns more of
+// Gemini's tight per-minute token/rate budget every turn), older entries get
+// folded into a compact rolling summary instead, updated in occasional
+// batches so a normally-paced campaign doesn't spend an extra Gemini call
+// every single turn.
+const SUMMARY_TRIGGER_ENTRIES = 40 // don't bother summarizing until this many entries have aged out of the live window since the last pass
+const SUMMARY_BATCH_CAP = 150 // cap how many stale entries one pass folds in, so a long-dormant campaign can't blow the prompt budget in one turn -- the remainder waits for the next pass
+const SUMMARY_MAX_OUTPUT_CHARS = 2000
 const GEMINI_MAX_RETRIES = 1 // retries on 429 (rate limit) before giving up on this turn
 
 const corsHeaders = {
@@ -213,7 +225,7 @@ Deno.serve(async (req) => {
 
   const { data: campaign, error: campaignError } = await supabase
     .from('campaigns')
-    .select('id, name, system, gm_type, house_rules, modes_of_play, session_number, ai_gm_tone, ai_gm_rules_style, ai_gm_lethality, ai_gm_autonomy')
+    .select('id, name, system, gm_type, house_rules, modes_of_play, session_number, ai_gm_tone, ai_gm_rules_style, ai_gm_lethality, ai_gm_autonomy, ai_gm_memory, ai_gm_memory_through_at')
     .eq('id', campaignId)
     .maybeSingle()
 
@@ -328,6 +340,69 @@ Deno.serve(async (req) => {
       party ? [...party] : []
 
     const transcript = (log || []).slice().reverse()
+
+    // Fold scene_log entries that are about to scroll out of the live
+    // TRANSCRIPT_LIMIT window into campaign.ai_gm_memory, a running summary.
+    // Best-effort and entirely optional: wrapped in its own try/catch so a
+    // Gemini hiccup here never breaks the actual turn, and it only fires
+    // once the live window is genuinely full (log.length === TRANSCRIPT_LIMIT)
+    // -- if there are fewer than that, nothing has aged out yet and the live
+    // transcript below already covers everything.
+    try {
+      const fullLog = log || []
+      if (fullLog.length === TRANSCRIPT_LIMIT) {
+        const windowStartAt = fullLog[fullLog.length - 1].created_at
+        let staleQuery = supabase
+          .from('scene_log')
+          .select('type, sender_name, text, created_at', { count: 'exact' })
+          .eq('campaign_id', campaignId)
+          .lt('created_at', windowStartAt)
+        if (campaign.ai_gm_memory_through_at) staleQuery = staleQuery.gt('created_at', campaign.ai_gm_memory_through_at)
+        const { data: staleEntries, count: staleCount } = await staleQuery.order('created_at', { ascending: true }).limit(SUMMARY_BATCH_CAP)
+
+        if ((staleCount || 0) >= SUMMARY_TRIGGER_ENTRIES && staleEntries && staleEntries.length) {
+          const staleText = staleEntries
+            .map((e: { type: string; sender_name: string; text: string; created_at: string }) => `${e.type === 'ai_gm' ? 'GM' : e.type === 'roll' ? 'Roll' : e.sender_name}: ${e.text}`)
+            .join('\n')
+          const summaryPrompt = `You are maintaining a running memory summary for an ongoing Shadowdark RPG campaign, for your own future reference as its GM. ${campaign.ai_gm_memory ? `Here is the summary so far:\n${campaign.ai_gm_memory}\n\n` : ''}Fold in these new events -- older material that's about to scroll out of your live transcript window -- into an updated summary. Keep only what matters for future scenes: key plot developments, decisions made, character fates, open threads, established facts about NPCs/factions/locations. Drop resolved combat blow-by-blow and small talk. Write it as compact prose or a tight bullet list, under ${SUMMARY_MAX_OUTPUT_CHARS} characters total.\n\nNEW EVENTS:\n${staleText}`
+
+          const summaryResp = await fetch(GEMINI_URL, {
+            method: 'POST',
+            headers: {
+              'x-goog-api-key': geminiKey,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],
+              generationConfig: { maxOutputTokens: 700 },
+            }),
+          })
+
+          if (summaryResp.ok) {
+            const summaryResult = await summaryResp.json()
+            const summaryText = (summaryResult.candidates?.[0]?.content?.parts || [])
+              .filter((p: Record<string, unknown>) => typeof p.text === 'string')
+              .map((p: { text: string }) => p.text)
+              .join('\n')
+              .trim()
+              .slice(0, SUMMARY_MAX_OUTPUT_CHARS + 200)
+
+            if (summaryText) {
+              const newThroughAt = staleEntries[staleEntries.length - 1].created_at
+              await writer
+                .from('campaigns')
+                .update({ ai_gm_memory: summaryText, ai_gm_memory_through_at: newThroughAt })
+                .eq('id', campaignId)
+              campaign.ai_gm_memory = summaryText
+            }
+          }
+        }
+      }
+    } catch {
+      // Best-effort: summarization failing (rate limit, transient network
+      // error) should never break the actual turn. The next turn tries again.
+    }
+
     const [{ data: npcSecrets }, { data: factionSecrets }] = await Promise.all([
       (npcs || []).length
         ? writer.from('campaign_npc_secrets').select('npc_id, notes').in('npc_id', (npcs || []).map((npc) => npc.id))
@@ -389,6 +464,9 @@ Deno.serve(async (req) => {
 
   CURRENT ENCOUNTER (monsters/combatants on the board right now -- refer to these by name with damage_monster/remove_monster; empty means no active encounter):
   ${currentMonsters.length ? currentMonsters.map((m) => `- ${m.name}: ${m.hp}/${m.max_hp} hp, ac ${m.ac}, dex mod ${m.dex_mod >= 0 ? '+' : ''}${m.dex_mod}, zone ${m.zone}${m.hidden ? ' (hidden from the party)' : ''}`).join('\n') : '(none)'}
+
+  STORY SO FAR (summary of events older than the live transcript below):
+  ${campaign.ai_gm_memory?.trim() || '(nothing summarized yet -- the live transcript below covers everything so far)'}
 
   TRANSCRIPT:
   ${transcriptText}
