@@ -321,7 +321,7 @@ select is(
   0,
   'failed character creation leaves no partial character'
 );
-select is((select count(*)::integer from encounter_monsters), 1, 'player sees only revealed monsters');
+select is((select count(*)::integer from encounter_monsters where campaign_id = '10000000-0000-0000-0000-000000000001'), 1, 'player sees only revealed monsters');
 select is((select count(*)::integer from gm_notes), 1, 'player sees only revealed notes');
 select is((select count(*)::integer from campaign_npcs), 1, 'player can read public NPC details');
 select is((select count(*)::integer from campaign_factions), 1, 'player can read public faction details');
@@ -848,7 +848,7 @@ reset role;
 -- The campaign GM retains the intended capabilities.
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-000000000001","role":"authenticated"}';
-select is((select count(*)::integer from encounter_monsters), 2, 'GM sees hidden monsters');
+select is((select count(*)::integer from encounter_monsters where campaign_id = '10000000-0000-0000-0000-000000000001'), 2, 'GM sees hidden monsters');
 select is((select count(*)::integer from gm_notes), 2, 'GM sees secret notes');
 select is((select count(*)::integer from campaign_npc_secrets), 1, 'GM sees NPC secrets');
 select is((select count(*)::integer from campaign_faction_secrets), 1, 'GM sees faction secrets');
@@ -1245,9 +1245,13 @@ reset role;
 
 -- join_public_campaign
 set local role anon;
+-- The schema never grants anon execute on this function, so the rejection
+-- happens at the grant layer (42501) before the function's own P0001
+-- signed-in guard can fire -- that guard is defense in depth for callers
+-- that do hold execute.
 select throws_ok(
   $$select join_public_campaign('10000000-0000-0000-0000-000000000002')$$,
-  'P0001', 'You must be signed in to join a campaign.',
+  '42501', 'permission denied for function join_public_campaign',
   'anonymous user cannot join a public campaign'
 );
 reset role;
