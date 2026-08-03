@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, Trash2, Flame, Play, Pause } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Flame, Play, Pause, ClipboardCheck } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import { appendUniqueById } from '../app/realtimeCollections.js'
 import ProgressBar from './ui/ProgressBar.jsx'
+import Modal from './ui/Modal.jsx'
+import Button from './ui/Button.jsx'
 
 const THREAD_STATUSES = ['open', 'resolved', 'abandoned']
 const STATUS_COLOR = {
@@ -46,6 +48,12 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
   const [clocks, setClocks] = useState([])
   const [timeline, setTimeline] = useState([])
   const [currentSessionNumber, setCurrentSessionNumber] = useState(1)
+  const [nextSessionPickup, setNextSessionPickup] = useState(null)
+  const [showEndSession, setShowEndSession] = useState(false)
+  const [recapDraft, setRecapDraft] = useState('')
+  const [pickupDraft, setPickupDraft] = useState('')
+  const [endingSession, setEndingSession] = useState(false)
+  const [endSessionError, setEndSessionError] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const [threadDraft, setThreadDraft] = useState('')
@@ -76,7 +84,7 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
       supabase.from('campaign_threads').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: true }),
       supabase.from('campaign_clocks').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: true }),
       supabase.from('campaign_timeline_entries').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: false }),
-      supabase.from('campaigns').select('session_number, session_active').eq('id', campaignId).maybeSingle(),
+      supabase.from('campaigns').select('session_number, session_active, next_session_pickup').eq('id', campaignId).maybeSingle(),
       supabase.from('campaign_light_sources').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: true }),
       supabase.from('characters').select('id, name, owner_user_id').eq('campaign_id', campaignId).order('created_at', { ascending: true }),
     ]).then(([threadsRes, clocksRes, timelineRes, campaignRes, lightRes, partyRes]) => {
@@ -86,6 +94,7 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
       setTimeline(timelineRes.data || [])
       setCurrentSessionNumber(campaignRes.data?.session_number || 1)
       setSessionActive(campaignRes.data?.session_active || false)
+      setNextSessionPickup(campaignRes.data?.next_session_pickup || null)
       setLightSources(lightRes.data || [])
       setParty(partyRes.data || [])
       setLoading(false)
@@ -138,7 +147,11 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
-        (payload) => setSessionActive(payload.new.session_active)
+        (payload) => {
+          setSessionActive(payload.new.session_active)
+          setCurrentSessionNumber(payload.new.session_number)
+          setNextSessionPickup(payload.new.next_session_pickup || null)
+        }
       )
       .subscribe()
 
@@ -257,6 +270,36 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
     setSessionActive(nextActive)
   }
 
+  const openEndSession = () => {
+    setRecapDraft('')
+    setPickupDraft('')
+    setEndSessionError(null)
+    setShowEndSession(true)
+  }
+
+  const confirmEndSession = async () => {
+    if (!recapDraft.trim()) {
+      setEndSessionError('A session recap is required to end the session.')
+      return
+    }
+    setEndingSession(true)
+    setEndSessionError(null)
+    const { data, error } = await supabase.rpc('end_campaign_session', {
+      p_campaign_id: campaignId,
+      p_recap: recapDraft,
+      p_next_session_pickup: pickupDraft || null,
+    })
+    setEndingSession(false)
+    if (error) {
+      setEndSessionError(error.message)
+      return
+    }
+    setCurrentSessionNumber(data.new_session_number)
+    setSessionActive(false)
+    setNextSessionPickup(data.next_session_pickup || null)
+    setShowEndSession(false)
+  }
+
   if (loading) {
     return (
       <div className="max-w-xl mx-auto p-6">
@@ -279,17 +322,26 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
           <p className="text-xs text-ink-dim">Campaign log</p>
         </div>
         {isGm && (
-          <button
-            onClick={toggleSession}
-            className={`text-xs rounded-md px-3 py-2 flex items-center gap-2 border ${
-              sessionActive
-                ? 'border-positive text-positive-text bg-positive-bg hover:bg-positive-bg'
-                : 'border-line text-ink-dim hover:bg-panel2'
-            }`}
-          >
-            {sessionActive ? <Pause size={13} /> : <Play size={13} />}
-            {sessionActive ? 'Session active' : 'Session paused'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleSession}
+              className={`text-xs rounded-md px-3 py-2 flex items-center gap-2 border ${
+                sessionActive
+                  ? 'border-positive text-positive-text bg-positive-bg hover:bg-positive-bg'
+                  : 'border-line text-ink-dim hover:bg-panel2'
+              }`}
+            >
+              {sessionActive ? <Pause size={13} /> : <Play size={13} />}
+              {sessionActive ? 'Session active' : 'Session paused'}
+            </button>
+            <button
+              onClick={openEndSession}
+              className="text-xs rounded-md px-3 py-2 flex items-center gap-2 border border-line text-ink-dim hover:bg-panel2"
+            >
+              <ClipboardCheck size={13} />
+              End session
+            </button>
+          </div>
         )}
         {!isGm && (
           <span className={`text-[11px] px-2 py-1 rounded ${sessionActive ? 'bg-positive-bg text-positive-text' : 'bg-panel2 text-ink-faint'}`}>
@@ -297,6 +349,13 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
           </span>
         )}
       </div>
+
+      {nextSessionPickup && (
+        <div className="bg-panel rounded-lg p-3 mb-4 border border-line">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint mb-1">Next session</p>
+          <p className="text-xs text-ink-dim whitespace-pre-wrap">{nextSessionPickup}</p>
+        </div>
+      )}
 
       <div className="bg-panel rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
@@ -496,6 +555,48 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
           })}
         </div>
       </div>
+
+      <Modal open={showEndSession} onClose={() => !endingSession && setShowEndSession(false)} title="End session">
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-ink-dim mb-1 block">Recap (required)</label>
+            <textarea
+              value={recapDraft}
+              onChange={(e) => setRecapDraft(e.target.value)}
+              placeholder="What happened this session?"
+              rows={4}
+              className="w-full text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-ink-dim mb-1 block">Next time (optional)</label>
+            <textarea
+              value={pickupDraft}
+              onChange={(e) => setPickupDraft(e.target.value)}
+              placeholder="Where should the table pick up next session?"
+              rows={2}
+              className="w-full text-xs bg-bg border border-line rounded-md px-2 py-2 text-ink"
+            />
+          </div>
+          {endSessionError && <p className="text-xs text-danger-text">{endSessionError}</p>}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={() => setShowEndSession(false)}
+              disabled={endingSession}
+              className="text-xs rounded-md px-3 py-2 border border-line text-ink-dim hover:bg-panel2"
+            >
+              Cancel
+            </button>
+            <Button
+              variant="primary"
+              onClick={confirmEndSession}
+              disabled={endingSession || !recapDraft.trim()}
+            >
+              {endingSession ? 'Ending…' : 'Finalize'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
