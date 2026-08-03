@@ -538,3 +538,26 @@ export const MOVEMENT_RULES = [
       'per round until you exit the hazard.',
   },
 ]
+
+// Downtime carousing costs, pg. 92 ("Carousing"). Each participant pitches
+// in the cost, then rolls 1d8 + the tier's bonus against the outcome table
+// (resolved server-side in carouse_character() -- the exact 14-row outcome
+// table lives in that RPC, not duplicated here, since it needs live coin/
+// luck-token state to resolve XP/wealth/luck effects).
+export const CAROUSING_COSTS = [
+  { gp: 30, bonus: 0, label: 'A worthy night of drinking and festivity' },
+  { gp: 100, bonus: 1, label: 'A full day and night of revelry, gambling, and recounting your exploits' },
+  { gp: 300, bonus: 2, label: 'Two days of crawling dozens of taverns to sing, buy rounds, and celebrate' },
+  { gp: 600, bonus: 3, label: 'A three-day voyage into the finest food, drink, and gambling you can find' },
+  { gp: 900, bonus: 4, label: 'A hazy, weeklong bender that runs multiple well-known taverns dry' },
+  {
+    gp: 1200,
+    bonus: 5,
+    label: 'A spirited fete lasting ten days that attracts hordes of revelers and takes over an entire town or a city district',
+  },
+  {
+    gp: 1800,
+    bonus: 6,
+    label: 'Two legendary weeks of drinking and debauchery widespread enough to take over a whole city',
+  },
+]

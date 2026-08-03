@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield, Package, Swords, Check, Gem, Users, Filter, ArrowUpDown, Search, ArrowUpCircle, Dices } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Upload, User, Sparkles, Ban, Shield, Package, Swords, Check, Gem, Users, Filter, ArrowUpDown, Search, ArrowUpCircle, Dices, PartyPopper } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import Row from './ui/Row.jsx'
 import Badge from './ui/Badge.jsx'
@@ -14,7 +14,7 @@ import {
   resolveSpellCheck,
   resolveTalentRolls,
 } from '../game/rules/character.js'
-import { CLASSES } from '../game/rules/content.js'
+import { CLASSES, CAROUSING_COSTS } from '../game/rules/content.js'
 
 // Shadowdark levels up on a hard formula (rulebook p.39): "current level x
 // 10 XP", XP resets to zero on success, capped at level 10. Talent rolls
@@ -67,6 +67,11 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   const [talentRoll, setTalentRoll] = useState(null)
   const [levelingUp, setLevelingUp] = useState(false)
   const [levelUpError, setLevelUpError] = useState(null)
+  const [showCarouse, setShowCarouse] = useState(false)
+  const [carouseTier, setCarouseTier] = useState(0)
+  const [carousing, setCarousing] = useState(false)
+  const [carouseError, setCarouseError] = useState(null)
+  const [carouseResult, setCarouseResult] = useState(null)
   const [resourceError, setResourceError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
@@ -248,6 +253,36 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     setShowLevelUp(false)
     setHpGainRoll(null)
     setTalentRoll(null)
+  }
+
+  const openCarouse = () => {
+    setCarouseTier(0)
+    setCarouseError(null)
+    setCarouseResult(null)
+    setShowCarouse(true)
+  }
+
+  // Downtime carousing (rulebook p.92-93) -- the dice/outcome resolution
+  // lives server-side in carouse_character() (coin/XP/luck-token deltas,
+  // the exact 14-row outcome table); this just picks a cost tier and
+  // shows what came back. Result stays on screen until the player closes
+  // the modal, same "read the outcome before dismissing" pattern as the
+  // level-up confirmation.
+  const confirmCarouse = async () => {
+    if (!characterId || carousing) return
+    setCarousing(true)
+    setCarouseError(null)
+    const { data, error } = await supabase.rpc('carouse_character', {
+      p_character_id: characterId,
+      p_cost_tier: carouseTier,
+    })
+    setCarousing(false)
+    if (error) {
+      setCarouseError(error.message)
+      return
+    }
+    setCharacter((current) => ({ ...current, coin: data.coin, xp: data.xp, luck_tokens: data.luck_tokens }))
+    setCarouseResult(data)
   }
 
   const toggleEquipped = async (item) => {
@@ -552,6 +587,16 @@ export default function CharacterSheet({ characterId, session, onBack }) {
             <span className="text-sm text-ink">{character.coin} gp</span>
             {canEdit && <button disabled={!changeReason.trim() || resourceChanging} onClick={() => adjustResource('coin', 1)} className="px-2 border border-line rounded text-ink-dim disabled:opacity-40">+</button>}
           </div>
+          {canEdit && (
+            <button
+              onClick={openCarouse}
+              disabled={(character.coin ?? 0) < CAROUSING_COSTS[0].gp}
+              title={(character.coin ?? 0) < CAROUSING_COSTS[0].gp ? `Needs at least ${CAROUSING_COSTS[0].gp} gp to carouse` : 'Downtime carousing'}
+              className="w-full mt-2 text-[11px] border border-line rounded-md px-2 py-1 flex items-center justify-center gap-1 text-ink-dim hover:bg-panel2 disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <PartyPopper size={12} /> Carouse
+            </button>
+          )}
         </div>
       </div>
       {canEdit && (
@@ -1121,6 +1166,70 @@ export default function CharacterSheet({ characterId, session, onBack }) {
               {levelingUp ? 'Leveling up…' : `Confirm level ${nextLevel}`}
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal open={showCarouse} onClose={() => !carousing && setShowCarouse(false)} title="Downtime carousing">
+        <div className="space-y-3">
+          {!carouseResult && (
+            <>
+              <p className="text-xs text-ink-dim">
+                Pitch in for a night out -- each tier costs more but rolls with a bigger bonus (rulebook p.92).
+              </p>
+              <div className="flex flex-col gap-2">
+                {CAROUSING_COSTS.map((tier, index) => {
+                  const affordable = (character?.coin ?? 0) >= tier.gp
+                  return (
+                    <button
+                      key={tier.gp}
+                      onClick={() => setCarouseTier(index)}
+                      disabled={!affordable}
+                      className={`text-left text-xs rounded-md border px-3 py-2 disabled:opacity-40 ${
+                        carouseTier === index ? 'bg-panel2 border-primary text-ink' : 'border-line text-ink-dim hover:bg-panel2'
+                      }`}
+                    >
+                      <span className="flex items-center justify-between">
+                        <span>{tier.gp} gp</span>
+                        <span className="text-ink-faint">+{tier.bonus} to the roll</span>
+                      </span>
+                      <span className="block text-[11px] text-ink-faint mt-1">{tier.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {carouseError && <p className="text-xs text-danger-text">{carouseError}</p>}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  onClick={() => setShowCarouse(false)}
+                  disabled={carousing}
+                  className="text-xs border border-line rounded-md px-3 py-2 text-ink-dim hover:bg-panel2 disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+                <Button variant="primary" onClick={confirmCarouse} disabled={carousing}>
+                  {carousing ? 'Rolling…' : `Carouse for ${CAROUSING_COSTS[carouseTier].gp} gp`}
+                </Button>
+              </div>
+            </>
+          )}
+
+          {carouseResult && (
+            <>
+              <div className="bg-bg rounded-md p-3">
+                <p className="text-xs text-ink-dim">Rolled {carouseResult.roll_total} on 1d8 + bonus</p>
+                <p className="text-sm text-ink mt-2">{carouseResult.outcome}</p>
+                <p className="text-[11px] text-ink-faint mt-2">
+                  +{carouseResult.xp_gain} XP &middot; {carouseResult.coin} gp remaining &middot; {carouseResult.luck_tokens} luck token{carouseResult.luck_tokens === 1 ? '' : 's'}
+                </p>
+              </div>
+              <p className="text-[11px] text-ink-faint">
+                Anything above (a new ally, a debt, an item) is yours to narrate at the table -- it isn&rsquo;t tracked automatically.
+              </p>
+              <div className="flex items-center justify-end pt-1">
+                <Button variant="primary" onClick={() => setShowCarouse(false)}>Done</Button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>
