@@ -1,0 +1,8 @@
+{
+  "name": "delve",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build": "mkdir -p dist && cp placeholder.html dist/index.html"
+  }
+}
