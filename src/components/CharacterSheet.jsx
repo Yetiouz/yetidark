@@ -7,6 +7,9 @@ import Card from './ui/Card.jsx'
 import Button from './ui/Button.jsx'
 import ProgressBar from './ui/ProgressBar.jsx'
 import Modal from './ui/Modal.jsx'
+import StatTile from './ui/StatTile.jsx'
+import SubRow from './ui/SubRow.jsx'
+import ConfirmModal from './ui/ConfirmModal.jsx'
 import {
   abilityModifier,
   gearSlotCapacity,
@@ -73,6 +76,9 @@ export default function CharacterSheet({ characterId, session, onBack }) {
   const [carouseError, setCarouseError] = useState(null)
   const [carouseResult, setCarouseResult] = useState(null)
   const [resourceError, setResourceError] = useState(null)
+  const [gearToRemove, setGearToRemove] = useState(null)
+  const [featureToRemove, setFeatureToRemove] = useState(null)
+  const [spellToRemove, setSpellToRemove] = useState(null)
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState(null)
@@ -295,7 +301,12 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     setCharacter((current) => ({ ...current, ac: Number(data.character_ac) }))
   }
 
-  const removeGear = async (item) => {
+  const requestRemoveGear = (item) => setGearToRemove(item)
+
+  const removeGear = async () => {
+    if (!gearToRemove) return
+    const item = gearToRemove
+    setGearToRemove(null)
     const { error } = await supabase.rpc('remove_character_gear', { p_gear_id: item.id })
     if (!error) setGear((all) => all.filter((current) => current.id !== item.id))
   }
@@ -322,7 +333,12 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     await supabase.from('character_features').update({ uses_current: next }).eq('id', feature.id)
   }
 
-  const removeFeature = async (feature) => {
+  const requestRemoveFeature = (feature) => setFeatureToRemove(feature)
+
+  const removeFeature = async () => {
+    if (!featureToRemove) return
+    const feature = featureToRemove
+    setFeatureToRemove(null)
     setFeatures((f) => f.filter((i) => i.id !== feature.id))
     await supabase.from('character_features').delete().eq('id', feature.id)
   }
@@ -406,7 +422,12 @@ export default function CharacterSheet({ characterId, session, onBack }) {
     })
   }
 
-  const removeSpell = async (spell) => {
+  const requestRemoveSpell = (spell) => setSpellToRemove(spell)
+
+  const removeSpell = async () => {
+    if (!spellToRemove) return
+    const spell = spellToRemove
+    setSpellToRemove(null)
     const { error } = await supabase.rpc('remove_character_spell', { p_spell_id: spell.id })
     if (!error) setSpells((all) => all.filter((item) => item.id !== spell.id))
   }
@@ -647,8 +668,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
               (matching the artifact's shape) but honestly says it isn't set
               up yet -- same treatment as the Treasure/Party sidebar below. */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className={`rounded-lg px-3 py-2 border ${gearFull ? 'border-warning/60 bg-warning/5' : 'bg-panel border-line-soft'}`}>
-              <p className="text-[10px] tracking-wide text-ink-dim mb-1">GEAR</p>
+            <StatTile label="GEAR" highlight={gearFull}>
               <p className={`text-lg font-semibold ${gearFull ? 'text-warning-text' : 'text-white'}`}>
                 {usedSlots}<span className="text-ink-dim text-sm font-normal"> / {maxSlots}</span>
               </p>
@@ -657,23 +677,19 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                   <div className="h-full w-full bg-warning rounded-full" />
                 </div>
               )}
-            </div>
-            <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-              <p className="text-[10px] tracking-wide text-ink-dim mb-1">COIN</p>
+            </StatTile>
+            <StatTile label="COIN">
               <p className="text-lg font-semibold text-white">{character.coin}<span className="text-ink-dim text-sm font-normal"> gp</span></p>
-            </div>
-            <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-              <p className="text-[10px] tracking-wide text-ink-dim mb-1">TORCHES</p>
+            </StatTile>
+            <StatTile label="TORCHES">
               <p className="text-lg font-semibold text-white">{torchCount}</p>
-            </div>
-            <div className="bg-panel border border-line-soft rounded-lg px-3 py-2">
-              <p className="text-[10px] tracking-wide text-ink-dim mb-1">RATIONS</p>
+            </StatTile>
+            <StatTile label="RATIONS">
               <p className="text-lg font-semibold text-white">{rationCount}</p>
-            </div>
-            <div className="bg-panel border border-dashed border-line-soft rounded-lg px-3 py-2">
-              <p className="text-[10px] tracking-wide text-ink-dim mb-1">PARTY STORAGE</p>
+            </StatTile>
+            <StatTile label="PARTY STORAGE" className="border-dashed">
               <p className="text-xs text-ink-faint mt-2">Not set up</p>
-            </div>
+            </StatTile>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -729,7 +745,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                               <button onClick={() => toggleEquipped(item)} className="text-[11px] text-ink-faint hover:text-ink-dim">
                                 Unequip
                               </button>
-                              <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text ml-auto">
+                              <button onClick={() => requestRemoveGear(item)} className="text-ink-faint hover:text-danger-text ml-auto">
                                 <Trash2 size={12} />
                               </button>
                             </>
@@ -785,7 +801,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                               <button onClick={() => toggleEquipped(item)} className="text-[11px] text-ink-faint hover:text-ink-dim whitespace-nowrap">
                                 Equip
                               </button>
-                              <button onClick={() => removeGear(item)} className="text-ink-faint hover:text-danger-text">
+                              <button onClick={() => requestRemoveGear(item)} className="text-ink-faint hover:text-danger-text">
                                 <Trash2 size={13} />
                               </button>
                             </>
@@ -910,14 +926,14 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         {features.length === 0 && <p className="text-xs text-ink-faint">None yet.</p>}
         <div className="flex flex-col gap-2">
           {features.map((f) => (
-            <div key={f.id} className="text-xs p-3 bg-panel2/60 rounded-md border border-line">
+            <SubRow key={f.id} className="text-xs p-3">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <span className="text-ink font-medium">{f.name}</span>
                   <span className="text-[10px] text-ink-faint ml-2">({f.source})</span>
                 </div>
                 {canEdit && (
-                  <button onClick={() => removeFeature(f)} className="text-ink-faint hover:text-danger-text shrink-0">
+                  <button onClick={() => requestRemoveFeature(f)} className="text-ink-faint hover:text-danger-text shrink-0">
                     <Trash2 size={13} />
                   </button>
                 )}
@@ -939,7 +955,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                   )}
                 </div>
               )}
-            </div>
+            </SubRow>
           ))}
         </div>
       </div>
@@ -963,7 +979,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
         <div className="flex flex-col gap-2 mb-3">
           {spells.length === 0 && <p className="text-xs text-ink-faint">None known yet.</p>}
           {spells.map((spell) => (
-            <div key={spell.id} className="text-xs p-3 bg-panel2/60 rounded-md border border-line">
+            <SubRow key={spell.id} className="text-xs p-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-ink font-medium ${spell.lost ? 'line-through text-ink-faint' : ''}`}>{spell.name}</span>
@@ -977,7 +993,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                   )}
                 </div>
                 {canEdit && (
-                  <button onClick={() => removeSpell(spell)} className="text-ink-faint hover:text-danger-text shrink-0">
+                  <button onClick={() => requestRemoveSpell(spell)} className="text-ink-faint hover:text-danger-text shrink-0">
                     <Trash2 size={13} />
                   </button>
                 )}
@@ -1033,7 +1049,7 @@ export default function CharacterSheet({ characterId, session, onBack }) {
                   </button>
                 </div>
               )}
-            </div>
+            </SubRow>
           ))}
         </div>
 
@@ -1232,6 +1248,31 @@ export default function CharacterSheet({ characterId, session, onBack }) {
           )}
         </div>
       </Modal>
+
+      <ConfirmModal
+        open={!!gearToRemove}
+        onClose={() => setGearToRemove(null)}
+        onConfirm={removeGear}
+        title="Remove item"
+        message={gearToRemove ? `Remove ${gearToRemove.name} from this character's gear?` : ''}
+        confirmLabel="Remove"
+      />
+      <ConfirmModal
+        open={!!featureToRemove}
+        onClose={() => setFeatureToRemove(null)}
+        onConfirm={removeFeature}
+        title="Remove feature"
+        message={featureToRemove ? `Remove ${featureToRemove.name}? This can't be undone.` : ''}
+        confirmLabel="Remove"
+      />
+      <ConfirmModal
+        open={!!spellToRemove}
+        onClose={() => setSpellToRemove(null)}
+        onConfirm={removeSpell}
+        title="Remove spell"
+        message={spellToRemove ? `Remove ${spellToRemove.name} from this character's spells?` : ''}
+        confirmLabel="Remove"
+      />
     </div>
   )
 }
