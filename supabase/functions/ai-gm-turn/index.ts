@@ -262,6 +262,31 @@ Deno.serve(async (req) => {
     })
   }
 
+  // Decision Queue #32, AI ops hardening: make mid-turn dice writes
+  // transactional with narration. Tool calls (roll_dice, spawn_monster,
+  // damage_monster, etc. below) write to the database immediately as the
+  // model works through a turn -- intentionally, so the table sees rolls
+  // and monster changes happen live rather than waiting for the whole turn
+  // to resolve. But that also means a turn that ultimately fails (Gemini
+  // gets blocked, the tool-call loop runs out of rounds, or
+  // complete_ai_gm_turn itself fails to persist the narration) can leave a
+  // roll or monster change sitting in the log with no narration ever
+  // explaining it. True atomicity would mean buffering every write until
+  // the very end, which would kill that live-roll visibility -- instead,
+  // if any tool call actually wrote something before the turn failed, post
+  // one clearly-attributed note explaining the turn didn't finish, so the
+  // dangling entries above it have context instead of sitting unexplained.
+  let mutatedThisTurn = false
+  const postInterruptedNote = async (reason: string) => {
+    if (!mutatedThisTurn) return
+    await writer.from('scene_log').insert({
+      campaign_id: campaignId,
+      type: 'ai_gm',
+      sender_name: `${campaign.name} — AI GM`,
+      text: `*(This turn didn't finish -- ${reason} The rolls and changes above already happened; hit Continue to let the GM pick up where it left off.)*`,
+    })
+  }
+
   // Everything from here through the completion RPC below runs after a
   // successful claim -- wrapped in one try/catch (Decision Queue #32, AI
   // ops hardening: release the turn claim on crash) so ANY failure here
@@ -676,6 +701,11 @@ Deno.serve(async (req) => {
               throw new Error(`Unknown tool "${call.name}".`)
             }
 
+            // Reached only once the tool's own write above has succeeded --
+            // every recognized tool here writes something, so this is the
+            // single place that needs to flip the flag.
+            mutatedThisTurn = true
+
             functionResponseParts.push({
               functionResponse: {
                 name: call.name,
@@ -694,11 +724,13 @@ Deno.serve(async (req) => {
         contents.push({ role: 'function', parts: functionResponseParts })
       }
     } catch (e) {
+      await postInterruptedNote(`something went wrong mid-turn (${e instanceof Error ? e.message : 'unknown error'}).`)
       await releaseClaim()
       return corsResponse({ error: e instanceof Error ? e.message : 'AI GM call failed.' }, 500)
     }
 
     if (!finalText) {
+      await postInterruptedNote('it used too many tool calls without wrapping up.')
       await releaseClaim()
       return corsResponse({ error: 'The GM used too many tool calls without wrapping up. Try Continue again.' }, 500)
     }
@@ -710,10 +742,12 @@ Deno.serve(async (req) => {
       p_text: finalText,
     })
     if (completeError || !completed) {
+      await postInterruptedNote("its narration couldn't be saved (the turn's lease may have expired).")
       await releaseClaim()
       return corsResponse({ error: completeError?.message || 'The AI GM turn lease expired before completion.' }, 500)
     }
   } catch (e) {
+    await postInterruptedNote(`something went wrong mid-turn (${e instanceof Error ? e.message : 'unknown error'}).`)
     await releaseClaim()
     return corsResponse({ error: e instanceof Error ? e.message : 'AI GM call failed.' }, 500)
   }
