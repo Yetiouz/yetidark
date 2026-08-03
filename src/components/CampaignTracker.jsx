@@ -37,9 +37,13 @@ const TABS = [
 // here yet.
 const NPC_STATUS_TONE = { Alive: 'green', Dead: 'red', Missing: 'amber', Unknown: 'neutral' }
 
+// Downtime XP-for-treasure-quality, rulebook p.117.
+const QUALITY_LABEL = { poor: 'Poor', normal: 'Normal', fabulous: 'Fabulous', legendary: 'Legendary' }
+const QUALITY_XP = { poor: 0, normal: 1, fabulous: 3, legendary: 10 }
+
 const emptyNpc = { name: '', ancestry: '', role: '', location: '', alignment: '', attitude: '', status: 'Alive', notes: '' }
 const emptyFaction = { name: '', type: '', leader: '', territory: '', goal: '', disposition: '', status_clock: '', notes: '' }
-const emptyTreasure = { session_number: '', item: '', type: '', qty_value: '', found_at: '', held_by: '', identified: '', notes: '' }
+const emptyTreasure = { session_number: '', item: '', type: '', qty_value: '', found_at: '', held_by: '', identified: '', quality: '', notes: '' }
 
 export default function CampaignTracker({ campaignId, session, campaignName = 'The sunken keep', onBack }) {
   const user = session?.user
@@ -60,6 +64,8 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
   const [factionDraft, setFactionDraft] = useState(emptyFaction)
   const [treasureDraft, setTreasureDraft] = useState(emptyTreasure)
   const [saving, setSaving] = useState(false)
+  const [awardingId, setAwardingId] = useState(null)
+  const [awardError, setAwardError] = useState(null)
 
   useEffect(() => {
     if (!campaignId || !user) return
@@ -188,6 +194,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
       found_at: t.found_at || '',
       held_by: t.held_by || '',
       identified: t.identified === true ? 'yes' : t.identified === false ? 'no' : '',
+      quality: t.quality || '',
       notes: treasureSecrets[t.id]?.notes || '',
     })
     setShowAdd(true)
@@ -272,6 +279,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
       item: trimmedItem,
       session_number: treasureDraft.session_number ? parseInt(treasureDraft.session_number, 10) : null,
       identified: treasureDraft.identified === '' ? null : treasureDraft.identified === 'yes',
+      quality: treasureDraft.quality || null,
     }
 
     if (editId) {
@@ -292,6 +300,20 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
   const deleteRow = async (table, id) => {
     if (!window.confirm('Remove this entry?')) return
     await supabase.from(table).delete().eq('id', id)
+  }
+
+  // GM-only, one-shot per treasure entry -- award_treasure_xp() enforces
+  // both the GM check and the double-award guard server-side, this just
+  // surfaces its error if either trips. Realtime's existing UPDATE
+  // handler (see the campaign_treasure channel subscription above)
+  // reflects xp_awarded flipping to true, same as every other edit on
+  // this screen -- no local state patch needed here.
+  const awardTreasureXp = async (treasureId) => {
+    setAwardingId(treasureId)
+    setAwardError(null)
+    const { error } = await supabase.rpc('award_treasure_xp', { p_treasure_id: treasureId })
+    setAwardingId(null)
+    if (error) setAwardError(error.message)
   }
 
   const inputCls = 'text-xs bg-bg border border-line rounded-md px-3 py-2 text-ink'
@@ -385,6 +407,13 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
             <option value="yes">Identified</option>
             <option value="no">Not identified</option>
           </select>
+          <select className={inputCls} value={treasureDraft.quality} onChange={(e) => setTreasureDraft({ ...treasureDraft, quality: e.target.value })}>
+            <option value="">Quality (for XP)?</option>
+            <option value="poor">Poor -- 0 XP</option>
+            <option value="normal">Normal -- 1 XP</option>
+            <option value="fabulous">Fabulous -- 3 XP</option>
+            <option value="legendary">Legendary -- 10 XP</option>
+          </select>
           <input className={inputCls} placeholder="Notes" value={treasureDraft.notes} onChange={(e) => setTreasureDraft({ ...treasureDraft, notes: e.target.value })} />
           <div className="col-span-2 flex items-center gap-2">
             <button onClick={saveTreasure} disabled={saving || !treasureDraft.item.trim()} className="flex-1 text-xs border border-line rounded-md py-2 text-ink hover:bg-panel2 disabled:opacity-50">
@@ -468,6 +497,7 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
 
       {tab === 'treasure' && (
         <div className="flex flex-col gap-2">
+          {awardError && <p className="text-xs text-danger-text">{awardError}</p>}
           {treasure.length === 0 && <p className="text-xs text-ink-faint">No treasure logged yet.</p>}
           {treasure.map((t) => (
             <Card key={t.id}>
@@ -480,6 +510,16 @@ export default function CampaignTracker({ campaignId, session, campaignName = 'T
                   {t.session_number != null && <Badge tone="neutral">Session {t.session_number}</Badge>}
                   {t.identified === true && <Badge tone="green">Identified</Badge>}
                   {t.identified === false && <Badge tone="neutral">Unidentified</Badge>}
+                  {t.quality && <Badge tone={t.xp_awarded ? 'green' : 'amber'}>{QUALITY_LABEL[t.quality]}{t.xp_awarded ? ' \u00b7 XP awarded' : ''}</Badge>}
+                  {isGm && t.quality && !t.xp_awarded && (
+                    <button
+                      onClick={() => awardTreasureXp(t.id)}
+                      disabled={awardingId === t.id}
+                      className="text-[11px] border border-line rounded-md px-2 py-1 text-ink-dim hover:bg-panel2 disabled:opacity-50"
+                    >
+                      {awardingId === t.id ? 'Awarding\u2026' : `Award ${QUALITY_XP[t.quality]} XP`}
+                    </button>
+                  )}
                   {isGm && (
                     <button onClick={() => startEditTreasure(t)} className="text-ink-faint hover:text-ink p-1">
                       <Pencil size={12} />
