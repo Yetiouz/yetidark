@@ -21,6 +21,29 @@
 // fair outcome -- every GM-side roll it wants to make actually happens
 // here, server-side, with a real RNG, and is logged to dice_rolls exactly
 // like a human GM's rolls are.
+//
+// Tool surface (Decision Queue #31, part 1 -- 2026-08-03): beyond roll_dice,
+// the model also gets spawn_monster/damage_monster/remove_monster so it can
+// actually run a fight, not just narrate one. These write directly to
+// encounter_monsters via the same service-role `writer` client dice_rolls
+// already uses -- no new RPC needed, this is the identical direct-table-CRUD
+// shape GmDashboard.jsx's own addMonster/adjustHp/deleteMonster already use
+// for a human GM, so the AI's mechanical footprint here is indistinguishable
+// from a human GM clicking the same buttons. The rest of #31 (adjust_
+// character_resource, roll_initiative/advance_turn, advance_clock, reveal/
+// light control, write_gm_note/update_npc/update_faction, and the combat-
+// resolution trio resolve_morale_check/resolve_stabilize_check/resolve_
+// dying_turn) is NOT wired yet -- those three in particular hit a real
+// wrinkle worth flagging for whoever picks this up next: they're SECURITY
+// DEFINER RPCs with an explicit `is_campaign_gm(campaign_id)` check inside
+// them, which reads auth.uid() -- and this `writer` client has no user JWT
+// (it authenticates as service_role), so auth.uid() is null there and that
+// check would always reject it. Calling them will need each RPC's guard
+// widened to accept `is_campaign_gm(p_campaign_id) or auth.role() =
+// 'service_role'` first (safe: service_role already bypasses RLS on every
+// table these touch, so this doesn't widen who can reach them, only lets
+// this already-trusted caller in) -- not done here to keep this pass to the
+// tools that needed zero auth-model changes.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -88,6 +111,7 @@ CORE COMMITMENTS (non-negotiable):
 2. Ground rulings in the campaign's actual house rules and context provided below, not invented rules.
 3. Consequences stick. No retroactive softening of a bad outcome, including PC death, to protect the story.
 4. If a table is aimless or stuck, actively nudge -- resurface a lead, frame explicit choices -- rather than leaving it fully open with no momentum (guided sandbox, not railroad).
+5. Monsters and other mechanical combatants are real tracked things, not just prose. Use spawn_monster the moment one becomes a real combatant in the scene, damage_monster for every hit that actually lands (after rolling damage with roll_dice), and remove_monster once it's truly dead or gone for good -- don't leave a monster's HP only described in narration without updating it here too.
 
 VOICE: Grimdark with real humor -- "Dungeon Crawler Carl" register. Stakes are genuinely dark (death is permanent, monsters are horrific) but it should also be funny -- dark comedy, snark, absurd/gonzo details, theatrical flair. A funny death is still a real, permanent death.
 
@@ -239,7 +263,7 @@ Deno.serve(async (req) => {
     })
   }
 
-  const [{ data: party }, { data: npcs }, { data: factions }, { data: log }] = await Promise.all([
+  const [{ data: party }, { data: npcs }, { data: factions }, { data: log }, { data: encounterMonsters }] = await Promise.all([
     supabase.from('characters').select('name, ancestry, class, level, hp, max_hp, ac').eq('campaign_id', campaignId),
     supabase.from('campaign_npcs').select('id, name, ancestry, role, location, attitude, status').eq('campaign_id', campaignId),
     supabase.from('campaign_factions').select('id, name, type, leader, territory, disposition, status_clock').eq('campaign_id', campaignId),
@@ -250,7 +274,18 @@ Deno.serve(async (req) => {
       .lte('created_at', claim.claimed_at)
       .order('created_at', { ascending: false })
       .limit(TRANSCRIPT_LIMIT),
+    // writer (service-role), not the caller's RLS-scoped `supabase` client --
+    // the AI is acting as this campaign's GM, so it needs to see hidden
+    // monsters too, same as a human GM's own dashboard does.
+    writer.from('encounter_monsters').select('id, name, ac, hp, max_hp, dex_mod, zone, hidden').eq('campaign_id', campaignId),
   ])
+
+  // Mutable working copy: spawn_monster/damage_monster/remove_monster below
+  // update this in place so a later tool call in the same turn (e.g. damage
+  // a monster spawned earlier this same turn) resolves by name correctly
+  // without needing a fresh DB round-trip.
+  const currentMonsters: Array<{ id: string; name: string; ac: number; hp: number; max_hp: number; dex_mod: number; zone: string; hidden: boolean }> =
+    encounterMonsters ? [...encounterMonsters] : []
 
   const transcript = (log || []).slice().reverse()
   const [{ data: npcSecrets }, { data: factionSecrets }] = await Promise.all([
@@ -312,6 +347,9 @@ ${(factions || []).map((f) => {
   return `- ${f.name} (${f.type || '?'}), led by ${f.leader || 'unknown'}, based at ${f.territory || 'unknown'} -- disposition: ${f.disposition || 'unknown'}${f.status_clock ? `, status: ${f.status_clock}` : ''}${secret?.goal ? `. Secret goal: ${secret.goal}` : ''}${secret?.notes ? `. GM notes: ${secret.notes}` : ''}`
 }).join('\n') || '(none logged yet)'}
 
+CURRENT ENCOUNTER (monsters/combatants on the board right now -- refer to these by name with damage_monster/remove_monster; empty means no active encounter):
+${currentMonsters.length ? currentMonsters.map((m) => `- ${m.name}: ${m.hp}/${m.max_hp} hp, ac ${m.ac}, dex mod ${m.dex_mod >= 0 ? '+' : ''}${m.dex_mod}, zone ${m.zone}${m.hidden ? ' (hidden from the party)' : ''}`).join('\n') : '(none)'}
+
 TRANSCRIPT:
 ${transcriptText}
 `.trim()
@@ -332,6 +370,48 @@ ${transcriptText}
               roller_name: { type: 'STRING', description: 'Who/what is rolling, e.g. "Goblin Scout".' },
             },
             required: ['notation', 'reason', 'roller_name'],
+          },
+        },
+        {
+          name: 'spawn_monster',
+          description:
+            "Add a monster or other mechanical combatant (something with real HP/AC that can be attacked or can attack) to the current encounter -- it immediately shows up on the party's map and the GM dashboard. Narrate its entrance in your response text as usual; this is what makes it a real, trackable thing at the table rather than just prose.",
+          parameters: {
+            type: 'OBJECT',
+            properties: {
+              name: { type: 'STRING', description: 'Display name, e.g. "Goblin Scout", or "Goblin Scout 2" if one by that name already exists in the CURRENT ENCOUNTER list.' },
+              ac: { type: 'NUMBER', description: 'Armor Class.' },
+              hp: { type: 'NUMBER', description: 'Starting and maximum hit points.' },
+              dex_mod: { type: 'NUMBER', description: 'DEX modifier. Defaults to 0 if omitted.' },
+              zone: { type: 'STRING', enum: ['close', 'near', 'far'], description: 'Where it starts relative to the party. Defaults to "near".' },
+              hidden: { type: 'BOOLEAN', description: "True if the party hasn't spotted it yet (an ambush, something lurking unseen) -- it stays off their map until revealed. Defaults to false." },
+            },
+            required: ['name', 'ac', 'hp'],
+          },
+        },
+        {
+          name: 'damage_monster',
+          description:
+            "Change a monster's current HP -- positive amount damages it, negative amount heals it (clamped between 0 and its max HP). Use this for every hit that actually lands, after rolling the damage with roll_dice -- never just narrate a monster taking damage without updating its real HP here too.",
+          parameters: {
+            type: 'OBJECT',
+            properties: {
+              monster_name: { type: 'STRING', description: 'The exact name as it appears in the CURRENT ENCOUNTER list.' },
+              amount: { type: 'NUMBER', description: 'Positive to damage, negative to heal.' },
+            },
+            required: ['monster_name', 'amount'],
+          },
+        },
+        {
+          name: 'remove_monster',
+          description:
+            "Remove a monster from the encounter entirely -- it died, fled the scene for good, or is otherwise fully resolved. Don't use this for a monster that's merely unconscious or might still matter later this scene; only when it's truly gone.",
+          parameters: {
+            type: 'OBJECT',
+            properties: {
+              monster_name: { type: 'STRING', description: 'The exact name as it appears in the CURRENT ENCOUNTER list.' },
+            },
+            required: ['monster_name'],
           },
         },
       ],
@@ -411,53 +491,105 @@ ${transcriptText}
       for (const p of functionCalls) {
         const call = p.functionCall as { name: string; args: Record<string, unknown> }
         try {
-          const { notation, mode, reason, roller_name } = call.args as {
-            notation: string
-            mode?: string
-            reason: string
-            roller_name: string
-          }
-          const roll = rollNotation(notation, mode || 'flat')
-          const { data: diceRow } = await writer
-            .from('dice_rolls')
-            .insert({
-              campaign_id: campaignId,
-              roller_name: roller_name,
-              notation,
-              mode: mode || 'flat',
-              reason,
-              breakdown: roll.breakdown,
-              total: roll.total,
-              raw_d20: roll.rawD20,
-              is_crit: roll.isCrit,
-              is_fumble: roll.isFumble,
-            })
-            .select()
-            .single()
+          let responseContent: string
 
-          await writer.from('scene_log').insert({
-            campaign_id: campaignId,
-            type: 'roll',
-            sender_name: roller_name,
-            text: `rolled ${notation}${mode && mode !== 'flat' ? ` (${mode})` : ''}: ${roll.total}${roll.isCrit ? ' — CRITICAL!' : roll.isFumble ? ' — fumble!' : ''} — ${reason}`,
-            roll_source: 'app',
-            dice_roll_id: diceRow?.id,
-          })
+          if (call.name === 'roll_dice') {
+            const { notation, mode, reason, roller_name } = call.args as {
+              notation: string
+              mode?: string
+              reason: string
+              roller_name: string
+            }
+            const roll = rollNotation(notation, mode || 'flat')
+            const { data: diceRow } = await writer
+              .from('dice_rolls')
+              .insert({
+                campaign_id: campaignId,
+                roller_name: roller_name,
+                notation,
+                mode: mode || 'flat',
+                reason,
+                breakdown: roll.breakdown,
+                total: roll.total,
+                raw_d20: roll.rawD20,
+                is_crit: roll.isCrit,
+                is_fumble: roll.isFumble,
+              })
+              .select()
+              .single()
+
+            await writer.from('scene_log').insert({
+              campaign_id: campaignId,
+              type: 'roll',
+              sender_name: roller_name,
+              text: `rolled ${notation}${mode && mode !== 'flat' ? ` (${mode})` : ''}: ${roll.total}${roll.isCrit ? ' — CRITICAL!' : roll.isFumble ? ' — fumble!' : ''} — ${reason}`,
+              roll_source: 'app',
+              dice_roll_id: diceRow?.id,
+            })
+
+            responseContent = `Rolled ${notation}${mode && mode !== 'flat' ? ` with ${mode}` : ''}: total ${roll.total} (${roll.breakdown})${roll.isCrit ? ' -- CRITICAL' : ''}${roll.isFumble ? ' -- FUMBLE' : ''}.`
+          } else if (call.name === 'spawn_monster') {
+            const { name, ac, hp, dex_mod, zone, hidden } = call.args as {
+              name: string
+              ac: number
+              hp: number
+              dex_mod?: number
+              zone?: string
+              hidden?: boolean
+            }
+            const safeHp = Math.max(1, Math.round(hp))
+            const safeZone = ['close', 'near', 'far'].includes(zone || '') ? (zone as string) : 'near'
+            const { data: spawned, error: spawnError } = await writer
+              .from('encounter_monsters')
+              .insert({
+                campaign_id: campaignId,
+                name,
+                ac: Math.round(ac),
+                hp: safeHp,
+                max_hp: safeHp,
+                dex_mod: Math.round(dex_mod || 0),
+                zone: safeZone,
+                hidden: Boolean(hidden),
+                hp_visible: false,
+              })
+              .select('id, name, ac, hp, max_hp, dex_mod, zone, hidden')
+              .single()
+            if (spawnError || !spawned) throw new Error(spawnError?.message || 'Could not spawn monster.')
+            currentMonsters.push(spawned)
+            responseContent = `Spawned ${spawned.name}: ${spawned.hp}/${spawned.max_hp} hp, ac ${spawned.ac}, zone ${spawned.zone}${spawned.hidden ? ' (hidden from the party)' : ''}.`
+          } else if (call.name === 'damage_monster') {
+            const { monster_name, amount } = call.args as { monster_name: string; amount: number }
+            const monster = currentMonsters.find((m) => m.name.toLowerCase() === String(monster_name).toLowerCase())
+            if (!monster) throw new Error(`No monster named "${monster_name}" in the current encounter. Check the CURRENT ENCOUNTER list, or spawn_monster first.`)
+            const nextHp = Math.max(0, Math.min(monster.max_hp, monster.hp - Math.round(amount)))
+            const { error: dmgError } = await writer.from('encounter_monsters').update({ hp: nextHp }).eq('id', monster.id)
+            if (dmgError) throw new Error(dmgError.message)
+            monster.hp = nextHp
+            responseContent = `${monster.name} is now at ${nextHp}/${monster.max_hp} hp${nextHp === 0 ? " -- down, but still on the board until you remove_monster if it's truly dead or gone" : ''}.`
+          } else if (call.name === 'remove_monster') {
+            const { monster_name } = call.args as { monster_name: string }
+            const idx = currentMonsters.findIndex((m) => m.name.toLowerCase() === String(monster_name).toLowerCase())
+            if (idx === -1) throw new Error(`No monster named "${monster_name}" in the current encounter.`)
+            const monster = currentMonsters[idx]
+            const { error: removeError } = await writer.from('encounter_monsters').delete().eq('id', monster.id)
+            if (removeError) throw new Error(removeError.message)
+            currentMonsters.splice(idx, 1)
+            responseContent = `${monster.name} removed from the encounter.`
+          } else {
+            throw new Error(`Unknown tool "${call.name}".`)
+          }
 
           functionResponseParts.push({
             functionResponse: {
               name: call.name,
-              response: {
-                name: call.name,
-                content: `Rolled ${notation}${mode && mode !== 'flat' ? ` with ${mode}` : ''}: total ${roll.total} (${roll.breakdown})${roll.isCrit ? ' -- CRITICAL' : ''}${roll.isFumble ? ' -- FUMBLE' : ''}.`,
-              },
+              response: { name: call.name, content: responseContent },
             },
           })
         } catch (e) {
           functionResponseParts.push({
             functionResponse: {
               name: call.name,
-              response: { name: call.name, content: `Error: ${e instanceof Error ? e.message : 'roll failed'}` },
+              response: { name: call.name, content: `Error: ${e instanceof Error ? e.message : 'tool call failed'}` },
             },
           })
         }
