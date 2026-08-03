@@ -7,10 +7,10 @@
 // one bit of conditional styling both screens share -- the amber "lit torch"
 // border/background swap -- so it's a prop instead of being reimplemented
 // per call site.
-export default function StatTile({ label, icon: Icon, highlight = false, title, children }) {
+export default function StatTile({ label, icon: Icon, highlight = false, title, children, className = '' }) {
   return (
     <div
-      className={`rounded-lg px-3 py-2 border ${highlight ? 'border-warning/60 bg-warning/5' : 'bg-panel border-line-soft'}`}
+      className={`rounded-lg px-3 py-2 border ${highlight ? 'border-warning/60 bg-warning/5' : 'bg-panel border-line-soft'} ${className}`}
       title={title}
     >
       <p className="text-[10px] tracking-wide text-ink-dim mb-1 flex items-center gap-1">
