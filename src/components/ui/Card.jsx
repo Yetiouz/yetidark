@@ -4,9 +4,10 @@
 // border-line-soft rounded-xl p-4` shape already used consistently across
 // Campaign Lobby, Lobby, and Character Picker -- this just makes it a
 // named, reusable piece instead of the same four classes retyped per card.
-export default function Card({ title, titleRight, children, className = '', bodyClassName = '' }) {
+export default function Card({ title, titleRight, children, className = '', bodyClassName = '', size = 'default' }) {
+  const pad = size === 'compact' ? 'p-3' : 'p-4'
   return (
-    <div className={`bg-panel border border-line-soft rounded-xl p-4 ${className}`}>
+    <div className={`bg-panel border border-line-soft rounded-xl ${pad} ${className}`}>
       {title && (
         <div className={`flex items-center justify-between gap-2 ${children ? 'mb-3' : ''}`}>
           <p className="text-sm font-medium text-ink">{title}</p>
