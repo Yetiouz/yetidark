@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, Trash2, Flame, Play, Pause, ClipboardCheck } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Flame, Play, Pause, ClipboardCheck, History } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient.js'
 import { appendUniqueById } from '../app/realtimeCollections.js'
 import ProgressBar from './ui/ProgressBar.jsx'
@@ -35,6 +35,77 @@ function displayedMinutes(source, nowMs) {
   return source.remaining_minutes
 }
 
+// Turns a campaign_events row into one human-readable line. Every mutating
+// RPC in this app already writes a structured event here (event_type +
+// entity_type/entity_id + payload) -- this is what finally surfaces that
+// ledger as real history instead of leaving it write-only. Character
+// attribution falls back through three tiers since payload shapes vary by
+// RPC: a nested row's own character_id (gear/spell events), the event's
+// own entity_id when entity_type is 'character' (resource/level/rest/
+// carouse events), and finally the acting user's own character in this
+// campaign (covers GM-attributed and any event with neither). An unmapped
+// event_type falls back to its raw type string rather than being hidden --
+// an honest "don't recognize this yet" beats silently dropping history.
+function describeEvent(e, party) {
+  const p = e.payload || {}
+  const charName = (id) => party.find((c) => c.id === id)?.name
+  const actorName = () => party.find((c) => c.owner_user_id === e.actor_user_id)?.name || 'The GM'
+  const who = (id) => charName(id) || actorName()
+  switch (e.event_type) {
+    case 'campaign.clock_added':
+      return `Clock "${p.clock?.name}" started (${p.clock?.segments_total} segments)`
+    case 'campaign.clock_adjusted':
+      return `Clock "${p.name}": ${p.before} → ${p.after}`
+    case 'campaign.clock_removed':
+      return `Clock "${p.clock?.name}" removed`
+    case 'campaign.light_added':
+      return `Light source "${p.light_source?.name}" added (${p.light_source?.total_minutes}m)`
+    case 'campaign.light_removed':
+      return `Light source "${p.light_source?.name}" removed`
+    case 'campaign.light_changed':
+      return `${p.name} ${p.lit ? 'lit' : `snuffed — ${Math.round(p.remaining_minutes)}m left`}`
+    case 'campaign.session_activity_changed':
+      return `Session ${p.after ? 'resumed' : 'paused'}`
+    case 'campaign.session_ended':
+      return `Session ${p.session_number} ended (${p.party_count} in the party)`
+    case 'character.created':
+      return `${p.character?.name} joined the party`
+    case 'character.resource_adjusted': {
+      const label = p.resource === 'hp' ? 'HP' : p.resource === 'xp' ? 'XP' : 'coin'
+      const delta = p.applied_delta
+      return `${who(e.entity_id)}: ${delta > 0 ? '+' : ''}${delta} ${label}${p.reason ? ` (${p.reason})` : ''}`
+    }
+    case 'character.leveled_up':
+      return `${who(e.entity_id)} reached level ${p.new_level} (+${p.hp_gain} max HP)`
+    case 'character.caroused':
+      return `${who(e.entity_id)} caroused: ${p.outcome}`
+    case 'character.full_rest_completed':
+      return `${who(e.entity_id)} completed a full rest`
+    case 'character.gear_added':
+      return `${who(p.item?.character_id)} acquired ${p.item?.name}`
+    case 'character.gear_removed':
+      return `${who(p.item?.character_id)} removed ${p.item?.name}`
+    case 'character.gear_equipped':
+      return `${p.equipped ? 'Equipped' : 'Unequipped'} ${p.name}`
+    case 'character.spell_added':
+      return `${who(p.spell?.character_id)} learned ${p.spell?.name}`
+    case 'character.spell_removed':
+      return `${who(p.spell?.character_id)} forgot ${p.spell?.name}`
+    case 'character.spell_prepared':
+      return `${p.name} ${p.prepared ? 'prepared' : 'unprepared'}`
+    case 'character.spell_check_recorded':
+      return `${actorName()} cast ${p.name}: ${p.succeeded ? 'succeeded' : p.mishap ? 'mishap' : 'failed'}${p.locked ? ' (locked until rest)' : ''}`
+    case 'treasure.xp_awarded':
+      return `Awarded ${p.xp_each} XP each for ${p.item} (${p.quality}) to ${p.recipient_count} character${p.recipient_count === 1 ? '' : 's'}`
+    default:
+      return e.event_type
+  }
+}
+
+function formatEventTime(iso) {
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
 // Three sections mirroring the file-based GM system's campaign-state.md /
 // timeline.md: open plot threads, countdown/countup clocks, and a
 // session-by-session recap log. GM can add/edit everything here directly
@@ -63,6 +134,7 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
   const [sessionActive, setSessionActive] = useState(false)
   const [lightSources, setLightSources] = useState([])
   const [party, setParty] = useState([])
+  const [events, setEvents] = useState([])
   const [lightNameDraft, setLightNameDraft] = useState('')
   const [lightCharacterDraft, setLightCharacterDraft] = useState('')
   const [nowTick, setNowTick] = useState(() => Date.now())
@@ -87,7 +159,8 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
       supabase.from('campaigns').select('session_number, session_active, next_session_pickup').eq('id', campaignId).maybeSingle(),
       supabase.from('campaign_light_sources').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: true }),
       supabase.from('characters').select('id, name, owner_user_id').eq('campaign_id', campaignId).order('created_at', { ascending: true }),
-    ]).then(([threadsRes, clocksRes, timelineRes, campaignRes, lightRes, partyRes]) => {
+      supabase.from('campaign_events').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: false }).limit(50),
+    ]).then(([threadsRes, clocksRes, timelineRes, campaignRes, lightRes, partyRes, eventsRes]) => {
       if (cancelled) return
       setThreads(threadsRes.data || [])
       setClocks(clocksRes.data || [])
@@ -97,6 +170,7 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
       setNextSessionPickup(campaignRes.data?.next_session_pickup || null)
       setLightSources(lightRes.data || [])
       setParty(partyRes.data || [])
+      setEvents(eventsRes.data || [])
       setLoading(false)
     })
 
@@ -152,6 +226,11 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
           setCurrentSessionNumber(payload.new.session_number)
           setNextSessionPickup(payload.new.next_session_pickup || null)
         }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'campaign_events', filter: `campaign_id=eq.${campaignId}` },
+        (payload) => setEvents((e) => [payload.new, ...e].slice(0, 50))
       )
       .subscribe()
 
@@ -479,6 +558,22 @@ export default function CampaignLog({ campaignId, session, campaignName = 'The s
             <div key={e.id} className="text-xs p-2 bg-panel2/60 rounded-md">
               <span className="text-ink-faint">Session {e.session_number ?? '?'}:</span>{' '}
               <span className="text-ink-dim">{e.entry}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-panel rounded-lg p-4 mt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <History size={13} className="text-ink-faint" />
+          <p className="text-xs text-ink-dim">Campaign history</p>
+        </div>
+        <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
+          {events.length === 0 && <p className="text-xs text-ink-faint">Nothing logged yet.</p>}
+          {events.map((e) => (
+            <div key={e.id} className="text-xs flex items-baseline gap-2">
+              <span className="text-ink-faint shrink-0">{formatEventTime(e.created_at)}</span>
+              <span className="text-ink-dim">{describeEvent(e, party)}</span>
             </div>
           ))}
         </div>
