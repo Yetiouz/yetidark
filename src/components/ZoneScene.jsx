@@ -31,9 +31,13 @@ function groupByZone(tokens) {
   return groups
 }
 
-// party: [{ id, name, color, zone }], monsters: [{ id, name, zone }] --
-// monsters render in neutral gray since they don't carry the per-character
-// color identity players do. litCharacterId centers a soft light-radius
+// party: [{ id, name, color, zone }], monsters: [{ id, name, zone }],
+// secrets: [{ id, name, zone, state }] -- monsters render in neutral gray
+// since they don't carry the per-character color identity players do;
+// secrets render amber with a dashed "?" ring while tell_visible, solid
+// once revealed (hidden ones never reach this component for a player --
+// RLS blocks the row entirely -- so secretState is only ever the other
+// two on the player page). litCharacterId centers a soft light-radius
 // glow on whichever token currently owns the lit torch, since no
 // Shadowdark ancestry has darkvision and "who's lit" is gameplay-critical,
 // not decorative -- it should move with the torchbearer, not sit fixed on
@@ -59,12 +63,20 @@ function groupByZone(tokens) {
 // a bounded step, not a teleport). Omit it and onSetZone behaves exactly
 // as before: any token, all three zones -- the GM's own unrestricted
 // control.
-export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = [], monsters = [], litCharacterId, onSelectToken, selectedTokenId, onSetZone, moveRestriction }) {
+export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = [], monsters = [], secrets = [], litCharacterId, onSelectToken, selectedTokenId, onSetZone, moveRestriction }) {
   const [zoneMenu, setZoneMenu] = useState(null) // { id, type, name, x, y } while a right-click menu is open
 
   const tokens = [
     ...party.map((p) => ({ id: p.id, name: p.name, color: p.color || '#3b82f6', zone: p.zone || 'near', type: 'character' })),
     ...monsters.map((m) => ({ id: m.id, name: m.name, color: '#737373', zone: m.zone || 'near', type: 'monster', hp: m.hp, maxHp: m.max_hp, hpVisible: m.hp_visible })),
+    // Secrets (traps, hidden doors): hidden ones never reach this component
+    // at all for a player (RLS blocks the row before it's fetched), so
+    // secretState is only ever 'tell_visible'/'revealed' on the player
+    // page -- the GM sees all three via its own full-access fetch.
+    // amber for the same "needs attention" reason the design system
+    // reserves amber for torch/warnings; a dashed ring for tell_visible
+    // marks it as a hint, not a confirmed reveal.
+    ...secrets.map((s) => ({ id: s.id, name: s.name, color: '#f5a524', zone: s.zone || 'near', type: 'secret', secretState: s.state })),
   ]
   const grouped = groupByZone(tokens)
 
@@ -141,12 +153,12 @@ export default function ZoneScene({ mapUrl, mapAccessError, sceneLabel, party = 
                 className="relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium"
                 style={{
                   background: `${t.color}33`,
-                  border: selected ? '2px solid #3b82f6' : `2px solid ${t.color}`,
+                  border: selected ? '2px solid #3b82f6' : `2px ${t.type === 'secret' && t.secretState === 'tell_visible' ? 'dashed' : 'solid'} ${t.color}`,
                   boxShadow: selected ? '0 0 0 2px rgba(59,130,246,0.5)' : 'none',
                   color: t.color,
                 }}
               >
-                {t.name?.[0]?.toUpperCase() || '?'}
+                {t.type === 'secret' && t.secretState === 'tell_visible' ? '?' : t.name?.[0]?.toUpperCase() || '?'}
                 {litCharacterId === t.id && <Flame size={9} className="absolute -top-1.5 -right-1.5" style={{ color: '#f5a524' }} />}
               </div>
               <span className={`text-[9px] whitespace-nowrap ${selected ? 'text-primary-text font-medium' : 'text-ink-dim'}`}>{t.name}</span>

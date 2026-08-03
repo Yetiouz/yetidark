@@ -168,6 +168,7 @@ const { url: mapUrl, error: mapAccessError } = useCampaignMapUrl(mapInfo)
 // and monsters below are GameTable-only, not part of that shared hook.)
 const [threads, setThreads] = useState([])
 const [monsters, setMonsters] = useState([])
+const [secrets, setSecrets] = useState([])
 const [nowTick, setNowTick] = useState(() => Date.now())
 
 // My character's gear and talents -- powers the left-rail "Quick actions"
@@ -233,6 +234,12 @@ supabase
 .then(({ data }) => { if (!cancelled) setMonsters(data || []) })
 
 supabase
+.from('scene_secrets')
+.select('id, name, description, zone, state')
+.eq('campaign_id', campaignId)
+.then(({ data }) => { if (!cancelled) setSecrets(data || []) })
+
+supabase
 .from('gm_notes')
 .select('id, text, revealed')
 .eq('campaign_id', campaignId)
@@ -267,6 +274,15 @@ setThreads((t) => t.map((x) => (x.id === row.id ? row : x)))
 if (payload.eventType === 'INSERT') setMonsters((m) => appendUniqueById(m, payload.new))
 else if (payload.eventType === 'UPDATE') setMonsters((m) => m.map((x) => (x.id === payload.new.id ? payload.new : x)))
 else if (payload.eventType === 'DELETE') setMonsters((m) => m.filter((x) => x.id !== payload.old.id))
+}
+)
+.on(
+'postgres_changes',
+{ event: '*', schema: 'public', table: 'scene_secrets', filter: `campaign_id=eq.${campaignId}` },
+(payload) => {
+if (payload.eventType === 'INSERT') setSecrets((s) => appendUniqueById(s, payload.new))
+else if (payload.eventType === 'UPDATE') setSecrets((s) => s.map((x) => (x.id === payload.new.id ? payload.new : x)))
+else if (payload.eventType === 'DELETE') setSecrets((s) => s.filter((x) => x.id !== payload.old.id))
 }
 )
 .on(
@@ -908,6 +924,7 @@ mapUrl={mapUrl}
 mapAccessError={mapAccessError}
 party={party}
 monsters={monsters}
+secrets={secrets}
 litCharacterId={litCharacterId}
 onSetZone={handleSetZone}
 moveRestriction={canMove ? { tokenId: myCharacter.id, allowedZones: myAdjacentZones } : { tokenId: '__none__', allowedZones: [] }}

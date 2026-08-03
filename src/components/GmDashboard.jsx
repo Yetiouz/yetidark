@@ -22,6 +22,12 @@ import { campaignMapPath, useCampaignMapUrl } from '../lib/useCampaignMapUrl.js'
 import { abilityModifier } from '../game/rules/character.js'
 import { useCampaignSession, useProfileDisplayName } from '../lib/useCampaignSession.js'
 
+// Shadowdark p.112: random-encounter check cadence during crawling rounds,
+// keyed by danger level (unsafe/risky/deadly). Also used for overland
+// travel/resting per p.86/90, but this app only tracks the crawling-round
+// case today.
+const CRAWLING_CADENCE = { unsafe: 3, risky: 2, deadly: 1 }
+
 // Mirrors GameTable.jsx's minute formatting -- kept local here rather
 // than shared since this is the only other screen that needs it.
 function formatMinutes(totalMin) {
@@ -224,6 +230,25 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
   // this uses the new shared ConfirmModal.jsx.
   const [monsterToDelete, setMonsterToDelete] = useState(null)
   const [deletingMonster, setDeletingMonster] = useState(false)
+
+  // Danger level / crawling round (Decision, 2026-08-03): danger_level,
+  // crawling_round, rounds_since_check all live on campaigns (simple
+  // session-wide scalars, same shape as session_active/map_url), fetched
+  // and realtime-subscribed alongside session_active below.
+  const [dangerLevel, setDangerLevel] = useState(null)
+  const [crawlingRound, setCrawlingRound] = useState(0)
+  const [roundsSinceCheck, setRoundsSinceCheck] = useState(0)
+  const [advancingCrawlingRound, setAdvancingCrawlingRound] = useState(false)
+
+  // Secret zones (traps, hidden doors -- ROADMAP.md Milestone 1 locked
+  // decision, built 2026-08-03): scene_secrets mirrors encounter_monsters'
+  // shape and this file's own add/delete pattern for it.
+  const [secrets, setSecrets] = useState([])
+  const [showAddSecret, setShowAddSecret] = useState(false)
+  const [secretForm, setSecretForm] = useState({ name: '', description: '', zone: 'near' })
+  const [addingSecret, setAddingSecret] = useState(false)
+  const [secretToDelete, setSecretToDelete] = useState(null)
+  const [deletingSecret, setDeletingSecret] = useState(false)
   const [message, setMessage] = useState('')
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [composeMode, setComposeMode] = useState('public') // 'public' -> scene_log, 'private' -> gm_notes
@@ -302,10 +327,23 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
 
     supabase
       .from('campaigns')
-      .select('session_active')
+      .select('session_active, danger_level, crawling_round, rounds_since_check')
       .eq('id', campaignId)
       .maybeSingle()
-      .then(({ data }) => { if (!cancelled) setSessionActive(data?.session_active || false) })
+      .then(({ data }) => {
+        if (cancelled) return
+        setSessionActive(data?.session_active || false)
+        setDangerLevel(data?.danger_level || null)
+        setCrawlingRound(data?.crawling_round || 0)
+        setRoundsSinceCheck(data?.rounds_since_check || 0)
+      })
+
+    supabase
+      .from('scene_secrets')
+      .select('id, name, description, zone, state')
+      .eq('campaign_id', campaignId)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => { if (!cancelled) setSecrets(data || []) })
 
     const channel = supabase
       .channel(`gm-dashboard-extra-${campaignId}`)
@@ -328,8 +366,22 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
       )
       .on(
         'postgres_changes',
+        { event: '*', schema: 'public', table: 'scene_secrets', filter: `campaign_id=eq.${campaignId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') setSecrets((list) => [...list, payload.new])
+          else if (payload.eventType === 'UPDATE') setSecrets((list) => list.map((s) => (s.id === payload.new.id ? payload.new : s)))
+          else if (payload.eventType === 'DELETE') setSecrets((list) => list.filter((s) => s.id !== payload.old.id))
+        }
+      )
+      .on(
+        'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
-        (payload) => setSessionActive(payload.new.session_active)
+        (payload) => {
+          setSessionActive(payload.new.session_active)
+          setDangerLevel(payload.new.danger_level)
+          setCrawlingRound(payload.new.crawling_round)
+          setRoundsSinceCheck(payload.new.rounds_since_check)
+        }
       )
       .subscribe()
 
@@ -420,6 +472,51 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     setEncounter((list) => list.filter((m) => m.id !== id))
     setDeletingMonster(false)
     setMonsterToDelete(null)
+  }
+
+  // Secrets (traps, hidden doors) -- same add/delete shape as monsters
+  // above. state cycles hidden -> tell_visible -> revealed -> hidden (a
+  // full loop, not a one-way reveal, in case the GM wants to re-hide
+  // something) via a single click on its badge, matching the existing
+  // hidden/hp_visible toggle-by-click convention.
+  const openAddSecret = () => {
+    setSecretForm({ name: '', description: '', zone: 'near' })
+    setShowAddSecret(true)
+  }
+
+  const addSecret = async () => {
+    if (!secretForm.name.trim() || !campaignId) return
+    setAddingSecret(true)
+    await supabase.from('scene_secrets').insert({
+      campaign_id: campaignId,
+      name: secretForm.name.trim(),
+      description: secretForm.description.trim() || null,
+      zone: secretForm.zone,
+    })
+    setAddingSecret(false)
+    setShowAddSecret(false)
+  }
+
+  const deleteSecret = async () => {
+    if (!secretToDelete || deletingSecret) return
+    setDeletingSecret(true)
+    const id = secretToDelete.id
+    await supabase.from('scene_secrets').delete().eq('id', id)
+    setSecrets((list) => list.filter((s) => s.id !== id))
+    setDeletingSecret(false)
+    setSecretToDelete(null)
+  }
+
+  const SECRET_STATE_CYCLE = { hidden: 'tell_visible', tell_visible: 'revealed', revealed: 'hidden' }
+  const cycleSecretState = async (secret) => {
+    const next = SECRET_STATE_CYCLE[secret.state] || 'hidden'
+    setSecrets((list) => list.map((s) => (s.id === secret.id ? { ...s, state: next } : s)))
+    await supabase.from('scene_secrets').update({ state: next }).eq('id', secret.id)
+  }
+
+  const setSecretZone = async (id, zone) => {
+    setSecrets((list) => list.map((s) => (s.id === id ? { ...s, zone } : s)))
+    await supabase.from('scene_secrets').update({ zone }).eq('id', id)
   }
 
   const revealNote = async (id) => {
@@ -619,6 +716,29 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     setQuickRolling(false)
   }
 
+  // Danger level (Shadowdark p.84/112) -- a simple GM-set session field,
+  // same direct-update shape as removeMap's campaigns write above (RLS's
+  // "gm can update their campaign" policy already covers any column).
+  const setDangerLevelValue = async (level) => {
+    setDangerLevel(level)
+    await supabase.from('campaigns').update({ danger_level: level || null }).eq('id', campaignId)
+  }
+
+  // Crawling round (Decision, 2026-08-03): advance_crawling_round owns the
+  // counter state server-side; when it reports a check is due, this reuses
+  // the exact same rollQuickTable('Random encounter check', '1d6') the
+  // dice modal's own Random-encounter row already calls -- one roll
+  // implementation, not two, and the GM reads hit-on-a-1 off the log the
+  // same way they would for any other quick-table roll.
+  const advanceCrawlingRound = async () => {
+    if (advancingCrawlingRound || !campaignId) return
+    setAdvancingCrawlingRound(true)
+    const { data, error } = await supabase.rpc('advance_crawling_round', { p_campaign_id: campaignId })
+    setAdvancingCrawlingRound(false)
+    if (error) return
+    if (data?.check_due) await rollQuickTable('Random encounter check', '1d6')
+  }
+
   // Real backend behind the mockup's "Pause torch" -- session_active is
   // campaign-wide (every light source's burn-down freezes, not just one
   // torch), same toggle Campaign Lobby's Start/End session and Campaign
@@ -725,6 +845,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
     .slice(0, 4)
 
   const selectedMonster = selectedEntity?.type === 'monster' ? encounter.find((m) => m.id === selectedEntity.id) : null
+  const selectedSecret = selectedEntity?.type === 'secret' ? secrets.find((s) => s.id === selectedEntity.id) : null
 
   // Turn indicator merged into the Party card below, matching GameTable.jsx's
   // player-page treatment (an acting party member gets a highlighted border +
@@ -798,14 +919,26 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         <StatTile label="MODE">
           <span className={`text-sm font-semibold ${gmSceneMode === 'Combat' ? 'text-danger-text' : 'text-primary-text'}`}>{gmSceneMode}</span>
         </StatTile>
-        <StatTile label="DANGER" icon={AlertTriangle}>
-          <p className="text-sm font-semibold text-ink-faint" title="Danger level isn't tracked yet -- placeholder slot">&mdash;</p>
+        <StatTile label="DANGER" icon={AlertTriangle} highlight={!!dangerLevel}>
+          <select
+            value={dangerLevel || ''}
+            onChange={(e) => setDangerLevelValue(e.target.value || null)}
+            title="Danger level -- drives the crawling-round encounter-check cadence"
+            className={`text-sm font-semibold bg-transparent border-0 p-0 focus:outline-none cursor-pointer ${dangerLevel ? 'text-danger-text' : 'text-ink-faint'}`}
+          >
+            <option value="">Not set</option>
+            <option value="unsafe">Unsafe</option>
+            <option value="risky">Risky</option>
+            <option value="deadly">Deadly</option>
+          </select>
         </StatTile>
         <StatTile label="CRAWLING ROUND" icon={RotateCw}>
-          <p className="text-sm font-semibold text-ink-faint" title="Crawling-round tracking isn't wired up yet -- placeholder slot">&mdash;</p>
+          <p className="text-sm font-semibold text-ink">{crawlingRound}</p>
         </StatTile>
         <StatTile label="NEXT ENCOUNTER CHECK" icon={Timer}>
-          <p className="text-sm font-semibold text-ink-faint" title="Next-encounter-check tracking isn't wired up yet -- placeholder slot">&mdash;</p>
+          <p className={`text-sm font-semibold ${dangerLevel ? 'text-ink' : 'text-ink-faint'}`} title={dangerLevel ? undefined : 'Set a danger level to start the check cadence'}>
+            {dangerLevel ? `in ${Math.max(0, CRAWLING_CADENCE[dangerLevel] - roundsSinceCheck)}` : '\u2014'}
+          </p>
         </StatTile>
       </div>
 
@@ -906,6 +1039,55 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                   ))}
                 </div>
               </Card>
+
+              <Card
+                title="Secrets"
+                titleRight={<Button icon={Plus} iconOnly onClick={openAddSecret} title="Add secret" />}
+              >
+                <div className="flex flex-col gap-2">
+                  {secrets.length === 0 && <p className="text-xs text-ink-dim">No secrets yet -- add a trap or hidden door above.</p>}
+                  {secrets.map((s) => (
+                    <div key={s.id} className="flex flex-col gap-1 text-xs p-2 bg-panel2/60 rounded-md border border-line">
+                      <div className="flex items-center justify-between gap-1 flex-wrap">
+                        <button
+                          onClick={() => selectEntity('secret', s.id, s.name)}
+                          className="font-medium text-white text-left hover:text-primary-text truncate"
+                        >
+                          {s.name}
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => cycleSecretState(s)} title="Cycle hidden / tell-visible / revealed">
+                            <Badge tone={s.state === 'revealed' ? 'green' : s.state === 'tell_visible' ? 'amber' : 'purple'}>
+                              {s.state === 'revealed' ? 'Revealed' : s.state === 'tell_visible' ? 'Tell-visible' : 'Hidden'}
+                            </Badge>
+                          </button>
+                          <button
+                            onClick={() => setSecretToDelete(s)}
+                            title="Delete secret"
+                            className="text-ink-faint hover:text-danger-text p-1"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="text-[10px] text-ink-dim mr-1">Zone</span>
+                        {['close', 'near', 'far'].map((z) => (
+                          <button
+                            key={z}
+                            onClick={() => setSecretZone(s.id, z)}
+                            className={`text-[10px] px-2 py-1 rounded border capitalize ${
+                              (s.zone || 'near') === z ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink-dim'
+                            }`}
+                          >
+                            {z}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
             </div>
 
             {/* CENTER: map + scene log -- Active encounter moved to the left
@@ -945,10 +1127,11 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     mapAccessError={mapAccessError}
                     party={party}
                     monsters={encounter}
+                    secrets={secrets}
                     litCharacterId={lightSources.find((s) => s.lit)?.character_id || null}
                     onSelectToken={(id, type, name) => selectEntity(type, id, name)}
                     selectedTokenId={selectedEntity?.id || null}
-                    onSetZone={(type, id, zone) => (type === 'character' ? setCharacterZone(id, zone) : setMonsterZone(id, zone))}
+                    onSetZone={(type, id, zone) => (type === 'character' ? setCharacterZone(id, zone) : type === 'secret' ? setSecretZone(id, zone) : setMonsterZone(id, zone))}
                   />
                   <div className="absolute top-2 left-2 max-w-[calc(100%-1rem)] bg-bg/90 backdrop-blur border border-line-soft rounded-lg p-2 flex items-center gap-1 flex-wrap">
                     {onSwitchToPlayerView && (
@@ -1132,6 +1315,13 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                         <Badge tone={selectedMonster.hp_visible ? 'green' : 'purple'}>{selectedMonster.hp_visible ? 'HP known' : 'HP hidden'}</Badge>
                       </button>
                     )}
+                    {selectedSecret && (
+                      <button onClick={() => cycleSecretState(selectedSecret)} title="Cycle hidden / tell-visible / revealed">
+                        <Badge tone={selectedSecret.state === 'revealed' ? 'green' : selectedSecret.state === 'tell_visible' ? 'amber' : 'purple'}>
+                          {selectedSecret.state === 'revealed' ? 'Revealed' : selectedSecret.state === 'tell_visible' ? 'Tell-visible' : 'Hidden'}
+                        </Badge>
+                      </button>
+                    )}
                     <button onClick={() => setSelectedEntity(null)} className="text-[10px] text-ink-dim hover:text-ink shrink-0">
                       Clear
                     </button>
@@ -1170,7 +1360,7 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
                     </div>
                   </div>
                 ) : (
-                  <p className="text-[11px] text-ink-dim">Click a token on the map to inspect it and see notes tied to it. Traps and other map features aren't selectable yet -- character and monster tokens only.</p>
+                  <p className="text-[11px] text-ink-dim">Click a token on the map (or a row in Secrets/Active encounter) to inspect it and see notes tied to it.</p>
                 )}
               </Card>
             </div>
@@ -1244,6 +1434,56 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
             <Button onClick={() => setShowAddMonster(false)} disabled={addingMonster}>Cancel</Button>
             <Button variant="primary" onClick={addMonster} disabled={!monsterForm.name.trim() || addingMonster}>
               {addingMonster ? 'Adding…' : 'Add monster'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Add secret (traps, hidden doors) -- same small-form shape as Add
+          monster above. state always starts 'hidden'; the GM cycles it
+          via the secret's own badge afterward. */}
+      <Modal open={showAddSecret} onClose={() => setShowAddSecret(false)} title="Add secret">
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="text-[11px] text-ink-dim mb-1">Name</p>
+            <input
+              value={secretForm.name}
+              onChange={(e) => setSecretForm((f) => ({ ...f, name: e.target.value }))}
+              onKeyDown={(e) => e.key === 'Enter' && addSecret()}
+              placeholder="Pit trap, false wall, hidden lever..."
+              autoFocus
+              className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-white"
+            />
+          </div>
+          <div>
+            <p className="text-[11px] text-ink-dim mb-1">Description (shown once tell-visible or revealed)</p>
+            <textarea
+              value={secretForm.description}
+              onChange={(e) => setSecretForm((f) => ({ ...f, description: e.target.value }))}
+              rows={2}
+              className="w-full text-sm bg-bg border border-line rounded-md px-3 py-2 text-white resize-none"
+            />
+          </div>
+          <div>
+            <p className="text-[11px] text-ink-dim mb-1">Zone</p>
+            <div className="flex gap-2">
+              {['close', 'near', 'far'].map((z) => (
+                <button
+                  key={z}
+                  onClick={() => setSecretForm((f) => ({ ...f, zone: z }))}
+                  className={`text-xs px-3 py-1.5 rounded border capitalize ${
+                    secretForm.zone === z ? 'border-primary text-primary-text bg-primary/10' : 'border-line text-ink-dim'
+                  }`}
+                >
+                  {z}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setShowAddSecret(false)} disabled={addingSecret}>Cancel</Button>
+            <Button variant="primary" onClick={addSecret} disabled={!secretForm.name.trim() || addingSecret}>
+              {addingSecret ? 'Adding…' : 'Add secret'}
             </Button>
           </div>
         </div>
@@ -1353,6 +1593,16 @@ export default function GmDashboard({ campaignId, session, campaignName = 'The s
         confirming={deletingMonster}
         title="Delete monster"
         message={monsterToDelete ? `Remove ${monsterToDelete.name} from this encounter? This can't be undone.` : ''}
+        confirmLabel="Delete"
+      />
+
+      <ConfirmModal
+        open={!!secretToDelete}
+        onClose={() => setSecretToDelete(null)}
+        onConfirm={deleteSecret}
+        confirming={deletingSecret}
+        title="Delete secret"
+        message={secretToDelete ? `Remove ${secretToDelete.name}? This can't be undone.` : ''}
         confirmLabel="Delete"
       />
 
